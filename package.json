@@ -1,0 +1,16 @@
+{
+  "name": "deep-blue",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "install:all": "npm install && npm install --prefix server && npm install --prefix web",
+    "dev:server": "npm run dev --prefix server",
+    "dev:web": "npm run dev --prefix web",
+    "dev": "concurrently -k -n server,web -c blue,magenta \"npm:dev:server\" \"npm:dev:web\"",
+    "build": "npm install --prefix server && npm run build --prefix server && npm install --prefix web && npm run build --prefix web",
+    "start": "npm start --prefix server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

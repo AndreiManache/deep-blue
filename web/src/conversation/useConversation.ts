@@ -3,10 +3,11 @@ import { v4 as uuidv4 } from "uuid";
 import { ApiError, fetchGreeting, sendChat } from "../api/client";
 import type { RecognitionErrorKind } from "../speech/recognition";
 import { SpeechRecognizer } from "../speech/recognition";
+import { ensureMicPermission } from "../speech/permission";
 import { getSpeechSupport } from "../speech/support";
 import { cancelSpeech, speak } from "../speech/synthesis";
 
-export type Phase = "idle" | "listening" | "thinking" | "speaking" | "unsupported";
+export type Phase = "idle" | "awaiting-mic" | "listening" | "thinking" | "speaking" | "unsupported";
 
 // Used when no profile name has been set yet.
 const FALLBACK_NAME = "there";
@@ -155,21 +156,38 @@ export function useConversation(): ConversationApi {
     setMicPermissionDenied(false);
     setErrorMessage(null);
     sessionIdRef.current = uuidv4();
-    setPhaseBoth("thinking"); // immediate feedback while the greeting loads
     const myEpoch = ++epochRef.current;
+
+    // Both started before the first await, so the permission prompt is
+    // raised inside this tap's own user gesture, and the greeting downloads
+    // while the user is deciding — waiting on the prompt costs no time.
+    // Nothing may be SPOKEN until permission settles: the greeting playing
+    // over a prompt the user hasn't answered yet is the whole bug (they
+    // answer the greeting, the mic isn't capturing, the words vanish).
+    const permission = ensureMicPermission();
+    const greeting = fetchGreeting().catch(() => null);
+
+    setPhaseBoth("awaiting-mic");
+    const granted = await permission;
+    if (epochRef.current !== myEpoch) return; // endSession() fired while we waited
+    if (granted === "denied") {
+      setMicPermissionDenied(true);
+      setPhaseBoth("idle");
+      return;
+    }
+
+    setPhaseBoth("thinking"); // permission settled; greeting may still be loading
 
     // Same voice pipeline as real replies (ElevenLabs, with an automatic
     // speechSynthesis fallback baked into speakThenListen/speak) — a failed
     // fetch here just falls back to the local placeholder greeting text.
     let text = `Hello ${FALLBACK_NAME}`;
     let audioBase64: string | null = null;
-    try {
-      const greeting = await fetchGreeting();
-      text = greeting.text;
-      audioBase64 = greeting.audio_base64;
-      languageRef.current = greeting.lang;
-    } catch {
-      // a failed greeting fetch shouldn't block starting the conversation
+    const result = await greeting;
+    if (result) {
+      text = result.text;
+      audioBase64 = result.audio_base64;
+      languageRef.current = result.lang;
     }
 
     if (epochRef.current !== myEpoch) return; // endSession() fired while we were fetching

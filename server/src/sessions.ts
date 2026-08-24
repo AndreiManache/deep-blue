@@ -1,5 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { MAX_HISTORY_MESSAGES } from "./config.js";
+import { MAX_HISTORY_TURNS } from "./config.js";
 
 const sessions = new Map<string, Anthropic.MessageParam[]>();
 
@@ -24,17 +24,21 @@ function isToolResultCarrier(message: Anthropic.MessageParam): boolean {
   return message.content.length > 0 && message.content.every((block) => block.type === "tool_result");
 }
 
-// Caps history at MAX_HISTORY_MESSAGES, but only cuts at a safe boundary:
-// a user message that is NOT a tool-result carrier (i.e. a genuine new turn).
+// Keeps the last MAX_HISTORY_TURNS genuine user turns. Counting raw
+// messages here (the old behavior) let tool-heavy turns — 4-11 messages
+// each — eat the whole budget, shrinking real memory to ~3-5 turns. The
+// cut always lands on a genuine user message, never a tool-result carrier,
+// so no tool_result is ever orphaned from its tool_use.
 export function truncatePairSafe(history: Anthropic.MessageParam[]): Anthropic.MessageParam[] {
-  if (history.length <= MAX_HISTORY_MESSAGES) return history;
-
-  let cutIndex = history.length - MAX_HISTORY_MESSAGES;
-  while (cutIndex < history.length) {
-    const candidate = history[cutIndex];
-    if (candidate.role === "user" && !isToolResultCarrier(candidate)) break;
-    cutIndex++;
+  let turns = 0;
+  for (let i = history.length - 1; i >= 0; i--) {
+    const message = history[i];
+    if (message.role === "user" && !isToolResultCarrier(message)) {
+      turns++;
+      // The cap-th turn from the end becomes the new start of history —
+      // beginning on a genuine user message, as the API requires.
+      if (turns === MAX_HISTORY_TURNS && i > 0) return history.slice(i);
+    }
   }
-
-  return cutIndex >= history.length ? [] : history.slice(cutIndex);
+  return history;
 }

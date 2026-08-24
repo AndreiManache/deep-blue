@@ -6,7 +6,9 @@ import { buildSystemPrompt } from "./systemPrompt.js";
 import { executeTool, tools } from "./tools.js";
 import { synthesizeSpeech } from "./tts.js";
 
-const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
+// 60s timeout (TS SDK default is 10 minutes — a hung request would strand
+// the UI in "thinking" for that long) with one retry for transient failures.
+const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY, timeout: 60_000, maxRetries: 1 });
 
 export interface ChatTurnResult {
   reply_text: string;
@@ -61,7 +63,7 @@ export async function runTurn(sessionId: string, userId: string, userText: strin
     );
 
     const toolResults: Anthropic.ToolResultBlockParam[] = toolUseBlocks.map((block) => {
-      const result = executeTool(userId, block.name, block.input as Record<string, unknown>);
+      const result = executeTool(userId, block.name, block.input as Record<string, unknown>, userText);
       if (result.mutated) mutated = true;
       if (result.ended) ended = true;
       return {

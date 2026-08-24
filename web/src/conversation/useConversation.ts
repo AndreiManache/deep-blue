@@ -12,6 +12,11 @@ export type Phase = "idle" | "awaiting-mic" | "listening" | "thinking" | "speaki
 // Used when no profile name has been set yet.
 const FALLBACK_NAME = "there";
 
+// Consecutive silent no-speech cycles (~8s each) before the session quietly
+// returns to idle — ends demonstrably dead sessions without ever cutting off
+// a normal thinking pause (spec §2.9).
+const MAX_SILENT_CYCLES = 4;
+
 export interface ConversationApi {
   phase: Phase;
   interimTranscript: string;
@@ -21,6 +26,8 @@ export interface ConversationApi {
   startSession: () => void;
   endTurn: () => void;
   endSession: () => void;
+  /** Barge-in: cut the AI off mid-reply and open the mic. */
+  interrupt: () => void;
 }
 
 export function useConversation(): ConversationApi {
@@ -46,6 +53,9 @@ export function useConversation(): ConversationApi {
   // Layer 4: a synchronous phase check readable inside async/event callbacks
   // (React state itself is stale inside closures until the next render).
   const phaseRef = useRef<Phase>(phase);
+  // Counts back-to-back no-speech cycles; reset whenever the user actually
+  // says something. Drives the auto-idle above.
+  const silentCyclesRef = useRef(0);
 
   // Plain hoisted function declarations on purpose — openMic, speakThenListen,
   // handleFinalTranscript and handleRecognitionError call each other in a
@@ -80,7 +90,13 @@ export function useConversation(): ConversationApi {
           handleRecognitionError(kind);
         },
         onEnd: () => {
-          // Normal completion is handled via onFinal/onError above.
+          // Normal completion arrives via onFinal/onError first, and both
+          // bump the epoch — so reaching here with a current epoch means
+          // recognition died with no result and no error event (browser
+          // kill, tab background, phone lock). Treat it as silence rather
+          // than sitting deaf on "Listening…" forever.
+          if (epochRef.current !== myEpoch || phaseRef.current !== "listening") return;
+          handleRecognitionError("no-speech");
         },
       },
       languageRef.current,
@@ -92,6 +108,7 @@ export function useConversation(): ConversationApi {
     setPhaseBoth("speaking");
     speak(text, {
       audioBase64,
+      lang: languageRef.current,
       onEnd: () => {
         if (phaseRef.current !== "speaking") return; // session may have ended meanwhile
         openMic();
@@ -102,7 +119,14 @@ export function useConversation(): ConversationApi {
   function handleRecognitionError(kind: RecognitionErrorKind) {
     if (kind === "no-speech") {
       // User was simply quiet — say nothing, just reopen the mic. Speaking
-      // "didn't catch that" here would nag on every silent pause.
+      // "didn't catch that" here would nag on every silent pause. But after
+      // several cycles of pure silence (~30s), the user has walked away:
+      // return to idle instead of holding the mic open indefinitely.
+      silentCyclesRef.current++;
+      if (silentCyclesRef.current >= MAX_SILENT_CYCLES) {
+        endSession();
+        return;
+      }
       openMic();
       return;
     }
@@ -125,6 +149,7 @@ export function useConversation(): ConversationApi {
       return;
     }
 
+    silentCyclesRef.current = 0; // the user is talking — session is alive
     epochRef.current++;
     setPhaseBoth("thinking"); // set immediately on end-of-speech — never a frozen gap
 
@@ -136,7 +161,11 @@ export function useConversation(): ConversationApi {
 
       if (result.ended) {
         setPhaseBoth("speaking");
-        speak(result.reply_text, { audioBase64: result.audio_base64, onEnd: () => setPhaseBoth("idle") });
+        speak(result.reply_text, {
+          audioBase64: result.audio_base64,
+          lang: result.lang,
+          onEnd: () => setPhaseBoth("idle"),
+        });
         return;
       }
 
@@ -155,6 +184,7 @@ export function useConversation(): ConversationApi {
     }
     setMicPermissionDenied(false);
     setErrorMessage(null);
+    silentCyclesRef.current = 0;
     sessionIdRef.current = uuidv4();
     const myEpoch = ++epochRef.current;
 
@@ -210,6 +240,17 @@ export function useConversation(): ConversationApi {
     setPhaseBoth("idle");
   }
 
+  // Barge-in: the user wants to talk over the AI. Silence it and listen.
+  // Safe against echo — speech is fully stopped before the mic opens, and
+  // the epoch bump discards anything already in flight.
+  function interrupt() {
+    if (phaseRef.current !== "speaking") return;
+    silentCyclesRef.current = 0;
+    epochRef.current++;
+    cancelSpeech();
+    openMic();
+  }
+
   return {
     phase,
     interimTranscript,
@@ -219,5 +260,6 @@ export function useConversation(): ConversationApi {
     startSession,
     endTurn,
     endSession,
+    interrupt,
   };
 }

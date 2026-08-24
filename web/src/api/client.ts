@@ -91,6 +91,9 @@ export async function sendChat(sessionId: string, userText: string): Promise<Cha
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ session_id: sessionId, user_text: userText }),
+    // Matches the server's own 60s model timeout (plus one retry's slack) —
+    // without this, a hung request strands the UI in "thinking" indefinitely.
+    signal: AbortSignal.timeout(90_000),
   });
   if (!res.ok) {
     throw new ApiError("Something went wrong. Try again.");

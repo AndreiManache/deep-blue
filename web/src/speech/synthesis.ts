@@ -19,6 +19,8 @@
 export interface SpeakOptions {
   onEnd: () => void;
   audioBase64?: string | null;
+  /** BCP-47 tag (e.g. "ro-RO") — without it the fallback voice reads Romanian text with English phonemes. */
+  lang?: string;
 }
 
 let currentUtterance: SpeechSynthesisUtterance | null = null;
@@ -46,7 +48,7 @@ function clearAudioWatchdog(): void {
   }
 }
 
-function speakLocal(text: string, onEnd: () => void): void {
+function speakLocal(text: string, onEnd: () => void, lang?: string): void {
   if (!window.speechSynthesis) {
     onEnd();
     return;
@@ -56,6 +58,7 @@ function speakLocal(text: string, onEnd: () => void): void {
   clearTimers();
 
   const utterance = new SpeechSynthesisUtterance(text);
+  if (lang) utterance.lang = lang;
   currentUtterance = utterance;
 
   let done = false;
@@ -64,6 +67,10 @@ function speakLocal(text: string, onEnd: () => void): void {
     done = true;
     clearTimers();
     currentUtterance = null;
+    // If the watchdog beat the utterance's own end event, the voice is
+    // still speaking — silence it before the caller reopens the mic, or
+    // the mic hears the tail of our own speech.
+    window.speechSynthesis.cancel();
     onEnd();
   };
 
@@ -91,7 +98,7 @@ function getAudioElement(): HTMLAudioElement {
   return audioEl;
 }
 
-function playRemoteAudio(base64: string, text: string, onEnd: () => void): void {
+function playRemoteAudio(base64: string, text: string, onEnd: () => void, lang?: string): void {
   const el = getAudioElement();
   clearAudioWatchdog();
 
@@ -100,6 +107,10 @@ function playRemoteAudio(base64: string, text: string, onEnd: () => void): void 
     if (done) return;
     done = true;
     clearAudioWatchdog();
+    // If the watchdog fired while audio is still playing, stop it — the
+    // caller opens the mic next, and the mic must never hear the tail of
+    // the AI's own reply. (After a natural `ended` this is a no-op.)
+    el.pause();
     onEnd();
   };
   const fallbackToLocal = () => {
@@ -108,27 +119,36 @@ function playRemoteAudio(base64: string, text: string, onEnd: () => void): void 
     clearAudioWatchdog();
     // Playback failed (autoplay block, decode error, network hiccup, etc) —
     // never leave the conversation stuck; degrade to the local voice.
-    speakLocal(text, onEnd);
+    speakLocal(text, onEnd, lang);
   };
 
   el.onended = finish;
   el.onerror = fallbackToLocal;
+  // Once metadata arrives the element knows the real duration — re-arm the
+  // watchdog from that instead of guessing. A chars/sec guess undershoots
+  // slower speech (Romanian especially), and a watchdog that fires
+  // mid-playback used to open the mic into the AI's own voice.
+  el.onloadedmetadata = () => {
+    if (done || !Number.isFinite(el.duration)) return;
+    clearAudioWatchdog();
+    audioWatchdogTimer = window.setTimeout(finish, el.duration * 1000 + 2000);
+  };
   el.src = `data:audio/mpeg;base64,${base64}`;
 
-  // ~14 chars/sec (matches the local watchdog) plus network/decode slack,
-  // in case `ended`/`error` never fire.
-  const estimatedMs = Math.max(4000, (text.length / 14) * 1000 + 3000);
+  // Deliberately generous initial estimate — only a backstop for the case
+  // where metadata never loads; the real deadline is set above.
+  const estimatedMs = Math.max(8000, (text.length / 8) * 1000 + 4000);
   audioWatchdogTimer = window.setTimeout(finish, estimatedMs);
 
   el.play()?.catch(fallbackToLocal);
 }
 
-export function speak(text: string, { onEnd, audioBase64 }: SpeakOptions): void {
+export function speak(text: string, { onEnd, audioBase64, lang }: SpeakOptions): void {
   if (audioBase64) {
-    playRemoteAudio(audioBase64, text, onEnd);
+    playRemoteAudio(audioBase64, text, onEnd, lang);
     return;
   }
-  speakLocal(text, onEnd);
+  speakLocal(text, onEnd, lang);
 }
 
 export function cancelSpeech(): void {

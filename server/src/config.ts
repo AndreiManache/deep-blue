@@ -45,12 +45,15 @@ export const ELEVENLABS_VOICE_ID_RO = process.env.ELEVENLABS_VOICE_ID_RO || ELEV
 // Also multilingual (32 languages, including Romanian).
 export const ELEVENLABS_MODEL_ID = "eleven_flash_v2_5";
 
-// Single config value — bump to a Sonnet model name if Haiku's quality
-// ever disappoints. No date suffix on this ID.
-export const MODEL = "claude-haiku-4-5";
+// Single config value. Upgraded from claude-haiku-4-5 (2026-08-25) for
+// estimation accuracy — Haiku applied the multi-step composition rule only
+// ~75% of the time. ~3x per-token cost, still a few dollars/month at this
+// usage. No date suffix on this ID.
+export const MODEL = "claude-sonnet-5";
 
-// Cap on stored conversation turns (user+assistant pairs), per spec §7.
-export const MAX_HISTORY_MESSAGES = 20;
+// Cap on stored conversation turns — genuine user turns, per spec §7. Tool
+// round-trips add extra messages that don't count against this.
+export const MAX_HISTORY_TURNS = 20;
 
 // Hard ceiling on tool-use round-trips within a single /chat turn.
 export const MAX_TOOL_ITERATIONS = 5;

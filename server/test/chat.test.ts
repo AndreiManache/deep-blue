@@ -71,7 +71,14 @@ before(async () => {
 
 after(() => {
   server.close();
-  fs.rmSync(path.dirname(dbPath), { recursive: true, force: true });
+  // Best-effort: on Windows the open SQLite handle keeps the file locked
+  // (node:sqlite has no close on this path), so deletion can fail — a
+  // leftover temp dir is not a test failure.
+  try {
+    fs.rmSync(path.dirname(dbPath), { recursive: true, force: true });
+  } catch {
+    /* leave the temp dir behind */
+  }
 });
 
 // A user message whose content is entirely tool_result blocks — the shape

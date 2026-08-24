@@ -737,3 +737,48 @@ button {
   align-self: flex-start;
   margin-top: 4px;
 }
+
+/* Floating conversation status pill — shown on Dashboard/Profile while a
+   session is active, so navigating away never hides a live conversation. */
+.conversation-pill {
+  position: fixed;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--surface-strong);
+  border: 1px solid var(--surface-border);
+  box-shadow: var(--shadow-card), var(--sheen);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  z-index: 40;
+}
+
+.conversation-pill-status {
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--accent);
+  padding: 8px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.conversation-pill-end {
+  border: none;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 0.8rem;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}

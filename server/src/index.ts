@@ -90,11 +90,22 @@ app.delete("/entries/:id", (req, res) => {
   res.status(204).end();
 });
 
+// The greeting text only changes when the name or language does — no reason
+// to pay ElevenLabs (credits + ~300ms) to re-synthesize it every session.
+const greetingAudioCache = new Map<string, string>();
+
 app.get("/greeting", async (_req, res) => {
   const profile = getProfile(res.locals.userId as string);
   const name = profile?.name ?? USERNAME;
   const text = profile?.language === "ro" ? `Bună, ${name}!` : `Hello ${name}`;
-  const audio_base64 = await synthesizeSpeech(text, resolveVoiceId(profile));
+  const voiceId = resolveVoiceId(profile);
+  const cacheKey = `${voiceId}:${text}`;
+
+  let audio_base64 = greetingAudioCache.get(cacheKey) ?? null;
+  if (!audio_base64) {
+    audio_base64 = await synthesizeSpeech(text, voiceId);
+    if (audio_base64) greetingAudioCache.set(cacheKey, audio_base64);
+  }
   res.json({ text, audio_base64, lang: resolveSpeechLang(profile) });
 });
 

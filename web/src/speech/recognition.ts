@@ -74,14 +74,20 @@ function normalizeError(error: string): RecognitionErrorKind {
 
 export class SpeechRecognizer {
   private recognition: SpeechRecognitionLike | null = null;
-  private listening = false;
 
   get isSupported(): boolean {
     return Boolean(getConstructor());
   }
 
   start(handlers: RecognitionHandlers, lang: string = "en-US"): void {
-    if (this.listening) return; // guard against InvalidStateError on double-start
+    // A previous instance may still be winding down: the browser fires
+    // error ("no-speech" etc.) BEFORE end, so a restart requested from an
+    // error handler arrives while the old instance hasn't ended yet.
+    // Returning early here (the old double-start guard) silently dropped
+    // that restart and left the app deaf on "Listening…". Abort the old
+    // instance and start fresh — callers' epoch guard already discards
+    // its late events.
+    if (this.recognition) this.abort();
     const Ctor = getConstructor();
     if (!Ctor) {
       handlers.onError("other");
@@ -113,17 +119,18 @@ export class SpeechRecognizer {
     };
 
     recognition.onend = () => {
-      this.listening = false;
-      this.recognition = null;
+      // Only clear wrapper state if we're still the live instance — an
+      // aborted predecessor's end event must not clobber its replacement.
+      if (this.recognition === recognition) {
+        this.recognition = null;
+      }
       handlers.onEnd();
     };
 
     this.recognition = recognition;
-    this.listening = true;
     try {
       recognition.start();
     } catch {
-      this.listening = false;
       this.recognition = null;
       handlers.onError("other");
     }
@@ -137,7 +144,6 @@ export class SpeechRecognizer {
   /** Ends listening and discards any pending result — used before TTS speaks, so the mic can never hear the AI's own voice. */
   abort(): void {
     this.recognition?.abort();
-    this.listening = false;
     this.recognition = null;
   }
 }

@@ -10,8 +10,16 @@ interface HomeScreenProps {
 }
 
 export function HomeScreen({ conversation, onNavigate }: HomeScreenProps) {
-  const { phase, interimTranscript, errorMessage, micPermissionDenied, startSession, endTurn, endSession } =
-    conversation;
+  const {
+    phase,
+    interimTranscript,
+    errorMessage,
+    micPermissionDenied,
+    startSession,
+    endTurn,
+    endSession,
+    interrupt,
+  } = conversation;
 
   if (phase === "unsupported") {
     return (
@@ -29,8 +37,10 @@ export function HomeScreen({ conversation, onNavigate }: HomeScreenProps) {
       startSession();
     } else if (phase === "listening") {
       endTurn();
+    } else if (phase === "speaking") {
+      interrupt(); // barge-in: cut the reply short and listen
     }
-    // thinking / speaking: no barge-in in the MVP — tap is a no-op.
+    // thinking: tap is a no-op — there's nothing to interrupt yet.
   }
 
   const sessionActive = phase !== "idle";

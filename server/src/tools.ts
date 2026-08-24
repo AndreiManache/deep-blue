@@ -114,12 +114,19 @@ export interface ToolExecutionResult {
   ended: boolean;
 }
 
-export function executeTool(userId: string, name: string, input: Record<string, unknown>): ToolExecutionResult {
+export function executeTool(
+  userId: string,
+  name: string,
+  input: Record<string, unknown>,
+  userTranscript?: string,
+): ToolExecutionResult {
   try {
     switch (name) {
       case "log_food": {
         const entry = createEntry(userId, {
-          raw_transcript: (input.raw_transcript as string | undefined) ?? (input.description as string),
+          // Spec: raw_transcript is what the user actually said — the real
+          // turn text, not the model's cleaned description.
+          raw_transcript: userTranscript ?? (input.description as string),
           description: input.description as string,
           calories: input.calories as number,
           protein_g: input.protein_g as number | undefined,

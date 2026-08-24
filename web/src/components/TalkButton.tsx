@@ -7,6 +7,7 @@ interface TalkButtonProps {
 
 const LABELS: Record<Phase, string> = {
   idle: "Tap to talk",
+  "awaiting-mic": "Allow mic…",
   listening: "Listening…",
   thinking: "Thinking…",
   speaking: "Speaking…",

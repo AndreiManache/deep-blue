@@ -40,7 +40,7 @@ export function HomeScreen({ conversation, onNavigate }: HomeScreenProps) {
       <HamburgerMenu onNavigate={onNavigate} />
 
       {micPermissionDenied ? (
-        <MicPermissionHelp />
+        <MicPermissionHelp onRetry={startSession} />
       ) : (
         <div className="talk-button-wrap">
           <TalkButton phase={phase} onTap={handleTap} />

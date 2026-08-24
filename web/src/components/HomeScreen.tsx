@@ -44,9 +44,6 @@ export function HomeScreen({ conversation, onNavigate }: HomeScreenProps) {
       ) : (
         <div className="talk-button-wrap">
           <TalkButton phase={phase} onTap={handleTap} />
-          <div className="talk-status-label">
-            {phase === "idle" && "Tap the button and start talking about what you ate."}
-          </div>
           <div className="interim-caption">{phase === "listening" ? interimTranscript : ""}</div>
 
           {sessionActive && (

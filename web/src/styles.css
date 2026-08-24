@@ -1,16 +1,32 @@
+/* Liquid Glass theme — clear glass over sculptural light, cooled with a
+   subtle blue. The glass reads as glass because there is structure behind
+   it to refract: soft light-forms sit under the button, the slab has a
+   luminous edge band (thickness), a clearer center, and a refracted text
+   ghost — modeled on the user's clear-glass reference set. */
+
+@property --rim-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 215deg;
+}
+
 :root {
-  --bg-top: #0c0f1d;
-  --bg-bottom: #1a1230;
-  --glass-tint: rgba(255, 182, 213, 0.14);
-  --glass-tint-strong: rgba(255, 182, 213, 0.26);
-  --glass-border: rgba(255, 214, 232, 0.45);
-  --pink: #ff8fb3;
-  --pink-bright: #ffb6d9;
-  --pink-deep: #ff5f96;
-  --text-primary: #f5f2f8;
-  --text-secondary: rgba(245, 242, 248, 0.62);
-  --danger: #ff6b6b;
-  --ok: #7ee0b8;
+  --bg-high: #f6f7f9;
+  --bg-mid: #eaecf0;
+  --bg-low: #dfe2e8;
+  --text-primary: #33363d;
+  --text-secondary: rgba(51, 54, 61, 0.55);
+  --surface: rgba(255, 255, 255, 0.55);
+  --surface-strong: rgba(255, 255, 255, 0.72);
+  --surface-border: rgba(255, 255, 255, 0.9);
+  --hairline: rgba(60, 70, 90, 0.07);
+  --accent: #3f6ad8;
+  --accent-soft: rgba(63, 106, 216, 0.14);
+  --danger: #c4384a;
+  --danger-soft: rgba(255, 222, 227, 0.6);
+  --shadow-ambient: 0 28px 55px -24px rgba(90, 105, 135, 0.5);
+  --shadow-card: 0 10px 26px -14px rgba(90, 105, 135, 0.32);
+  --sheen: inset 0 1px 1.5px rgba(255, 255, 255, 0.95);
 }
 
 * {
@@ -27,7 +43,11 @@ body,
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   color: var(--text-primary);
-  background: radial-gradient(circle at 50% 20%, #2a1a3d 0%, var(--bg-top) 45%, var(--bg-bottom) 100%);
+  color-scheme: light;
+  background:
+    radial-gradient(60% 50% at 70% 8%, rgba(175, 200, 240, 0.28), transparent 60%),
+    radial-gradient(50% 45% at 18% 6%, rgba(255, 255, 255, 0.7), transparent 55%),
+    radial-gradient(130% 100% at 50% 0%, var(--bg-high) 0%, var(--bg-mid) 58%, var(--bg-low) 100%);
   background-attachment: fixed;
   overflow-x: hidden;
 }
@@ -53,22 +73,53 @@ button {
   justify-content: center;
   padding: 24px;
   gap: 28px;
+  overflow: hidden;
+}
+
+/* Sculptural light-forms behind the glass — these give the backdrop blur
+   real structure to distort, which is what makes the button read as glass */
+.home-screen::before {
+  content: "";
+  position: absolute;
+  width: 72vmax;
+  height: 72vmax;
+  left: -20vmax;
+  top: -24vmax;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.95), rgba(228, 233, 242, 0.55) 58%, transparent 100%);
+  filter: blur(28px);
+  pointer-events: none;
+}
+
+.home-screen::after {
+  content: "";
+  position: absolute;
+  width: 64vmax;
+  height: 64vmax;
+  right: -24vmax;
+  bottom: -28vmax;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(188, 203, 228, 0.9), rgba(206, 216, 234, 0.45) 55%, transparent 100%);
+  filter: blur(34px);
+  pointer-events: none;
 }
 
 .hamburger-wrap {
   position: absolute;
   top: 20px;
   right: 20px;
+  z-index: 2;
 }
 
 .hamburger-button {
   width: 44px;
   height: 44px;
   border-radius: 14px;
-  border: 1px solid var(--glass-border);
-  background: var(--glass-tint);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--surface-border);
+  background: var(--surface-strong);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  box-shadow: var(--shadow-card), var(--sheen);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -78,40 +129,8 @@ button {
   transition: background 0.2s ease;
 }
 
-.hamburger-dropdown {
-  position: absolute;
-  top: 52px;
-  right: 0;
-  min-width: 160px;
-  background: rgba(30, 20, 45, 0.9);
-  border: 1px solid var(--glass-border);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-radius: 14px;
-  padding: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  box-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.6);
-}
-
-.dropdown-item {
-  background: transparent;
-  border: none;
-  color: var(--text-primary);
-  text-align: left;
-  padding: 10px 12px;
-  border-radius: 10px;
-  cursor: pointer;
-  font-size: 0.9rem;
-}
-
-.dropdown-item:hover {
-  background: rgba(255, 255, 255, 0.08);
-}
-
 .hamburger-button:hover {
-  background: var(--glass-tint-strong);
+  background: rgba(255, 255, 255, 0.92);
 }
 
 .hamburger-button span {
@@ -121,6 +140,38 @@ button {
   border-radius: 1px;
 }
 
+.hamburger-dropdown {
+  position: absolute;
+  top: 52px;
+  right: 0;
+  min-width: 170px;
+  background: var(--surface-strong);
+  border: 1px solid var(--surface-border);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 16px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-shadow: var(--shadow-ambient), var(--sheen);
+}
+
+.dropdown-item {
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 11px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.85);
+}
+
 /* ---------- Talk button ---------- */
 
 .talk-button-wrap {
@@ -128,30 +179,75 @@ button {
   flex-direction: column;
   align-items: center;
   gap: 18px;
+  position: relative;
+  z-index: 1;
 }
 
+/* A thick slab of clear glass: near-transparent center, a luminous edge
+   band where light bends through the rim, brightness lifted behind it */
 .talk-button {
   --size: 220px;
   width: var(--size);
   height: var(--size);
   border-radius: 50%;
-  border: 1px solid var(--glass-border);
-  background:
-    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.35), transparent 45%),
-    linear-gradient(160deg, var(--glass-tint-strong), var(--glass-tint) 60%, rgba(255, 182, 213, 0.06));
-  backdrop-filter: blur(22px) saturate(140%);
-  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border: none;
+  position: relative;
+  background: radial-gradient(100% 100% at 50% 42%, rgba(255, 255, 255, 0.1) 42%, rgba(255, 255, 255, 0.42) 82%, rgba(255, 255, 255, 0.6) 100%);
+  backdrop-filter: blur(16px) brightness(1.07) saturate(1.25);
+  -webkit-backdrop-filter: blur(16px) brightness(1.07) saturate(1.25);
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.06) inset,
-    0 20px 60px -20px rgba(255, 95, 150, 0.45),
-    0 0 40px rgba(255, 143, 179, 0.18);
+    0 6px 14px -6px rgba(90, 105, 135, 0.35),
+    0 30px 60px -25px rgba(90, 105, 135, 0.5),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.85),
+    inset 0 0 24px 10px rgba(255, 255, 255, 0.5),
+    inset 0 14px 24px -10px rgba(255, 255, 255, 0.9),
+    inset 0 -14px 26px -12px rgba(175, 195, 230, 0.55);
   cursor: pointer;
   color: var(--text-primary);
   font-size: 1.1rem;
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: 0.02em;
-  transition: transform 0.2s ease, box-shadow 0.3s ease;
-  position: relative;
+  /* refracted ghost of the label, cast down through the glass */
+  text-shadow: 0 12px 8px rgba(70, 85, 115, 0.16);
+  transition: transform 0.2s ease, box-shadow 0.35s ease;
+}
+
+/* Icy edge light — white with faint blue, following the rim */
+.talk-button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  padding: 2px;
+  background: conic-gradient(
+    from var(--rim-angle),
+    rgba(255, 255, 255, 0.95),
+    rgba(185, 208, 255, 0.75) 18%,
+    rgba(255, 255, 255, 0.85) 38%,
+    rgba(205, 225, 255, 0.6) 55%,
+    rgba(255, 255, 255, 0.9) 72%,
+    rgba(190, 212, 255, 0.7) 88%,
+    rgba(255, 255, 255, 0.95)
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  filter: blur(0.4px);
+  pointer-events: none;
+}
+
+/* Specular highlights hugging the top and bottom curvature */
+.talk-button::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(95% 50% at 50% -6%, rgba(255, 255, 255, 0.85), transparent 55%),
+    radial-gradient(70% 32% at 50% 106%, rgba(255, 255, 255, 0.4), transparent 60%);
+  pointer-events: none;
+  z-index: 0;
 }
 
 .talk-button:active {
@@ -160,47 +256,61 @@ button {
 
 .talk-button.phase-idle:hover {
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.08) inset,
-    0 24px 70px -18px rgba(255, 95, 150, 0.55),
-    0 0 50px rgba(255, 143, 179, 0.28);
+    0 8px 16px -6px rgba(90, 105, 135, 0.4),
+    0 36px 68px -26px rgba(90, 105, 135, 0.55),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.9),
+    inset 0 0 26px 11px rgba(255, 255, 255, 0.55),
+    inset 0 14px 24px -10px rgba(255, 255, 255, 0.95),
+    inset 0 -14px 26px -12px rgba(175, 195, 230, 0.5);
 }
 
 .talk-button.phase-listening {
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.1) inset,
-    0 0 0 8px rgba(255, 143, 179, 0.12),
-    0 0 60px rgba(255, 143, 179, 0.4);
-  animation: listen-pulse 1.6s ease-in-out infinite;
+  animation: listen-pulse 1.8s ease-in-out infinite;
 }
 
-.talk-button.phase-thinking {
-  animation: think-spin 1.4s linear infinite;
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.08) inset,
-    0 0 40px rgba(180, 160, 255, 0.35);
+.talk-button.phase-thinking::before {
+  animation: rim-spin 2.2s linear infinite;
 }
 
 .talk-button.phase-speaking {
-  animation: speak-pulse 0.9s ease-in-out infinite;
+  animation: speak-pulse 0.95s ease-in-out infinite;
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.1) inset,
-    0 0 0 10px rgba(255, 95, 150, 0.14),
-    0 0 70px rgba(255, 95, 150, 0.5);
+    0 6px 14px -6px rgba(90, 105, 135, 0.35),
+    0 30px 60px -25px rgba(90, 105, 135, 0.5),
+    0 0 44px 8px rgba(95, 145, 255, 0.45),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.85),
+    inset 0 0 24px 10px rgba(255, 255, 255, 0.5),
+    inset 0 -14px 26px -12px rgba(175, 195, 230, 0.55);
 }
 
 @keyframes listen-pulse {
-  0%, 100% { box-shadow: 0 0 0 1px rgba(255,255,255,0.1) inset, 0 0 0 6px rgba(255,143,179,0.1), 0 0 50px rgba(255,143,179,0.35); }
-  50% { box-shadow: 0 0 0 1px rgba(255,255,255,0.1) inset, 0 0 0 14px rgba(255,143,179,0.16), 0 0 70px rgba(255,143,179,0.5); }
+  0%, 100% {
+    box-shadow:
+      0 6px 14px -6px rgba(90, 105, 135, 0.35),
+      0 30px 60px -25px rgba(90, 105, 135, 0.5),
+      0 0 0 8px rgba(120, 160, 255, 0.22),
+      0 0 40px 6px rgba(120, 165, 255, 0.4),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.85),
+      inset 0 0 24px 10px rgba(255, 255, 255, 0.5);
+  }
+  50% {
+    box-shadow:
+      0 6px 14px -6px rgba(90, 105, 135, 0.35),
+      0 30px 60px -25px rgba(90, 105, 135, 0.5),
+      0 0 0 16px rgba(120, 160, 255, 0.13),
+      0 0 60px 12px rgba(120, 165, 255, 0.5),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.85),
+      inset 0 0 24px 10px rgba(255, 255, 255, 0.5);
+  }
 }
 
 @keyframes speak-pulse {
   0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.035); }
+  50% { transform: scale(1.03); }
 }
 
-@keyframes think-spin {
-  0% { filter: hue-rotate(0deg); }
-  100% { filter: hue-rotate(25deg); }
+@keyframes rim-spin {
+  to { --rim-angle: 575deg; }
 }
 
 .talk-button-core {
@@ -211,6 +321,7 @@ button {
   justify-content: center;
   flex-direction: column;
   gap: 10px;
+  z-index: 1;
 }
 
 .thinking-dots {
@@ -222,7 +333,7 @@ button {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--pink-bright);
+  background: #8aa2d8;
   animation: dot-bounce 1.2s ease-in-out infinite;
 }
 
@@ -234,18 +345,10 @@ button {
   40% { opacity: 1; transform: translateY(-4px); }
 }
 
-.talk-status-label {
-  font-size: 0.95rem;
-  color: var(--text-secondary);
-  min-height: 1.2em;
-  text-align: center;
-  max-width: 320px;
-}
-
 .interim-caption {
   font-size: 0.95rem;
   color: var(--text-primary);
-  opacity: 0.85;
+  opacity: 0.8;
   font-style: italic;
   min-height: 1.2em;
 }
@@ -256,40 +359,45 @@ button {
 }
 
 .pill-button {
-  padding: 10px 20px;
+  padding: 10px 22px;
   border-radius: 999px;
-  border: 1px solid var(--glass-border);
-  background: var(--glass-tint);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--surface-border);
+  background: var(--surface-strong);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  box-shadow: var(--shadow-card), var(--sheen);
   color: var(--text-primary);
   cursor: pointer;
   font-size: 0.9rem;
+  font-weight: 500;
   transition: background 0.2s ease;
 }
 
 .pill-button:hover {
-  background: var(--glass-tint-strong);
+  background: rgba(255, 255, 255, 0.92);
 }
 
 .pill-button.danger {
-  border-color: rgba(255, 107, 107, 0.5);
-  color: #ffb3b3;
+  border-color: rgba(196, 56, 74, 0.25);
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 
-/* ---------- Banners ---------- */
+/* ---------- Banners & help cards ---------- */
 
 .error-banner {
   position: fixed;
   bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(255, 107, 107, 0.16);
-  border: 1px solid rgba(255, 107, 107, 0.4);
-  color: #ffd4d4;
+  background: rgba(255, 235, 238, 0.85);
+  border: 1px solid rgba(196, 56, 74, 0.25);
+  color: var(--danger);
   padding: 12px 20px;
   border-radius: 14px;
-  backdrop-filter: blur(14px);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: var(--shadow-card);
   max-width: 90vw;
   text-align: center;
   font-size: 0.9rem;
@@ -297,13 +405,17 @@ button {
 
 .mic-permission-help {
   max-width: 420px;
-  background: var(--glass-tint);
-  border: 1px solid var(--glass-border);
-  backdrop-filter: blur(18px);
-  border-radius: 20px;
-  padding: 24px;
+  background:
+    radial-gradient(120% 70% at 60% 0%, rgba(175, 200, 240, 0.22), transparent 55%),
+    var(--surface-strong);
+  border: 1px solid var(--surface-border);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border-radius: 24px;
+  padding: 26px;
   text-align: center;
   line-height: 1.5;
+  box-shadow: var(--shadow-ambient), var(--sheen);
 }
 
 .mic-permission-help h2 {
@@ -324,14 +436,20 @@ button {
 }
 
 .access-code-input {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--glass-border);
-  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid var(--surface-border);
+  box-shadow: 0 0 0 1px var(--hairline);
+  border-radius: 12px;
   padding: 12px 14px;
   color: var(--text-primary);
   font-size: 1rem;
   text-align: center;
   letter-spacing: 0.1em;
+}
+
+.access-code-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-soft), 0 0 0 1px var(--accent);
 }
 
 .unsupported-screen {
@@ -362,9 +480,12 @@ button {
 .back-button {
   width: 40px;
   height: 40px;
-  border-radius: 12px;
-  border: 1px solid var(--glass-border);
-  background: var(--glass-tint);
+  border-radius: 13px;
+  border: 1px solid var(--surface-border);
+  background: var(--surface-strong);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  box-shadow: var(--shadow-card), var(--sheen);
   color: var(--text-primary);
   cursor: pointer;
   font-size: 1rem;
@@ -382,21 +503,31 @@ button {
 }
 
 .calorie-total {
-  background: var(--glass-tint);
-  border: 1px solid var(--glass-border);
-  backdrop-filter: blur(16px);
-  border-radius: 20px;
+  background:
+    radial-gradient(120% 80% at 65% 0%, rgba(175, 200, 240, 0.25), transparent 55%),
+    var(--surface-strong);
+  border: 1px solid var(--surface-border);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border-radius: 22px;
   padding: 20px 24px;
   margin-bottom: 20px;
   display: flex;
   align-items: baseline;
   justify-content: space-between;
+  box-shadow: var(--shadow-card), var(--sheen);
 }
 
 .calorie-total .value {
   font-size: 2.2rem;
-  font-weight: 600;
-  color: var(--pink-bright);
+  font-weight: 650;
+  color: var(--accent);
+}
+
+.target-protein {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin: -12px 0 20px;
 }
 
 .entry-list {
@@ -406,11 +537,13 @@ button {
 }
 
 .entry-item {
-  background: var(--glass-tint);
-  border: 1px solid var(--glass-border);
-  backdrop-filter: blur(14px);
-  border-radius: 16px;
+  background: var(--surface-strong);
+  border: 1px solid var(--surface-border);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border-radius: 18px;
   padding: 14px 16px;
+  box-shadow: var(--shadow-card), var(--sheen);
 }
 
 .entry-row {
@@ -422,6 +555,7 @@ button {
 .expand-toggle {
   border-color: transparent;
   background: transparent;
+  box-shadow: none;
   flex-shrink: 0;
 }
 
@@ -431,7 +565,7 @@ button {
   gap: 8px;
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid var(--glass-border);
+  border-top: 1px solid var(--hairline);
 }
 
 .macro {
@@ -451,7 +585,7 @@ button {
 .macro-value {
   font-size: 0.95rem;
   font-weight: 600;
-  color: var(--pink-bright);
+  color: var(--accent);
 }
 
 .entry-row .entry-main {
@@ -474,7 +608,7 @@ button {
 
 .entry-calories {
   font-weight: 600;
-  color: var(--pink-bright);
+  color: var(--accent);
   white-space: nowrap;
 }
 
@@ -482,8 +616,8 @@ button {
   width: 32px;
   height: 32px;
   border-radius: 10px;
-  border: 1px solid var(--glass-border);
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--surface-border);
+  background: rgba(255, 255, 255, 0.55);
   color: var(--text-secondary);
   cursor: pointer;
   display: flex;
@@ -493,13 +627,13 @@ button {
 }
 
 .icon-button:hover {
-  background: rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.9);
   color: var(--text-primary);
 }
 
 .icon-button.danger:hover {
   color: var(--danger);
-  border-color: rgba(255, 107, 107, 0.5);
+  border-color: rgba(196, 56, 74, 0.35);
 }
 
 .empty-state {
@@ -517,9 +651,10 @@ button {
 }
 
 .edit-form input {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--glass-border);
-  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid var(--surface-border);
+  box-shadow: 0 0 0 1px var(--hairline);
+  border-radius: 9px;
   padding: 6px 10px;
   color: var(--text-primary);
   font-size: 0.85rem;
@@ -544,12 +679,6 @@ button {
 
 /* ---------- Profile page ---------- */
 
-.target-protein {
-  color: var(--text-secondary);
-  font-size: 0.85rem;
-  margin: -12px 0 20px;
-}
-
 .profile-form {
   display: flex;
   flex-direction: column;
@@ -573,13 +702,21 @@ button {
 .profile-form input,
 .profile-form select,
 .profile-form textarea {
-  background: var(--glass-tint);
-  border: 1px solid var(--glass-border);
-  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid var(--surface-border);
+  box-shadow: 0 0 0 1px var(--hairline);
+  border-radius: 11px;
   padding: 10px 12px;
   color: var(--text-primary);
   font-size: 0.9rem;
   font-family: inherit;
+}
+
+.profile-form input:focus,
+.profile-form select:focus,
+.profile-form textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-soft), 0 0 0 1px var(--accent);
 }
 
 .profile-form textarea {

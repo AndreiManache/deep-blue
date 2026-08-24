@@ -1,9 +1,11 @@
+import { ELEVENLABS_VOICE_ID, ELEVENLABS_VOICE_ID_RO } from "./config.js";
 import { db } from "./db.js";
 
 export type Sex = "male" | "female";
 export type ActivityLevel = "sedentary" | "light" | "moderate" | "active" | "very_active";
 export type GoalType = "lose" | "maintain" | "gain";
 export type GoalRate = "gentle" | "moderate" | "aggressive";
+export type Language = "en" | "ro";
 
 export interface UserProfile {
   name: string | null;
@@ -15,6 +17,7 @@ export interface UserProfile {
   goal_type: GoalType | null;
   goal_rate: GoalRate | null;
   goal_notes: string | null;
+  language: Language | null;
   updated_at: string;
 }
 
@@ -28,6 +31,7 @@ export interface ProfileUpdateInput {
   goal_type?: GoalType | null;
   goal_rate?: GoalRate | null;
   goal_notes?: string | null;
+  language?: Language | null;
 }
 
 export interface Targets {
@@ -37,18 +41,18 @@ export interface Targets {
   protein_target_g: number;
 }
 
-const selectStmt = db.prepare(`SELECT * FROM user_profile WHERE id = 1`);
+const selectStmt = db.prepare(`SELECT * FROM user_profile WHERE id = :id`);
 
-export function getProfile(): UserProfile | null {
-  const row = selectStmt.get() as unknown as (UserProfile & { id: number }) | undefined;
+export function getProfile(userId: string): UserProfile | null {
+  const row = selectStmt.get({ id: userId }) as unknown as (UserProfile & { id: string }) | undefined;
   if (!row) return null;
   const { id: _id, ...profile } = row;
   return profile;
 }
 
 const upsertStmt = db.prepare(`
-  INSERT INTO user_profile (id, name, height_cm, weight_kg, age, sex, activity_level, goal_type, goal_rate, goal_notes, updated_at)
-  VALUES (1, :name, :height_cm, :weight_kg, :age, :sex, :activity_level, :goal_type, :goal_rate, :goal_notes, :updated_at)
+  INSERT INTO user_profile (id, name, height_cm, weight_kg, age, sex, activity_level, goal_type, goal_rate, goal_notes, language, updated_at)
+  VALUES (:id, :name, :height_cm, :weight_kg, :age, :sex, :activity_level, :goal_type, :goal_rate, :goal_notes, :language, :updated_at)
   ON CONFLICT(id) DO UPDATE SET
     name = excluded.name,
     height_cm = excluded.height_cm,
@@ -59,11 +63,12 @@ const upsertStmt = db.prepare(`
     goal_type = excluded.goal_type,
     goal_rate = excluded.goal_rate,
     goal_notes = excluded.goal_notes,
+    language = excluded.language,
     updated_at = excluded.updated_at
 `);
 
-export function upsertProfile(fields: ProfileUpdateInput): UserProfile {
-  const existing = getProfile();
+export function upsertProfile(userId: string, fields: ProfileUpdateInput): UserProfile {
+  const existing = getProfile(userId);
 
   const merged: UserProfile = {
     name: fields.name !== undefined ? fields.name : (existing?.name ?? null),
@@ -76,11 +81,22 @@ export function upsertProfile(fields: ProfileUpdateInput): UserProfile {
     goal_type: fields.goal_type !== undefined ? fields.goal_type : (existing?.goal_type ?? null),
     goal_rate: fields.goal_rate !== undefined ? fields.goal_rate : (existing?.goal_rate ?? null),
     goal_notes: fields.goal_notes !== undefined ? fields.goal_notes : (existing?.goal_notes ?? null),
+    language: fields.language !== undefined ? fields.language : (existing?.language ?? null),
     updated_at: new Date().toISOString(),
   };
 
-  upsertStmt.run(merged as unknown as Record<string, string | number | null>);
+  upsertStmt.run({ id: userId, ...merged } as unknown as Record<string, string | number | null>);
   return merged;
+}
+
+// Shared by /greeting and the /chat reply path so voice/STT language always
+// agree with each other and with the profile setting.
+export function resolveVoiceId(profile: UserProfile | null): string {
+  return profile?.language === "ro" ? ELEVENLABS_VOICE_ID_RO : ELEVENLABS_VOICE_ID;
+}
+
+export function resolveSpeechLang(profile: UserProfile | null): string {
+  return profile?.language === "ro" ? "ro-RO" : "en-US";
 }
 
 const ACTIVITY_MULTIPLIERS: Record<ActivityLevel, number> = {

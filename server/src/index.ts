@@ -4,9 +4,17 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { endSession, runTurn } from "./chat.js";
-import { ACCESS_CODE, PORT } from "./config.js";
+import { ACCESS_CODES, PORT, USERNAME } from "./config.js";
 import { deleteEntry, getEntriesForDate, updateEntry } from "./entries.js";
-import { computeTargets, getProfile, upsertProfile, type ProfileUpdateInput } from "./profile.js";
+import {
+  computeTargets,
+  getProfile,
+  resolveSpeechLang,
+  resolveVoiceId,
+  upsertProfile,
+  type ProfileUpdateInput,
+} from "./profile.js";
+import { synthesizeSpeech } from "./tts.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -18,22 +26,27 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
-// Gates the data API only — never the static app shell below, since a plain
-// page navigation can't attach a custom header. The frontend's AccessGate
-// prompts for the code before making any of these calls.
-function requireAccessCode(req: Request, res: Response, next: NextFunction) {
-  if (!ACCESS_CODE) {
-    next(); // no code configured — local dev, gate disabled
+// Resolves the shared access code to a user identity and stores it on
+// res.locals for downstream handlers — gates the data API only, never the
+// static app shell below, since a plain page navigation can't attach a
+// custom header. The frontend's AccessGate prompts for the code before
+// making any of these calls.
+function resolveUser(req: Request, res: Response, next: NextFunction) {
+  if (ACCESS_CODES.size === 0) {
+    res.locals.userId = "andrei"; // no codes configured — local dev, gate disabled
+    next();
     return;
   }
-  if (req.header("X-Access-Code") !== ACCESS_CODE) {
+  const userId = ACCESS_CODES.get(req.header("X-Access-Code") ?? "");
+  if (!userId) {
     res.status(401).json({ error: "Invalid or missing access code" });
     return;
   }
+  res.locals.userId = userId;
   next();
 }
 
-app.use(["/chat", "/entries", "/profile"], requireAccessCode);
+app.use(["/chat", "/entries", "/profile", "/greeting"], resolveUser);
 
 app.post("/chat", async (req, res) => {
   const { session_id, user_text } = req.body as { session_id?: string; user_text?: string };
@@ -43,7 +56,7 @@ app.post("/chat", async (req, res) => {
   }
 
   try {
-    const result = await runTurn(session_id, user_text);
+    const result = await runTurn(session_id, res.locals.userId as string, user_text);
     if (result.ended) {
       endSession(session_id);
     }
@@ -56,11 +69,11 @@ app.post("/chat", async (req, res) => {
 
 app.get("/entries", (req, res) => {
   const date = typeof req.query.date === "string" ? req.query.date : undefined;
-  res.json(getEntriesForDate(date));
+  res.json(getEntriesForDate(res.locals.userId as string, date));
 });
 
 app.patch("/entries/:id", (req, res) => {
-  const updated = updateEntry(req.params.id, req.body);
+  const updated = updateEntry(res.locals.userId as string, req.params.id, req.body);
   if (!updated) {
     res.status(404).json({ error: "Entry not found" });
     return;
@@ -69,7 +82,7 @@ app.patch("/entries/:id", (req, res) => {
 });
 
 app.delete("/entries/:id", (req, res) => {
-  const ok = deleteEntry(req.params.id);
+  const ok = deleteEntry(res.locals.userId as string, req.params.id);
   if (!ok) {
     res.status(404).json({ error: "Entry not found" });
     return;
@@ -77,13 +90,21 @@ app.delete("/entries/:id", (req, res) => {
   res.status(204).end();
 });
 
+app.get("/greeting", async (_req, res) => {
+  const profile = getProfile(res.locals.userId as string);
+  const name = profile?.name ?? USERNAME;
+  const text = profile?.language === "ro" ? `Bună, ${name}!` : `Hello ${name}`;
+  const audio_base64 = await synthesizeSpeech(text, resolveVoiceId(profile));
+  res.json({ text, audio_base64, lang: resolveSpeechLang(profile) });
+});
+
 app.get("/profile", (_req, res) => {
-  const profile = getProfile();
+  const profile = getProfile(res.locals.userId as string);
   res.json({ profile, targets: computeTargets(profile) });
 });
 
 app.put("/profile", (req, res) => {
-  const profile = upsertProfile(req.body as ProfileUpdateInput);
+  const profile = upsertProfile(res.locals.userId as string, req.body as ProfileUpdateInput);
   res.json({ profile, targets: computeTargets(profile) });
 });
 

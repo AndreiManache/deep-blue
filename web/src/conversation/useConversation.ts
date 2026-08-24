@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import { ApiError, fetchProfile, sendChat } from "../api/client";
+import { ApiError, fetchGreeting, sendChat } from "../api/client";
 import type { RecognitionErrorKind } from "../speech/recognition";
 import { SpeechRecognizer } from "../speech/recognition";
 import { getSpeechSupport } from "../speech/support";
@@ -35,6 +35,10 @@ export function useConversation(): ConversationApi {
   if (!recognizerRef.current) recognizerRef.current = new SpeechRecognizer();
 
   const sessionIdRef = useRef<string>("");
+  // BCP-47 tag for SpeechRecognition, resolved from the profile's language
+  // preference — refreshed after every /greeting and /chat response so a
+  // mid-conversation language switch takes effect on the very next listen.
+  const languageRef = useRef<string>("en-US");
   // Layer 3 of the echo guard: every transition bumps this, so a recognition
   // event that resolves after we've already moved on is ignored.
   const epochRef = useRef(0);
@@ -60,29 +64,33 @@ export function useConversation(): ConversationApi {
     setInterimTranscript("");
     setPhaseBoth("listening");
 
-    recognizerRef.current!.start({
-      onInterim: (text) => {
-        if (epochRef.current !== myEpoch || phaseRef.current !== "listening") return;
-        setInterimTranscript(text);
+    recognizerRef.current!.start(
+      {
+        onInterim: (text) => {
+          if (epochRef.current !== myEpoch || phaseRef.current !== "listening") return;
+          setInterimTranscript(text);
+        },
+        onFinal: (text) => {
+          if (epochRef.current !== myEpoch || phaseRef.current !== "listening") return;
+          void handleFinalTranscript(text);
+        },
+        onError: (kind) => {
+          if (epochRef.current !== myEpoch || phaseRef.current !== "listening") return;
+          handleRecognitionError(kind);
+        },
+        onEnd: () => {
+          // Normal completion is handled via onFinal/onError above.
+        },
       },
-      onFinal: (text) => {
-        if (epochRef.current !== myEpoch || phaseRef.current !== "listening") return;
-        void handleFinalTranscript(text);
-      },
-      onError: (kind) => {
-        if (epochRef.current !== myEpoch || phaseRef.current !== "listening") return;
-        handleRecognitionError(kind);
-      },
-      onEnd: () => {
-        // Normal completion is handled via onFinal/onError above.
-      },
-    });
+      languageRef.current,
+    );
   }
 
-  function speakThenListen(text: string) {
+  function speakThenListen(text: string, audioBase64?: string | null) {
     epochRef.current++; // invalidate any in-flight recognition before speaking
     setPhaseBoth("speaking");
     speak(text, {
+      audioBase64,
       onEnd: () => {
         if (phaseRef.current !== "speaking") return; // session may have ended meanwhile
         openMic();
@@ -123,14 +131,15 @@ export function useConversation(): ConversationApi {
       const result = await sendChat(sessionIdRef.current, text);
       setErrorMessage(null);
       if (result.mutated) setMutationSignal((n) => n + 1);
+      languageRef.current = result.lang;
 
       if (result.ended) {
         setPhaseBoth("speaking");
-        speak(result.reply_text, { onEnd: () => setPhaseBoth("idle") });
+        speak(result.reply_text, { audioBase64: result.audio_base64, onEnd: () => setPhaseBoth("idle") });
         return;
       }
 
-      speakThenListen(result.reply_text);
+      speakThenListen(result.reply_text, result.audio_base64);
     } catch (err) {
       const message = err instanceof ApiError ? err.message : "Something went wrong. Try again.";
       setErrorMessage(message);
@@ -146,19 +155,25 @@ export function useConversation(): ConversationApi {
     setMicPermissionDenied(false);
     setErrorMessage(null);
     sessionIdRef.current = uuidv4();
-    setPhaseBoth("thinking"); // immediate feedback while the profile name loads
+    setPhaseBoth("thinking"); // immediate feedback while the greeting loads
     const myEpoch = ++epochRef.current;
 
-    let name = FALLBACK_NAME;
+    // Same voice pipeline as real replies (ElevenLabs, with an automatic
+    // speechSynthesis fallback baked into speakThenListen/speak) — a failed
+    // fetch here just falls back to the local placeholder greeting text.
+    let text = `Hello ${FALLBACK_NAME}`;
+    let audioBase64: string | null = null;
     try {
-      const { profile } = await fetchProfile();
-      if (profile?.name) name = profile.name;
+      const greeting = await fetchGreeting();
+      text = greeting.text;
+      audioBase64 = greeting.audio_base64;
+      languageRef.current = greeting.lang;
     } catch {
-      // a failed profile fetch shouldn't block starting the conversation
+      // a failed greeting fetch shouldn't block starting the conversation
     }
 
     if (epochRef.current !== myEpoch) return; // endSession() fired while we were fetching
-    speakThenListen(`Hello ${name}`); // still a canned local greeting — zero LLM tokens
+    speakThenListen(text, audioBase64);
   }
 
   // Manual "tap to end my turn" fallback (spec §9), for when end-of-speech

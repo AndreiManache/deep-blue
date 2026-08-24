@@ -80,7 +80,7 @@ export class SpeechRecognizer {
     return Boolean(getConstructor());
   }
 
-  start(handlers: RecognitionHandlers): void {
+  start(handlers: RecognitionHandlers, lang: string = "en-US"): void {
     if (this.listening) return; // guard against InvalidStateError on double-start
     const Ctor = getConstructor();
     if (!Ctor) {
@@ -91,7 +91,7 @@ export class SpeechRecognizer {
     const recognition = new Ctor();
     recognition.continuous = false;
     recognition.interimResults = true;
-    recognition.lang = "en-US";
+    recognition.lang = lang;
 
     recognition.onresult = (event) => {
       let finalTranscript = "";

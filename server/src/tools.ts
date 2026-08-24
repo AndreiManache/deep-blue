@@ -10,7 +10,11 @@ export const tools: Anthropic.Tool[] = [
     input_schema: {
       type: "object",
       properties: {
-        description: { type: "string", description: "Clean, short description of the food, e.g. 'two fried eggs'" },
+        description: {
+          type: "string",
+          description:
+            "Clean, short description of the food, e.g. 'two fried eggs'. Write it in the same language you're conversing in.",
+        },
         calories: { type: "number", description: "Estimated total calories" },
         protein_g: { type: "number", description: "Estimated grams of protein" },
         carbs_g: { type: "number", description: "Estimated grams of carbohydrates" },
@@ -60,7 +64,7 @@ export const tools: Anthropic.Tool[] = [
   {
     name: "update_profile",
     description:
-      "Create or update the user's profile: name, height, weight, age, biological sex, activity level, and fitness goal. Call this whenever the user states or changes any of this info by voice. All fields optional — only pass what changed.",
+      "Create or update the user's profile: name, height, weight, age, biological sex, activity level, fitness goal, and conversation language. Call this whenever the user states or changes any of this info by voice. All fields optional — only pass what changed.",
     input_schema: {
       type: "object",
       properties: {
@@ -83,6 +87,12 @@ export const tools: Anthropic.Tool[] = [
           type: "string",
           description: "Free-text nuance, e.g. 'avoid losing muscle while cutting'",
         },
+        language: {
+          type: "string",
+          enum: ["en", "ro"],
+          description:
+            "The user's preferred spoken language. Call this if they ask to switch to Romanian/English, or address you in Romanian for the first time. Takes effect starting with this reply.",
+        },
       },
     },
   },
@@ -104,11 +114,11 @@ export interface ToolExecutionResult {
   ended: boolean;
 }
 
-export function executeTool(name: string, input: Record<string, unknown>): ToolExecutionResult {
+export function executeTool(userId: string, name: string, input: Record<string, unknown>): ToolExecutionResult {
   try {
     switch (name) {
       case "log_food": {
-        const entry = createEntry({
+        const entry = createEntry(userId, {
           raw_transcript: (input.raw_transcript as string | undefined) ?? (input.description as string),
           description: input.description as string,
           calories: input.calories as number,
@@ -119,7 +129,7 @@ export function executeTool(name: string, input: Record<string, unknown>): ToolE
         return { content: JSON.stringify(entry), isError: false, mutated: true, ended: false };
       }
       case "get_entries": {
-        const entries = getEntriesForDate(input.date as string | undefined);
+        const entries = getEntriesForDate(userId, input.date as string | undefined);
         const total = entries.reduce((sum, e) => sum + e.calories, 0);
         return {
           content: JSON.stringify({ entries, total_calories: total }),
@@ -130,21 +140,21 @@ export function executeTool(name: string, input: Record<string, unknown>): ToolE
       }
       case "update_entry": {
         const { id, ...fields } = input as { id: string } & Record<string, unknown>;
-        const updated = updateEntry(id, fields);
+        const updated = updateEntry(userId, id, fields);
         if (!updated) {
           return { content: `No entry found with id ${id}`, isError: true, mutated: false, ended: false };
         }
         return { content: JSON.stringify(updated), isError: false, mutated: true, ended: false };
       }
       case "delete_entry": {
-        const ok = deleteEntry(input.id as string);
+        const ok = deleteEntry(userId, input.id as string);
         if (!ok) {
           return { content: `No entry found with id ${input.id}`, isError: true, mutated: false, ended: false };
         }
         return { content: "deleted", isError: false, mutated: true, ended: false };
       }
       case "update_profile": {
-        const updated = upsertProfile(input as ProfileUpdateInput);
+        const updated = upsertProfile(userId, input as ProfileUpdateInput);
         return { content: JSON.stringify(updated), isError: false, mutated: false, ended: false };
       }
       case "end_conversation": {

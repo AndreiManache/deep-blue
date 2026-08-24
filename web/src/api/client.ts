@@ -2,6 +2,8 @@ export interface ChatResponse {
   reply_text: string;
   ended: boolean;
   mutated: boolean;
+  audio_base64: string | null;
+  lang: string;
 }
 
 export interface FoodEntry {
@@ -20,6 +22,7 @@ export type Sex = "male" | "female";
 export type ActivityLevel = "sedentary" | "light" | "moderate" | "active" | "very_active";
 export type GoalType = "lose" | "maintain" | "gain";
 export type GoalRate = "gentle" | "moderate" | "aggressive";
+export type Language = "en" | "ro";
 
 export interface UserProfile {
   name: string | null;
@@ -31,6 +34,7 @@ export interface UserProfile {
   goal_type: GoalType | null;
   goal_rate: GoalRate | null;
   goal_notes: string | null;
+  language: Language | null;
   updated_at: string;
 }
 
@@ -114,6 +118,18 @@ export async function editEntry(id: string, fields: Partial<Pick<FoodEntry, "des
 export async function removeEntry(id: string): Promise<void> {
   const res = await apiFetch(`/entries/${id}`, { method: "DELETE" });
   if (!res.ok) throw new ApiError("Could not delete entry.");
+}
+
+export interface GreetingResponse {
+  text: string;
+  audio_base64: string | null;
+  lang: string;
+}
+
+export async function fetchGreeting(): Promise<GreetingResponse> {
+  const res = await apiFetch("/greeting");
+  if (!res.ok) throw new ApiError("Could not load greeting.");
+  return res.json();
 }
 
 export async function fetchProfile(): Promise<ProfileResponse> {

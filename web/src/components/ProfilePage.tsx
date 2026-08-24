@@ -5,6 +5,7 @@ import {
   type ActivityLevel,
   type GoalRate,
   type GoalType,
+  type Language,
   type Sex,
   type Targets,
   type UserProfile,
@@ -24,6 +25,7 @@ type FormState = {
   goal_type: GoalType | "";
   goal_rate: GoalRate | "";
   goal_notes: string;
+  language: Language | "";
 };
 
 const EMPTY_FORM: FormState = {
@@ -36,6 +38,7 @@ const EMPTY_FORM: FormState = {
   goal_type: "",
   goal_rate: "",
   goal_notes: "",
+  language: "",
 };
 
 function toForm(profile: UserProfile | null): FormState {
@@ -50,6 +53,7 @@ function toForm(profile: UserProfile | null): FormState {
     goal_type: profile.goal_type ?? "",
     goal_rate: profile.goal_rate ?? "",
     goal_notes: profile.goal_notes ?? "",
+    language: profile.language ?? "",
   };
 }
 
@@ -89,6 +93,7 @@ export function ProfilePage({ onBack }: ProfilePageProps) {
         goal_type: form.goal_type || null,
         goal_rate: form.goal_rate || null,
         goal_notes: form.goal_notes.trim() || null,
+        language: form.language || null,
       });
       setTargets(newTargets);
     } catch {
@@ -128,6 +133,15 @@ export function ProfilePage({ onBack }: ProfilePageProps) {
           <label>
             Name
             <input value={form.name} onChange={(e) => update("name", e.target.value)} />
+          </label>
+
+          <label>
+            Conversation language
+            <select value={form.language} onChange={(e) => update("language", e.target.value as Language | "")}>
+              <option value="">— (defaults to English)</option>
+              <option value="en">English</option>
+              <option value="ro">Română</option>
+            </select>
           </label>
 
           <div className="profile-form-row">

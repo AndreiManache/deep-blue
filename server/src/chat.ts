@@ -1,8 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { ANTHROPIC_API_KEY, MAX_TOOL_ITERATIONS, MODEL } from "./config.js";
+import { getProfile, resolveSpeechLang, resolveVoiceId } from "./profile.js";
 import { clearSession, getHistory, setHistory, truncatePairSafe } from "./sessions.js";
 import { buildSystemPrompt } from "./systemPrompt.js";
 import { executeTool, tools } from "./tools.js";
+import { synthesizeSpeech } from "./tts.js";
 
 const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
@@ -10,6 +12,8 @@ export interface ChatTurnResult {
   reply_text: string;
   ended: boolean;
   mutated: boolean;
+  audio_base64: string | null;
+  lang: string;
 }
 
 function extractText(content: Anthropic.Message["content"]): string {
@@ -20,7 +24,7 @@ function extractText(content: Anthropic.Message["content"]): string {
     .trim();
 }
 
-export async function runTurn(sessionId: string, userText: string): Promise<ChatTurnResult> {
+export async function runTurn(sessionId: string, userId: string, userText: string): Promise<ChatTurnResult> {
   const history = truncatePairSafe(getHistory(sessionId));
   history.push({ role: "user", content: userText });
 
@@ -32,7 +36,7 @@ export async function runTurn(sessionId: string, userText: string): Promise<Chat
     response = await client.messages.create({
       model: MODEL,
       max_tokens: 1024,
-      system: buildSystemPrompt(),
+      system: buildSystemPrompt(userId),
       tools,
       messages: history,
     });
@@ -46,7 +50,7 @@ export async function runTurn(sessionId: string, userText: string): Promise<Chat
     );
 
     const toolResults: Anthropic.ToolResultBlockParam[] = toolUseBlocks.map((block) => {
-      const result = executeTool(block.name, block.input as Record<string, unknown>);
+      const result = executeTool(userId, block.name, block.input as Record<string, unknown>);
       if (result.mutated) mutated = true;
       if (result.ended) ended = true;
       return {
@@ -76,8 +80,14 @@ export async function runTurn(sessionId: string, userText: string): Promise<Chat
   setHistory(sessionId, history);
 
   const reply_text = extractText(response.content) || "Okay.";
+  // Read fresh (not cached from before the loop) so a language switch made
+  // via update_profile during this very turn is reflected immediately — in
+  // this reply's voice, and in the STT language the frontend listens with
+  // on the user's next turn — not one turn later.
+  const profile = getProfile(userId);
+  const audio_base64 = await synthesizeSpeech(reply_text, resolveVoiceId(profile));
 
-  return { reply_text, ended, mutated };
+  return { reply_text, ended, mutated, audio_base64, lang: resolveSpeechLang(profile) };
 }
 
 export function endSession(sessionId: string): void {

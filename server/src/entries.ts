@@ -15,6 +15,7 @@ export interface FoodEntry {
 
 interface FoodEntryRow {
   id: string;
+  user_id: string;
   raw_transcript: string;
   description: string;
   calories: number;
@@ -26,7 +27,8 @@ interface FoodEntryRow {
 }
 
 function rowToEntry(row: FoodEntryRow): FoodEntry {
-  return { ...row, edited: Boolean(row.edited) };
+  const { user_id: _userId, edited, ...rest } = row;
+  return { ...rest, edited: Boolean(edited) };
 }
 
 export interface CreateEntryInput {
@@ -39,13 +41,14 @@ export interface CreateEntryInput {
 }
 
 const insertStmt = db.prepare(`
-  INSERT INTO food_entries (id, raw_transcript, description, calories, protein_g, carbs_g, fat_g, created_at, edited)
-  VALUES (:id, :raw_transcript, :description, :calories, :protein_g, :carbs_g, :fat_g, :created_at, :edited)
+  INSERT INTO food_entries (id, user_id, raw_transcript, description, calories, protein_g, carbs_g, fat_g, created_at, edited)
+  VALUES (:id, :user_id, :raw_transcript, :description, :calories, :protein_g, :carbs_g, :fat_g, :created_at, :edited)
 `);
 
-export function createEntry(input: CreateEntryInput): FoodEntry {
+export function createEntry(userId: string, input: CreateEntryInput): FoodEntry {
   const row: FoodEntryRow = {
     id: randomUUID(),
+    user_id: userId,
     raw_transcript: input.raw_transcript,
     description: input.description,
     calories: Math.round(input.calories),
@@ -61,21 +64,21 @@ export function createEntry(input: CreateEntryInput): FoodEntry {
 
 const selectByDateStmt = db.prepare(`
   SELECT * FROM food_entries
-  WHERE date(created_at, 'localtime') = date(:anchor, 'localtime')
+  WHERE user_id = :user_id AND date(created_at, 'localtime') = date(:anchor, 'localtime')
   ORDER BY created_at ASC
 `);
 
 // date: 'YYYY-MM-DD' (interpreted as a local calendar day) — defaults to today.
-export function getEntriesForDate(date?: string): FoodEntry[] {
+export function getEntriesForDate(userId: string, date?: string): FoodEntry[] {
   const anchor = date ? `${date}T12:00:00` : new Date().toISOString();
-  const rows = selectByDateStmt.all({ anchor }) as unknown as FoodEntryRow[];
+  const rows = selectByDateStmt.all({ user_id: userId, anchor }) as unknown as FoodEntryRow[];
   return rows.map(rowToEntry);
 }
 
-const selectByIdStmt = db.prepare(`SELECT * FROM food_entries WHERE id = :id`);
+const selectByIdStmt = db.prepare(`SELECT * FROM food_entries WHERE id = :id AND user_id = :user_id`);
 
-export function getEntryById(id: string): FoodEntry | undefined {
-  const row = selectByIdStmt.get({ id }) as unknown as FoodEntryRow | undefined;
+export function getEntryById(userId: string, id: string): FoodEntry | undefined {
+  const row = selectByIdStmt.get({ id, user_id: userId }) as unknown as FoodEntryRow | undefined;
   return row ? rowToEntry(row) : undefined;
 }
 
@@ -91,15 +94,16 @@ const updateStmt = db.prepare(`
   UPDATE food_entries
   SET description = :description, calories = :calories, protein_g = :protein_g,
       carbs_g = :carbs_g, fat_g = :fat_g, edited = :edited
-  WHERE id = :id
+  WHERE id = :id AND user_id = :user_id
 `);
 
-export function updateEntry(id: string, fields: UpdateEntryInput): FoodEntry | undefined {
-  const existing = getEntryById(id);
+export function updateEntry(userId: string, id: string, fields: UpdateEntryInput): FoodEntry | undefined {
+  const existing = getEntryById(userId, id);
   if (!existing) return undefined;
 
   const merged: FoodEntryRow = {
     id: existing.id,
+    user_id: userId,
     raw_transcript: existing.raw_transcript,
     description: fields.description ?? existing.description,
     calories: fields.calories !== undefined ? Math.round(fields.calories) : existing.calories,
@@ -112,6 +116,7 @@ export function updateEntry(id: string, fields: UpdateEntryInput): FoodEntry | u
 
   updateStmt.run({
     id: merged.id,
+    user_id: merged.user_id,
     description: merged.description,
     calories: merged.calories,
     protein_g: merged.protein_g,
@@ -123,9 +128,9 @@ export function updateEntry(id: string, fields: UpdateEntryInput): FoodEntry | u
   return rowToEntry(merged);
 }
 
-const deleteStmt = db.prepare(`DELETE FROM food_entries WHERE id = :id`);
+const deleteStmt = db.prepare(`DELETE FROM food_entries WHERE id = :id AND user_id = :user_id`);
 
-export function deleteEntry(id: string): boolean {
-  const result = deleteStmt.run({ id });
+export function deleteEntry(userId: string, id: string): boolean {
+  const result = deleteStmt.run({ id, user_id: userId });
   return Number(result.changes) > 0;
 }

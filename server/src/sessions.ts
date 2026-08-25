@@ -1,14 +1,32 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { MAX_HISTORY_TURNS } from "./config.js";
 
-const sessions = new Map<string, Anthropic.MessageParam[]>();
+interface SessionEntry {
+  history: Anthropic.MessageParam[];
+  touchedAt: number;
+}
+
+const sessions = new Map<string, SessionEntry>();
+
+// Sessions used to live until end_conversation or a restart — closing the
+// tab mid-conversation leaked its history forever. Sweep idle ones instead;
+// an hour comfortably outlasts any real pause in a voice conversation.
+const SESSION_IDLE_MS = 60 * 60 * 1000;
+const SWEEP_INTERVAL_MS = 10 * 60 * 1000;
+
+setInterval(() => {
+  const cutoff = Date.now() - SESSION_IDLE_MS;
+  for (const [id, session] of sessions) {
+    if (session.touchedAt < cutoff) sessions.delete(id);
+  }
+}, SWEEP_INTERVAL_MS).unref(); // never keeps the process (or tests) alive
 
 export function getHistory(sessionId: string): Anthropic.MessageParam[] {
-  return sessions.get(sessionId) ?? [];
+  return sessions.get(sessionId)?.history ?? [];
 }
 
 export function setHistory(sessionId: string, history: Anthropic.MessageParam[]): void {
-  sessions.set(sessionId, history);
+  sessions.set(sessionId, { history, touchedAt: Date.now() });
 }
 
 export function clearSession(sessionId: string): void {

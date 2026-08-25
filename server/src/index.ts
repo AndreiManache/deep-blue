@@ -15,12 +15,43 @@ import {
   type ProfileUpdateInput,
 } from "./profile.js";
 import { synthesizeSpeech } from "./tts.js";
+import { validateEntryPatch, validateProfileInput } from "./validation.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
+// Railway terminates TLS at a proxy — without this, req.ip is the proxy's
+// address and per-IP rate limiting would throttle everyone together.
+app.set("trust proxy", 1);
 app.use(cors());
 app.use(express.json());
+
+// Tiny fixed-window rate limiter — no dependency needed at this scale.
+function makeRateLimiter(limit: number, windowMs: number) {
+  const hits = new Map<string, { count: number; windowStart: number }>();
+  setInterval(() => {
+    const now = Date.now();
+    for (const [ip, h] of hits) {
+      if (now - h.windowStart > windowMs) hits.delete(ip);
+    }
+  }, windowMs).unref();
+  return function hit(ip: string): boolean {
+    const now = Date.now();
+    const h = hits.get(ip);
+    if (!h || now - h.windowStart > windowMs) {
+      hits.set(ip, { count: 1, windowStart: now });
+      return false;
+    }
+    h.count++;
+    return h.count > limit;
+  };
+}
+
+// Loose overall ceiling — generous for a handful of trusted people.
+const apiOverLimit = makeRateLimiter(120, 60_000);
+// Tight budget for wrong access codes: the codes are deliberately short,
+// and every authenticated call downstream costs real API money.
+const failedAuthOverLimit = makeRateLimiter(10, 15 * 60_000);
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
@@ -32,6 +63,11 @@ app.get("/health", (_req, res) => {
 // custom header. The frontend's AccessGate prompts for the code before
 // making any of these calls.
 function resolveUser(req: Request, res: Response, next: NextFunction) {
+  const ip = req.ip ?? "unknown";
+  if (apiOverLimit(ip)) {
+    res.status(429).json({ error: "Too many requests — slow down a little." });
+    return;
+  }
   if (ACCESS_CODES.size === 0) {
     res.locals.userId = "andrei"; // no codes configured — local dev, gate disabled
     next();
@@ -39,6 +75,10 @@ function resolveUser(req: Request, res: Response, next: NextFunction) {
   }
   const userId = ACCESS_CODES.get(req.header("X-Access-Code") ?? "");
   if (!userId) {
+    if (failedAuthOverLimit(ip)) {
+      res.status(429).json({ error: "Too many attempts — try again later." });
+      return;
+    }
     res.status(401).json({ error: "Invalid or missing access code" });
     return;
   }
@@ -73,6 +113,11 @@ app.get("/entries", (req, res) => {
 });
 
 app.patch("/entries/:id", (req, res) => {
+  const validationError = validateEntryPatch(req.body ?? {});
+  if (validationError) {
+    res.status(400).json({ error: validationError });
+    return;
+  }
   const updated = updateEntry(res.locals.userId as string, req.params.id, req.body);
   if (!updated) {
     res.status(404).json({ error: "Entry not found" });
@@ -115,6 +160,11 @@ app.get("/profile", (_req, res) => {
 });
 
 app.put("/profile", (req, res) => {
+  const validationError = validateProfileInput(req.body ?? {});
+  if (validationError) {
+    res.status(400).json({ error: validationError });
+    return;
+  }
   const profile = upsertProfile(res.locals.userId as string, req.body as ProfileUpdateInput);
   res.json({ profile, targets: computeTargets(profile) });
 });

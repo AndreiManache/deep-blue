@@ -40,9 +40,22 @@ Check current names (not values) with `railway variables --kv`. As of the last d
 
 To change any of these: `railway variables --set "KEY=value"`, then redeploy (variable changes alone don't trigger a redeploy).
 
-## Deploying a change — the actual procedure
+## Deploying a change — via GitHub Actions (no PC needed)
 
-**Important: pushing to GitHub does NOT deploy anything.** This project has no Railway↔GitHub auto-deploy hook connected — `git push` only updates the repo. Deploying is a separate, manual step.
+There is now a GitHub Actions workflow ([.github/workflows/deploy.yml](.github/workflows/deploy.yml)) that builds, tests, and deploys to Railway from GitHub — so a deploy needs nothing installed locally.
+
+- **Automatic:** every update to `master` (e.g. a merged PR) triggers a deploy.
+- **Manual:** GitHub → Actions tab → "Deploy to Railway" → **Run workflow**.
+
+**One-time setup — the `RAILWAY_TOKEN` secret:**
+1. Railway dashboard → the Deep Blue project → **Settings → Tokens** → create a **Project Token** scoped to the **production** environment. Copy it.
+2. GitHub → repo **Settings → Secrets and variables → Actions → New repository secret** → name it exactly `RAILWAY_TOKEN`, paste the value.
+
+That's it — the workflow authenticates with that token (no `railway login`, no local project link) and runs `railway up --ci --service deep-blue`. The token is scoped to this one project; rotate it from the Railway dashboard any time.
+
+## Deploying manually from a PC (the original procedure)
+
+**Note: a plain `git push` still does NOT deploy** — only the Actions workflow above or the manual `railway up` below deploy. This section is the local fallback.
 
 1. **Land your change on `master`.** This repo uses feature branches + PRs (not direct commits to `master`). From `D:\DeepBlue`:
    ```bash

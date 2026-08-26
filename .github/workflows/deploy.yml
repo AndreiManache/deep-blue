@@ -1,0 +1,54 @@
+name: Deploy to Railway
+
+# Deploys the single Railway service (Express serving the API + built frontend).
+#
+# Runs automatically when master updates — e.g. when a PR merges — and can also
+# be triggered by hand from the Actions tab (or the API) via "Run workflow".
+#
+# Requires one repository secret:
+#   RAILWAY_TOKEN — a Railway *project* token for the production environment,
+#   created at: Railway dashboard → the project → Settings → Tokens.
+# Without it the deploy step fails fast with an authentication error.
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+# Never run two deploys at once; let an in-flight deploy finish rather than
+# cancelling it half-way.
+concurrency:
+  group: railway-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      # The service name to deploy to, as it appears in the Railway project.
+      RAILWAY_SERVICE: deep-blue
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Matches the dev/prod runtime; node:sqlite (used by the server) needs
+          # a recent Node.
+          node-version: 24
+
+      # The same build + tests Railway would run, but here first: a broken commit
+      # fails the job and never reaches the deploy step.
+      - name: Build and test
+        run: |
+          npm run build
+          npm test
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      # --ci streams build logs then exits non-zero on failure. The project
+      # token in RAILWAY_TOKEN authenticates non-interactively and selects the
+      # project + environment; --service picks the one service within it.
+      - name: Deploy to Railway
+        run: railway up --ci --service "$RAILWAY_SERVICE"
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}

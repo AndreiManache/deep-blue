@@ -43,6 +43,8 @@ export interface Targets {
   tdee: number;
   calorie_target: number;
   protein_target_g: number;
+  carbs_target_g: number;
+  fat_target_g: number;
 }
 
 export interface ProfileResponse {
@@ -178,6 +180,24 @@ export interface GreetingResponse {
 export async function fetchGreeting(): Promise<GreetingResponse> {
   const res = await apiFetch("/greeting");
   if (!res.ok) throw new ApiError("Could not load greeting.");
+  return res.json();
+}
+
+export interface DailyStat {
+  date: string; // YYYY-MM-DD
+  calories: number;
+  protein_g: number;
+  logged: boolean;
+}
+
+export interface StatsResponse {
+  days: DailyStat[];
+  targets: Targets | null;
+}
+
+export async function fetchStats(days: number): Promise<StatsResponse> {
+  const res = await apiFetch(`/stats?days=${days}`);
+  if (!res.ok) throw new ApiError("Could not load stats.");
   return res.json();
 }
 

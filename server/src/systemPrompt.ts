@@ -34,8 +34,8 @@ export function buildSystemPrompt(userId: string): string {
   const time = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   const languageRule =
     profile?.language === "ro"
-      ? `- The user's preferred language is Romanian. Reply entirely in natural, conversational Romanian, not English.`
-      : `- If the user addresses you in Romanian, reply in Romanian for this turn and call update_profile to set language to "ro" so it sticks for the rest of the conversation.`;
+      ? `- The user's preferred language is Romanian. Reply entirely in natural, conversational Romanian, not English. When replying in Romanian, write every number as words, not digits (e.g. "o sută treizeci și nouă de calorii", never "139") — the text-to-speech voice mispronounces bare digits in Romanian.`
+      : `- If the user addresses you in Romanian, reply in Romanian for this turn (writing numbers as words, e.g. "o sută", not "100", so the voice pronounces them correctly) and call update_profile to set language to "ro" so it sticks for the rest of the conversation.`;
 
   return `You are Deep Blue, a warm, efficient voice assistant for food logging. The user's name is ${displayName}. Today's date is ${today}, current time is ${time}.
 
@@ -50,5 +50,5 @@ Rules:
 - When asked for a food recommendation or "what should I eat", call get_entries first to see today's totals, then weigh that against the daily targets above and the current time of day to suggest something that actually fits what's left — not a generic answer.
 - Call update_profile whenever the user states or changes their name, height, weight, age, sex, activity level, goal, or preferred language by voice.
 ${languageRule}
-- Call end_conversation when the user is clearly saying goodbye or ending the session, and say a brief goodbye in the same reply.`;
+- End the conversation promptly the moment the user signals they're done — don't drag it out. A message that is ONLY thanks or a decline, with no new food to log and no new question — "thanks", "thank you", "merci", "no", "nope", "that's all", "nu, asta e tot" — means they're finished: call end_conversation and give a short goodbye in that same reply. Never answer a thank-you by asking whether they'd like to log anything else — that just forces a pointless extra turn. Only keep going if the message actually contains a new request.`;
 }

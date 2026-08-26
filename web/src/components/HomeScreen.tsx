@@ -7,9 +7,10 @@ import { TalkButton } from "./TalkButton";
 interface HomeScreenProps {
   conversation: ConversationApi;
   onNavigate: (view: "dashboard" | "profile") => void;
+  onLogout: () => void;
 }
 
-export function HomeScreen({ conversation, onNavigate }: HomeScreenProps) {
+export function HomeScreen({ conversation, onNavigate, onLogout }: HomeScreenProps) {
   const {
     phase,
     interimTranscript,
@@ -47,7 +48,7 @@ export function HomeScreen({ conversation, onNavigate }: HomeScreenProps) {
 
   return (
     <div className="home-screen">
-      <HamburgerMenu onNavigate={onNavigate} />
+      <HamburgerMenu onNavigate={onNavigate} onLogout={onLogout} />
 
       {micPermissionDenied ? (
         <MicPermissionHelp onRetry={startSession} />

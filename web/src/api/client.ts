@@ -52,38 +52,84 @@ export interface ProfileResponse {
 
 export class ApiError extends Error {}
 
-const ACCESS_CODE_STORAGE_KEY = "deepblue_access_code";
-// Fired whenever the server rejects the stored code, so the app can fall
-// back to the AccessGate screen without prop-drilling auth state everywhere.
-export const ACCESS_CODE_INVALIDATED_EVENT = "deepblue:access-code-invalidated";
+const SESSION_TOKEN_KEY = "deepblue_session_token";
+// Fired whenever the server rejects the stored token (expired or logged out
+// elsewhere), so the app can fall back to the login screen without
+// prop-drilling auth state everywhere.
+export const SESSION_INVALIDATED_EVENT = "deepblue:session-invalidated";
 
-export function getStoredAccessCode(): string | null {
-  return localStorage.getItem(ACCESS_CODE_STORAGE_KEY);
+export function getStoredToken(): string | null {
+  return localStorage.getItem(SESSION_TOKEN_KEY);
 }
 
-export function setStoredAccessCode(code: string): void {
-  localStorage.setItem(ACCESS_CODE_STORAGE_KEY, code);
+function setStoredToken(token: string): void {
+  localStorage.setItem(SESSION_TOKEN_KEY, token);
 }
 
-function clearStoredAccessCode(): void {
-  localStorage.removeItem(ACCESS_CODE_STORAGE_KEY);
+function clearStoredToken(): void {
+  localStorage.removeItem(SESSION_TOKEN_KEY);
 }
 
-// Every API call routes through here so the access code (if any is stored)
-// is attached, and a 401 uniformly clears it and surfaces the gate again.
-// In local dev, where the server has no ACCESS_CODE configured, this is a
-// no-op passthrough — the gate is never shown because no request ever 401s.
+// Every gated API call routes through here so the session token (if any is
+// stored) is attached as a bearer, and a 401 uniformly clears it and surfaces
+// the login screen again.
 async function apiFetch(path: string, options: RequestInit = {}): Promise<Response> {
-  const code = getStoredAccessCode();
+  const token = getStoredToken();
   const headers = new Headers(options.headers);
-  if (code) headers.set("X-Access-Code", code);
+  if (token) headers.set("Authorization", `Bearer ${token}`);
 
   const res = await fetch(path, { ...options, headers });
   if (res.status === 401) {
-    clearStoredAccessCode();
-    window.dispatchEvent(new Event(ACCESS_CODE_INVALIDATED_EVENT));
+    clearStoredToken();
+    window.dispatchEvent(new Event(SESSION_INVALIDATED_EVENT));
   }
   return res;
+}
+
+export interface AuthResult {
+  token: string;
+  username: string;
+}
+
+// Login and registration talk to the server directly, not through apiFetch: a
+// 401 here is an expected "wrong username or password", not a stale session, so
+// it must surface as an error to the form rather than firing the invalidated
+// event. On success the token is stored for every subsequent apiFetch.
+async function postAuth(path: string, username: string, password: string): Promise<AuthResult> {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  const data = (await res.json().catch(() => ({}))) as Partial<AuthResult> & { error?: string };
+  if (!res.ok || !data.token) {
+    throw new ApiError(data.error ?? "Something went wrong. Try again.");
+  }
+  setStoredToken(data.token);
+  return { token: data.token, username: data.username ?? username };
+}
+
+export function registerAccount(username: string, password: string): Promise<AuthResult> {
+  return postAuth("/auth/register", username, password);
+}
+
+export function loginAccount(username: string, password: string): Promise<AuthResult> {
+  return postAuth("/auth/login", username, password);
+}
+
+// Best-effort server-side session deletion, then always clear locally so the
+// UI returns to the login screen even if the network call fails.
+export async function logout(): Promise<void> {
+  const token = getStoredToken();
+  try {
+    await fetch("/auth/logout", {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+  } catch {
+    /* offline or server down — local clear below is what matters */
+  }
+  clearStoredToken();
 }
 
 export async function sendChat(sessionId: string, userText: string): Promise<ChatResponse> {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { ACCESS_CODE_INVALIDATED_EVENT } from "./api/client";
-import { AccessGate } from "./components/AccessGate";
+import { getStoredToken, logout as logoutRequest, SESSION_INVALIDATED_EVENT } from "./api/client";
+import { AuthGate } from "./components/AuthGate";
 import { Dashboard } from "./components/Dashboard";
 import { HomeScreen } from "./components/HomeScreen";
 import { ProfilePage } from "./components/ProfilePage";
@@ -17,30 +17,37 @@ const PILL_LABELS: Partial<Record<Phase, string>> = {
 
 export function App() {
   const [view, setView] = useState<View>("home");
-  // Starts unlocked, optimistically — in local dev (no ACCESS_CODE
-  // configured server-side) no request ever 401s, so the gate never
-  // appears. In production it flips true the first time one does.
-  const [locked, setLocked] = useState(false);
+  // Authed purely by whether a session token is stored. A stale/expired token
+  // is caught the first time an API call 401s (see the invalidated event
+  // below), which clears it and flips this back to the login screen.
+  const [authed, setAuthed] = useState<boolean>(() => Boolean(getStoredToken()));
   const conversation = useConversation();
   const { endSession } = conversation;
 
   useEffect(() => {
     function handleInvalidated() {
-      // The gate replaces the whole UI — a conversation left running would
-      // keep speaking and listening invisibly behind it.
+      // The login screen replaces the whole UI — a conversation left running
+      // would keep speaking and listening invisibly behind it.
       endSession();
-      setLocked(true);
+      setAuthed(false);
     }
-    window.addEventListener(ACCESS_CODE_INVALIDATED_EVENT, handleInvalidated);
-    return () => window.removeEventListener(ACCESS_CODE_INVALIDATED_EVENT, handleInvalidated);
+    window.addEventListener(SESSION_INVALIDATED_EVENT, handleInvalidated);
+    return () => window.removeEventListener(SESSION_INVALIDATED_EVENT, handleInvalidated);
     // endSession is a stable-enough plain function recreated per render;
     // re-subscribing on each render is harmless and keeps it current.
   }, [endSession]);
 
-  if (locked) {
+  async function handleLogout() {
+    endSession();
+    setView("home");
+    setAuthed(false);
+    await logoutRequest();
+  }
+
+  if (!authed) {
     return (
       <div className="app-shell">
-        <AccessGate onUnlock={() => setLocked(false)} />
+        <AuthGate onAuthed={() => setAuthed(true)} />
       </div>
     );
   }
@@ -49,7 +56,9 @@ export function App() {
 
   return (
     <div className="app-shell">
-      {view === "home" && <HomeScreen conversation={conversation} onNavigate={setView} />}
+      {view === "home" && (
+        <HomeScreen conversation={conversation} onNavigate={setView} onLogout={handleLogout} />
+      )}
       {view === "dashboard" && (
         <Dashboard onBack={() => setView("home")} refreshSignal={conversation.mutationSignal} />
       )}

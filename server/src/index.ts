@@ -26,6 +26,7 @@ import {
   type ProfileUpdateInput,
 } from "./profile.js";
 import { getDailyStats } from "./stats.js";
+import { SttNotConfiguredError, transcribeAudio } from "./stt.js";
 import { synthesizeSpeech } from "./tts.js";
 import { validateEntryPatch, validateProfileInput } from "./validation.js";
 
@@ -149,7 +150,35 @@ app.post("/auth/logout", (req, res) => {
   res.status(204).end();
 });
 
-app.use(["/chat", "/entries", "/profile", "/greeting", "/stats", "/auth/me"], requireAuth);
+app.use(
+  ["/chat", "/entries", "/profile", "/greeting", "/stats", "/transcribe", "/auth/me"],
+  requireAuth,
+);
+
+// Speech-to-text: the client records the user's turn and POSTs the raw audio
+// bytes (Content-Type is the recorder's MIME, e.g. audio/mp4 on iOS). Returns
+// the transcript, which the client then sends to /chat. express.raw buffers the
+// body; the 25MB cap is generous for a short spoken turn.
+app.post("/transcribe", express.raw({ type: () => true, limit: "25mb" }), async (req, res) => {
+  const audio = req.body as Buffer;
+  if (!Buffer.isBuffer(audio) || audio.length === 0) {
+    res.status(400).json({ error: "No audio received." });
+    return;
+  }
+  const profile = getProfile(res.locals.userId as string);
+  const languageCode = profile?.language === "ro" ? "ro" : profile?.language === "en" ? "en" : undefined;
+  try {
+    const result = await transcribeAudio(audio, req.header("content-type") ?? "audio/mp4", languageCode);
+    res.json({ text: result.text });
+  } catch (err) {
+    if (err instanceof SttNotConfiguredError) {
+      res.status(503).json({ error: "Speech-to-text is not configured on the server." });
+      return;
+    }
+    console.error("[/transcribe] error:", err);
+    res.status(502).json({ error: "Could not transcribe the audio. Try again." });
+  }
+});
 
 app.get("/auth/me", (_req, res) => {
   res.json({ username: res.locals.username as string });

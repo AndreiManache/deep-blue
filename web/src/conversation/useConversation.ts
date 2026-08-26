@@ -1,9 +1,7 @@
 import { useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import { ApiError, fetchGreeting, sendChat } from "../api/client";
-import type { RecognitionErrorKind } from "../speech/recognition";
-import { SpeechRecognizer } from "../speech/recognition";
-import { ensureMicPermission } from "../speech/permission";
+import { ApiError, fetchGreeting, sendChat, transcribeAudio } from "../api/client";
+import { SpeechCapture } from "../speech/capture";
 import { getSpeechSupport } from "../speech/support";
 import { cancelSpeech, speak } from "../speech/synthesis";
 
@@ -12,26 +10,13 @@ export type Phase = "idle" | "awaiting-mic" | "listening" | "thinking" | "speaki
 // Used when no profile name has been set yet.
 const FALLBACK_NAME = "there";
 
-// End the conversation after this long listening with nobody saying anything.
-// The timer is cleared the moment any speech is detected, so it only fires on
-// true silence — which also means a session never hangs on "Listening…" when
-// the mic delivers no audio at all (the iOS "didn't hear me" case).
-//
-// 8s, not 3s: the diagnostics showed iOS needs ~1.5s to spin up recognition
-// after listening opens, and a person needs a few seconds to answer a question
-// like "what did you eat?" — a 3s window ended before the first word landed,
-// which looked exactly like "it didn't hear me."
-const SILENCE_TIMEOUT_MS = 8000;
+// After the AI finishes speaking, wait this long before opening the mic. We now
+// hold the mic stream open for the whole session (see SpeechCapture), so iOS
+// stays in record mode; this is just a small guard so the <audio> element is
+// fully released first.
+const MIC_REARM_DELAY_MS = 250;
 
-// After the AI finishes speaking, wait this long before opening the mic. On
-// iOS the audio session doesn't switch from playback back to record instantly;
-// opening recognition the same tick starved it of audio. A short beat (plus the
-// audio-element teardown in synthesis.ts) lets the session settle first.
-const MIC_REARM_DELAY_MS = 350;
-
-// A single line in the on-screen diagnostics log. Timestamped so the UI can
-// show wall-clock time and the delta between events (which is where latency
-// shows up).
+// A single line in the on-screen diagnostics log.
 export interface DiagEvent {
   t: number; // Date.now()
   label: string;
@@ -57,30 +42,25 @@ export function useConversation(): ConversationApi {
   const [phase, setPhase] = useState<Phase>(() =>
     getSpeechSupport().fullySupported ? "idle" : "unsupported",
   );
-  const [interimTranscript, setInterimTranscript] = useState("");
+  const [interimTranscript] = useState(""); // no interim results with batch STT
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [micPermissionDenied, setMicPermissionDenied] = useState(false);
   const [mutationSignal, setMutationSignal] = useState(0);
   const [diagnostics, setDiagnostics] = useState<DiagEvent[]>([]);
 
-  const recognizerRef = useRef<SpeechRecognizer | null>(null);
-  if (!recognizerRef.current) recognizerRef.current = new SpeechRecognizer();
+  const captureRef = useRef<SpeechCapture | null>(null);
+  if (!captureRef.current) captureRef.current = new SpeechCapture();
 
   const sessionIdRef = useRef<string>("");
-  // BCP-47 tag for SpeechRecognition, resolved from the profile's language
-  // preference — refreshed after every /greeting and /chat response so a
-  // mid-conversation language switch takes effect on the very next listen.
+  // BCP-47 tag, refreshed after every /greeting and /chat response so a
+  // mid-conversation language switch takes effect immediately (drives TTS).
   const languageRef = useRef<string>("en-US");
-  // Layer 3 of the echo guard: every transition bumps this, so a recognition
-  // event that resolves after we've already moved on is ignored.
+  // Every transition bumps this, so a capture/transcribe result that resolves
+  // after we've already moved on is ignored.
   const epochRef = useRef(0);
-  // Layer 4: a synchronous phase check readable inside async/event callbacks
-  // (React state itself is stale inside closures until the next render).
+  // A synchronous phase check readable inside async/event callbacks.
   const phaseRef = useRef<Phase>(phase);
-  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Append to the diagnostics log (capped so a long session can't grow it
-  // without bound). Kept cheap — plain state, no refs to read back.
   function logDiag(label: string, detail?: string) {
     setDiagnostics((prev) => {
       const next = [...prev, { t: Date.now(), label, detail }];
@@ -92,81 +72,65 @@ export function useConversation(): ConversationApi {
     setDiagnostics([]);
   }
 
-  function clearSilenceTimer() {
-    if (silenceTimerRef.current) {
-      clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = null;
-    }
-  }
-
-  // Plain hoisted function declarations on purpose — openMic, speakThenListen,
-  // handleFinalTranscript and handleRecognitionError call each other in a
-  // cycle, which const-arrow + useCallback can't express without a temporal-
-  // dead-zone error. None of these need referential stability across renders.
+  // Plain hoisted function declarations on purpose — openMic, speakThenListen
+  // and handleFinalTranscript call each other in a cycle.
 
   function setPhaseBoth(p: Phase) {
     phaseRef.current = p;
     setPhase(p);
   }
 
-  // The ONLY places this is called: a TTS "end" handler (greeting or reply),
-  // or a barge-in. It is structurally impossible to listen while the AI talks.
   function openMic() {
-    clearSilenceTimer();
     const myEpoch = ++epochRef.current;
-    setInterimTranscript("");
     setPhaseBoth("listening");
     logDiag("listening…");
 
-    // Closure-local: was any speech heard in THIS listening window?
-    let heard = false;
+    const fresh = () => epochRef.current === myEpoch && phaseRef.current === "listening";
 
-    silenceTimerRef.current = setTimeout(() => {
-      if (epochRef.current !== myEpoch || phaseRef.current !== "listening" || heard) return;
-      logDiag(`silence — nobody spoke for ${SILENCE_TIMEOUT_MS / 1000}s, ending`);
-      endSession();
-    }, SILENCE_TIMEOUT_MS);
-
-    recognizerRef.current!.start(
-      {
-        onInterim: (text) => {
-          if (epochRef.current !== myEpoch || phaseRef.current !== "listening") return;
-          if (!heard) {
-            heard = true;
-            clearSilenceTimer();
-            logDiag("first audio heard", text);
-          }
-          setInterimTranscript(text);
-        },
-        onFinal: (text) => {
-          if (epochRef.current !== myEpoch || phaseRef.current !== "listening") return;
-          clearSilenceTimer();
-          void handleFinalTranscript(text);
-        },
-        onError: (kind) => {
-          if (epochRef.current !== myEpoch || phaseRef.current !== "listening") return;
-          clearSilenceTimer();
-          logDiag("recognition error", kind);
-          handleRecognitionError(kind);
-        },
-        onEnd: () => {
-          // Normal completion arrives via onFinal/onError first, and both
-          // bump the epoch — so reaching here with a current epoch means
-          // recognition died with no result and no error event (browser
-          // kill, tab background, phone lock). Treat it as silence.
-          if (epochRef.current !== myEpoch || phaseRef.current !== "listening") return;
-          clearSilenceTimer();
-          logDiag("recognition ended with no result");
-          handleRecognitionError("no-speech");
-        },
+    captureRef.current!.listen({
+      onSpeechStart: () => {
+        if (!fresh()) return;
+        logDiag("first audio heard");
       },
-      languageRef.current,
-    );
+      onResult: (blob) => {
+        if (!fresh()) return;
+        void transcribeAndSend(blob, myEpoch);
+      },
+      onNoSpeech: () => {
+        if (!fresh()) return;
+        logDiag("silence — nobody spoke, ending");
+        endSession();
+      },
+      onError: (message) => {
+        if (epochRef.current !== myEpoch) return;
+        logDiag("capture error", message);
+        setErrorMessage("Microphone trouble — tap to try again.");
+        endSession();
+      },
+    });
+  }
+
+  async function transcribeAndSend(blob: Blob, myEpoch: number) {
+    setPhaseBoth("thinking"); // end of speech — show loading through STT + model
+    logDiag("recording stopped, transcribing…", `${Math.round(blob.size / 1024)}KB`);
+    const t0 = Date.now();
+    let text: string;
+    try {
+      text = await transcribeAudio(blob);
+    } catch {
+      logDiag("✕ transcribe failed", `${Date.now() - t0}ms`);
+      if (epochRef.current !== myEpoch) return;
+      speakThenListen("Sorry, I didn't catch that.");
+      return;
+    }
+    logDiag("transcript", `"${text}" (${Date.now() - t0}ms)`);
+    if (epochRef.current !== myEpoch) return;
+    void handleFinalTranscript(text);
   }
 
   function speakThenListen(text: string, audioBase64?: string | null) {
-    clearSilenceTimer();
-    epochRef.current++; // invalidate any in-flight recognition before speaking
+    captureRef.current!.abort(); // never record while the AI talks
+    epochRef.current++;
     setPhaseBoth("speaking");
     logDiag("AI speaks", text.slice(0, 60));
     speak(text, {
@@ -174,36 +138,14 @@ export function useConversation(): ConversationApi {
       lang: languageRef.current,
       onEnd: () => {
         if (phaseRef.current !== "speaking") return; // session may have ended meanwhile
-        // Brief pause so iOS can hand the mic back to recognition (see the
-        // MIC_REARM_DELAY_MS note). Re-check phase after the wait in case the
-        // session ended during it.
+        // Small beat so iOS finishes releasing the <audio> element before the
+        // mic re-opens; re-check phase after the wait.
         setTimeout(() => {
           if (phaseRef.current !== "speaking") return;
           openMic();
         }, MIC_REARM_DELAY_MS);
       },
     });
-  }
-
-  function handleRecognitionError(kind: RecognitionErrorKind) {
-    if (kind === "no-speech") {
-      // Silence ends the conversation (per the 3s-silence rule) rather than
-      // holding the mic open. The timer above usually fires first; this is the
-      // backstop for a browser that raises no-speech on its own.
-      endSession();
-      return;
-    }
-    if (kind === "aborted") {
-      return; // we caused this ourselves (abort before speaking / ending session)
-    }
-    epochRef.current++;
-    if (kind === "not-allowed" || kind === "service-not-allowed") {
-      setMicPermissionDenied(true);
-      setPhaseBoth("idle");
-      return;
-    }
-    // audio-capture, network, other: treat as an unusable transcript.
-    speakThenListen("Sorry, I didn't catch that.");
   }
 
   async function handleFinalTranscript(text: string) {
@@ -213,9 +155,8 @@ export function useConversation(): ConversationApi {
       return;
     }
 
-    logDiag("heard", text);
     epochRef.current++;
-    setPhaseBoth("thinking"); // set immediately on end-of-speech — never a frozen gap
+    setPhaseBoth("thinking");
 
     const startedAt = Date.now();
     logDiag("→ request sent");
@@ -227,12 +168,13 @@ export function useConversation(): ConversationApi {
       languageRef.current = result.lang;
 
       if (result.ended) {
+        captureRef.current!.abort();
         setPhaseBoth("speaking");
         logDiag("AI speaks", result.reply_text.slice(0, 60));
         speak(result.reply_text, {
           audioBase64: result.audio_base64,
           lang: result.lang,
-          onEnd: () => setPhaseBoth("idle"),
+          onEnd: () => endSession(),
         });
         return;
       }
@@ -257,13 +199,9 @@ export function useConversation(): ConversationApi {
     const myEpoch = ++epochRef.current;
     logDiag("── tap → start session ──");
 
-    // Both started before the first await, so the permission prompt is
-    // raised inside this tap's own user gesture, and the greeting downloads
-    // while the user is deciding — waiting on the prompt costs no time.
-    // Nothing may be SPOKEN until permission settles: the greeting playing
-    // over a prompt the user hasn't answered yet is the whole bug (they
-    // answer the greeting, the mic isn't capturing, the words vanish).
-    const permission = ensureMicPermission();
+    // Acquire (and hold) the mic inside the tap gesture, and fetch the greeting
+    // in parallel. Nothing is spoken until permission settles.
+    const permission = captureRef.current!.acquire();
     const greeting = fetchGreeting().catch(() => null);
 
     setPhaseBoth("awaiting-mic");
@@ -275,12 +213,14 @@ export function useConversation(): ConversationApi {
       setPhaseBoth("idle");
       return;
     }
+    if (granted === "unavailable") {
+      setErrorMessage("Microphone isn't available in this browser.");
+      setPhaseBoth("idle");
+      return;
+    }
 
     setPhaseBoth("thinking"); // permission settled; greeting may still be loading
 
-    // Same voice pipeline as real replies (ElevenLabs, with an automatic
-    // speechSynthesis fallback baked into speakThenListen/speak) — a failed
-    // fetch here just falls back to the local placeholder greeting text.
     let text = `Hello ${FALLBACK_NAME}`;
     let audioBase64: string | null = null;
     const result = await greeting;
@@ -294,27 +234,24 @@ export function useConversation(): ConversationApi {
     speakThenListen(text, audioBase64);
   }
 
-  // Manual "tap to end my turn" fallback (spec §9), for when end-of-speech
-  // detection misfires. stop() (not abort()) so a pending result still lands.
+  // Manual "tap to end my turn": stop recording now and transcribe what we have.
   function endTurn() {
     if (phaseRef.current === "listening") {
-      recognizerRef.current!.stop();
+      captureRef.current!.stopTurn();
     }
   }
 
   function endSession() {
-    clearSilenceTimer();
     epochRef.current++;
-    recognizerRef.current!.abort();
+    captureRef.current!.release(); // stops the held mic stream — session over
     cancelSpeech();
-    setInterimTranscript("");
     setPhaseBoth("idle");
     logDiag("session ended");
   }
 
-  // Barge-in: the user wants to talk over the AI. Silence it and listen.
-  // Safe against echo — speech is fully stopped before the mic opens, and
-  // the epoch bump discards anything already in flight.
+  // Barge-in: talk over the AI. Silence it and listen. The held stream is still
+  // open, so this just re-opens the mic; the epoch bump discards any in-flight
+  // transcription.
   function interrupt() {
     if (phaseRef.current !== "speaking") return;
     epochRef.current++;

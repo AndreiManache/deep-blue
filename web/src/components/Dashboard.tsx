@@ -9,7 +9,6 @@ import {
 } from "../api/client";
 import { DaySummary } from "./DaySummary";
 import { EntryRow } from "./EntryRow";
-import { StatsPanel } from "./StatsPanel";
 import { WeekStrip } from "./WeekStrip";
 
 interface DashboardProps {
@@ -121,8 +120,6 @@ export function Dashboard({ onBack, refreshSignal }: DashboardProps) {
           <EntryRow key={entry.id} entry={entry} onSave={handleSave} onDelete={handleDelete} />
         ))}
       </div>
-
-      <StatsPanel refreshSignal={refreshSignal} />
     </div>
   );
 }

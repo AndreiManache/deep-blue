@@ -6,7 +6,7 @@ import { TalkButton } from "./TalkButton";
 
 interface HomeScreenProps {
   conversation: ConversationApi;
-  onNavigate: (view: "dashboard" | "profile") => void;
+  onNavigate: (view: "dashboard" | "profile" | "diagnostics") => void;
   onLogout: () => void;
 }
 

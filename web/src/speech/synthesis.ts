@@ -107,10 +107,16 @@ function playRemoteAudio(base64: string, text: string, onEnd: () => void, lang?:
     if (done) return;
     done = true;
     clearAudioWatchdog();
-    // If the watchdog fired while audio is still playing, stop it — the
-    // caller opens the mic next, and the mic must never hear the tail of
-    // the AI's own reply. (After a natural `ended` this is a no-op.)
+    // Fully release the audio element before the caller reopens the mic. On
+    // iOS, leaving playback attached keeps the audio session in playback mode,
+    // which starves the SpeechRecognition that opens next (it starts but
+    // receives no microphone audio — the "it didn't hear me" case). pause +
+    // drop the src + load() tears the element down so iOS can flip the session
+    // back to record. (Also stops the watchdog case where audio is still
+    // playing, so the mic never hears the tail of the AI's own reply.)
     el.pause();
+    el.removeAttribute("src");
+    el.load();
     onEnd();
   };
   const fallbackToLocal = () => {

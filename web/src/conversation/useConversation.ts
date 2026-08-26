@@ -16,7 +16,18 @@ const FALLBACK_NAME = "there";
 // The timer is cleared the moment any speech is detected, so it only fires on
 // true silence — which also means a session never hangs on "Listening…" when
 // the mic delivers no audio at all (the iOS "didn't hear me" case).
-const SILENCE_TIMEOUT_MS = 3000;
+//
+// 8s, not 3s: the diagnostics showed iOS needs ~1.5s to spin up recognition
+// after listening opens, and a person needs a few seconds to answer a question
+// like "what did you eat?" — a 3s window ended before the first word landed,
+// which looked exactly like "it didn't hear me."
+const SILENCE_TIMEOUT_MS = 8000;
+
+// After the AI finishes speaking, wait this long before opening the mic. On
+// iOS the audio session doesn't switch from playback back to record instantly;
+// opening recognition the same tick starved it of audio. A short beat (plus the
+// audio-element teardown in synthesis.ts) lets the session settle first.
+const MIC_REARM_DELAY_MS = 350;
 
 // A single line in the on-screen diagnostics log. Timestamped so the UI can
 // show wall-clock time and the delta between events (which is where latency
@@ -112,7 +123,7 @@ export function useConversation(): ConversationApi {
 
     silenceTimerRef.current = setTimeout(() => {
       if (epochRef.current !== myEpoch || phaseRef.current !== "listening" || heard) return;
-      logDiag("silence — nobody spoke for 3s, ending");
+      logDiag(`silence — nobody spoke for ${SILENCE_TIMEOUT_MS / 1000}s, ending`);
       endSession();
     }, SILENCE_TIMEOUT_MS);
 
@@ -163,7 +174,13 @@ export function useConversation(): ConversationApi {
       lang: languageRef.current,
       onEnd: () => {
         if (phaseRef.current !== "speaking") return; // session may have ended meanwhile
-        openMic();
+        // Brief pause so iOS can hand the mic back to recognition (see the
+        // MIC_REARM_DELAY_MS note). Re-check phase after the wait in case the
+        // session ended during it.
+        setTimeout(() => {
+          if (phaseRef.current !== "speaking") return;
+          openMic();
+        }, MIC_REARM_DELAY_MS);
       },
     });
   }

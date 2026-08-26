@@ -1,14 +1,14 @@
 import { useState } from "react";
 
 interface HamburgerMenuProps {
-  onNavigate: (view: "dashboard" | "profile") => void;
+  onNavigate: (view: "dashboard" | "profile" | "diagnostics") => void;
   onLogout: () => void;
 }
 
 export function HamburgerMenu({ onNavigate, onLogout }: HamburgerMenuProps) {
   const [open, setOpen] = useState(false);
 
-  function go(view: "dashboard" | "profile") {
+  function go(view: "dashboard" | "profile" | "diagnostics") {
     setOpen(false);
     onNavigate(view);
   }
@@ -37,6 +37,9 @@ export function HamburgerMenu({ onNavigate, onLogout }: HamburgerMenuProps) {
           </button>
           <button className="dropdown-item" onClick={() => go("profile")}>
             Profile
+          </button>
+          <button className="dropdown-item" onClick={() => go("diagnostics")}>
+            Diagnostics
           </button>
           <button className="dropdown-item dropdown-item-danger" onClick={handleLogout}>
             Log out

@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import { getStoredToken, logout as logoutRequest, SESSION_INVALIDATED_EVENT } from "./api/client";
 import { AuthGate } from "./components/AuthGate";
 import { Dashboard } from "./components/Dashboard";
+import { DiagnosticsPage } from "./components/DiagnosticsPage";
 import { HomeScreen } from "./components/HomeScreen";
 import { ProfilePage } from "./components/ProfilePage";
 import { useConversation, type Phase } from "./conversation/useConversation";
 
-type View = "home" | "dashboard" | "profile";
+type View = "home" | "dashboard" | "profile" | "diagnostics";
 
 const PILL_LABELS: Partial<Record<Phase, string>> = {
   "awaiting-mic": "Allow mic…",
@@ -63,6 +64,13 @@ export function App() {
         <Dashboard onBack={() => setView("home")} refreshSignal={conversation.mutationSignal} />
       )}
       {view === "profile" && <ProfilePage onBack={() => setView("home")} />}
+      {view === "diagnostics" && (
+        <DiagnosticsPage
+          events={conversation.diagnostics}
+          onClear={conversation.clearDiagnostics}
+          onBack={() => setView("home")}
+        />
+      )}
 
       {view !== "home" && pillLabel && (
         <div className="conversation-pill">

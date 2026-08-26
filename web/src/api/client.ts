@@ -171,6 +171,21 @@ export async function removeEntry(id: string): Promise<void> {
   if (!res.ok) throw new ApiError("Could not delete entry.");
 }
 
+// Sends a recorded audio turn to the server for transcription (ElevenLabs
+// Scribe). The blob's MIME becomes the Content-Type so the server forwards it
+// verbatim. Returns the (possibly empty) transcript.
+export async function transcribeAudio(blob: Blob): Promise<string> {
+  const res = await apiFetch("/transcribe", {
+    method: "POST",
+    headers: { "Content-Type": blob.type || "audio/mp4" },
+    body: blob,
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!res.ok) throw new ApiError("Could not transcribe the audio.");
+  const data = (await res.json()) as { text?: string };
+  return (data.text ?? "").trim();
+}
+
 export interface GreetingResponse {
   text: string;
   audio_base64: string | null;

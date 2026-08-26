@@ -89,3 +89,30 @@ if (idColumn && idColumn.type.toUpperCase().includes("INT")) {
     ALTER TABLE user_profile_v2 RENAME TO user_profile;
   `);
 }
+
+// Real accounts. id is the normalized (lowercase) username, and is the same
+// identity string used as user_id across food_entries and user_profile — so a
+// person who registers "andrei" inherits any data already logged under that id
+// (e.g. from the earlier access-code deployment). username keeps the original
+// casing for display; password_hash is a self-contained "salt:hash" scrypt
+// string (see auth.ts).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    username TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+`);
+
+// Opaque session tokens issued at login/registration. Kept in the database
+// (not memory) so a server restart or Railway redeploy doesn't log everyone
+// out. expires_at is an ISO string; expired rows are swept lazily in auth.ts.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS auth_sessions (
+    token TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL
+  );
+`);

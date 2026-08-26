@@ -3,8 +3,19 @@ import express, { type NextFunction, type Request, type Response } from "express
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  createSession,
+  createUser,
+  deleteSession,
+  findUser,
+  getSessionUser,
+  tokenFromHeaders,
+  UsernameTakenError,
+  validateCredentials,
+  verifyPassword,
+} from "./auth.js";
 import { endSession, runTurn } from "./chat.js";
-import { ACCESS_CODES, PORT, USERNAME } from "./config.js";
+import { PORT, USERNAME } from "./config.js";
 import { deleteEntry, getEntriesForDate, updateEntry } from "./entries.js";
 import {
   computeTargets,
@@ -49,44 +60,99 @@ function makeRateLimiter(limit: number, windowMs: number) {
 
 // Loose overall ceiling — generous for a handful of trusted people.
 const apiOverLimit = makeRateLimiter(120, 60_000);
-// Tight budget for wrong access codes: the codes are deliberately short,
-// and every authenticated call downstream costs real API money.
+// Tight budget for wrong login attempts per IP — slows password guessing
+// against the /auth/login endpoint.
 const failedAuthOverLimit = makeRateLimiter(10, 15 * 60_000);
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
-// Resolves the shared access code to a user identity and stores it on
-// res.locals for downstream handlers — gates the data API only, never the
-// static app shell below, since a plain page navigation can't attach a
-// custom header. The frontend's AccessGate prompts for the code before
-// making any of these calls.
-function resolveUser(req: Request, res: Response, next: NextFunction) {
-  const ip = req.ip ?? "unknown";
-  if (apiOverLimit(ip)) {
+// Shared per-IP throttle used by both the auth endpoints and the gated data
+// API — an early return, so a flood can't even reach account lookup or the model.
+function rateLimited(req: Request, res: Response): boolean {
+  if (apiOverLimit(req.ip ?? "unknown")) {
     res.status(429).json({ error: "Too many requests — slow down a little." });
+    return true;
+  }
+  return false;
+}
+
+// Resolves the bearer session token to a user and stores the identity on
+// res.locals for downstream handlers. Gates the data API only, never the
+// static app shell below, since a plain page navigation can't attach a
+// header — the frontend's login screen obtains a token before making any of
+// these calls, and a 401 here sends it back to that screen.
+function requireAuth(req: Request, res: Response, next: NextFunction) {
+  if (rateLimited(req, res)) return;
+  const token = tokenFromHeaders(req.header("authorization"), req.header("x-session-token"));
+  const user = getSessionUser(token);
+  if (!user) {
+    res.status(401).json({ error: "Not signed in" });
     return;
   }
-  if (ACCESS_CODES.size === 0) {
-    res.locals.userId = "andrei"; // no codes configured — local dev, gate disabled
-    next();
-    return;
-  }
-  const userId = ACCESS_CODES.get(req.header("X-Access-Code") ?? "");
-  if (!userId) {
-    if (failedAuthOverLimit(ip)) {
-      res.status(429).json({ error: "Too many attempts — try again later." });
-      return;
-    }
-    res.status(401).json({ error: "Invalid or missing access code" });
-    return;
-  }
-  res.locals.userId = userId;
+  res.locals.userId = user.id;
+  res.locals.username = user.username;
   next();
 }
 
-app.use(["/chat", "/entries", "/profile", "/greeting"], resolveUser);
+// --- auth endpoints (public; obtain or discard a session token) ------------
+
+app.post("/auth/register", (req, res) => {
+  if (rateLimited(req, res)) return;
+  const { username, password } = (req.body ?? {}) as { username?: unknown; password?: unknown };
+  const invalid = validateCredentials(username, password);
+  if (invalid) {
+    res.status(400).json({ error: invalid });
+    return;
+  }
+  try {
+    const user = createUser(username as string, password as string);
+    const token = createSession(user.id);
+    res.json({ token, username: user.username });
+  } catch (err) {
+    if (err instanceof UsernameTakenError) {
+      res.status(409).json({ error: err.message });
+      return;
+    }
+    console.error("[/auth/register] error:", err);
+    res.status(500).json({ error: "Could not create the account. Try again." });
+  }
+});
+
+app.post("/auth/login", (req, res) => {
+  if (rateLimited(req, res)) return;
+  const { username, password } = (req.body ?? {}) as { username?: unknown; password?: unknown };
+  if (typeof username !== "string" || typeof password !== "string") {
+    res.status(400).json({ error: "Username and password are required." });
+    return;
+  }
+  const user = findUser(username);
+  // One generic message and one code for both "no such user" and "wrong
+  // password", so the endpoint never reveals which usernames exist. Every
+  // failure is metered so the short-lived guess budget applies here too.
+  if (!user || !verifyPassword(password, user.password_hash)) {
+    if (failedAuthOverLimit(req.ip ?? "unknown")) {
+      res.status(429).json({ error: "Too many attempts — try again later." });
+      return;
+    }
+    res.status(401).json({ error: "Wrong username or password." });
+    return;
+  }
+  const token = createSession(user.id);
+  res.json({ token, username: user.username });
+});
+
+app.post("/auth/logout", (req, res) => {
+  deleteSession(tokenFromHeaders(req.header("authorization"), req.header("x-session-token")));
+  res.status(204).end();
+});
+
+app.use(["/chat", "/entries", "/profile", "/greeting", "/auth/me"], requireAuth);
+
+app.get("/auth/me", (_req, res) => {
+  res.json({ username: res.locals.username as string });
+});
 
 app.post("/chat", async (req, res) => {
   const { session_id, user_text } = req.body as { session_id?: string; user_text?: string };
@@ -141,7 +207,10 @@ const greetingAudioCache = new Map<string, string>();
 
 app.get("/greeting", async (_req, res) => {
   const profile = getProfile(res.locals.userId as string);
-  const name = profile?.name ?? USERNAME;
+  // Prefer the profile's display name, then the account's own username, then
+  // the generic env fallback — so a freshly registered user is still greeted
+  // by name before they've filled in a profile.
+  const name = profile?.name ?? (res.locals.username as string) ?? USERNAME;
   const text = profile?.language === "ro" ? `Bună, ${name}!` : `Hello ${name}`;
   const voiceId = resolveVoiceId(profile);
   const cacheKey = `${voiceId}:${text}`;

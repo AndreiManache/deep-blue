@@ -2,6 +2,10 @@
 
 Improvements identified in review, not yet implemented. Ordered by priority within each group.
 
+## Auth — username/password accounts (2026-08-26)
+
+- [x] **Replaced the shared access-code gate with real login/logout.** The old model was one shared secret per user (`ACCESS_CODES` env var, `code:user_id`), stored in `localStorage` and sent as `X-Access-Code`, with no logout and no self sign-up. Now: username + password accounts with open self sign-up. Server: [auth.ts](server/src/auth.ts) (scrypt hashing via Node's built-in `crypto`, opaque 32-byte session tokens, 30-day expiry), new `users` + `auth_sessions` tables in [db.ts](server/src/db.ts), and `/auth/register`, `/auth/login`, `/auth/logout`, `/auth/me` in [index.ts](server/src/index.ts) with the gated data routes moved behind a bearer-token `requireAuth` middleware. Frontend: [AuthGate.tsx](web/src/components/AuthGate.tsx) (login/register toggle), token storage + auth calls in [client.ts](web/src/api/client.ts), a **Log out** item in the hamburger menu, and `App.tsx` auth state driven by the stored token / a 401 `SESSION_INVALIDATED_EVENT`. **Identity continuity:** a user's `id` is their normalized (lowercase) username, which is the same `user_id` the food log and profile were already keyed by — so registering `andrei` inherits the existing access-code-era data. Login attempts are rate-limited per IP; the login error is deliberately generic so it never reveals which usernames exist. No email/reset flow (a forgotten password means deleting the `users` row). Tests in [auth.test.ts](server/test/auth.test.ts) plus a full curl smoke test of the live endpoints.
+
 ## P0 — Conversation-killing bugs (full-codebase review, 2026-08-25)
 
 **Shipped 2026-08-25** (commit eb94ccb, deployed to Railway; checked items were fixed in that pass — real-device verification of the mic/echo fixes still pending on the phone). Root causes for the two live bug reports ("model doesn't hear me after allowing the mic"; "going to dashboard stops the listening"; "Romanian glitches while speaking"). All three trace to two defects.

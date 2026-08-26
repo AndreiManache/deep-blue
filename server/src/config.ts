@@ -14,22 +14,6 @@ export const PORT = Number(process.env.PORT ?? 3001);
 export const USERNAME = process.env.DEEPBLUE_USERNAME ?? "there";
 export const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? "";
 
-// Maps a shared access code to the user identity it belongs to — e.g.
-// "andrei23:andrei,Maria:maria" grants two people their own isolated
-// profile/food-log data on the same deployment. Empty means "no gate" —
-// every request resolves to the fixed "andrei" identity, fine for local dev.
-export const ACCESS_CODES: Map<string, string> = new Map(
-  (process.env.ACCESS_CODES ?? "")
-    .split(",")
-    .map((pair) => pair.trim())
-    .filter(Boolean)
-    .map((pair) => {
-      const [code, userId] = pair.split(":").map((s) => s.trim());
-      return [code, userId] as [string, string];
-    })
-    .filter(([code, userId]) => code && userId),
-);
-
 // Empty means "no ElevenLabs" — reply audio synthesis is skipped and the
 // frontend falls back to the browser's own speechSynthesis. Never required.
 export const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY ?? "";

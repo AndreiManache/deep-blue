@@ -31,19 +31,27 @@ Check current names (not values) with `railway variables --kv`. As of the last d
 |---|---|
 | `ANTHROPIC_API_KEY` | Claude API access |
 | `ELEVENLABS_API_KEY` | Premium TTS voice; if unset/failing, app falls back to browser `speechSynthesis` automatically |
-| `ACCESS_CODES` | Multi-user auth, format `code1:userid1,code2:userid2` (e.g. `andrei23:andrei,Maria:maria`) — each code maps to an isolated identity/data set |
-| `DEEPBLUE_USERNAME` | Display name (note: `DEEPBLUE_USERNAME`, not `USERNAME` — that collides with a built-in Windows env var) |
+| `DEEPBLUE_USERNAME` | Display name fallback (note: `DEEPBLUE_USERNAME`, not `USERNAME` — that collides with a built-in Windows env var) |
 | `DEEPBLUE_DB_PATH` | Set to `/data/deepblue.db` — must point into the mounted volume or data won't survive a redeploy |
 
-**Stale/legacy:** an old `ACCESS_CODE` (singular) var is also still set from before multi-user support shipped — it's unused now that `ACCESS_CODES` (plural) exists. Harmless to leave, but don't be confused by it showing up in `railway variables --kv`.
+**Auth:** the app uses username + password accounts with open self sign-up — there is **no** auth env var. Accounts (`users`) and session tokens (`auth_sessions`) live in the SQLite database, so `DEEPBLUE_DB_PATH` pointing at the persistent volume is what keeps people logged in and their accounts alive across redeploys. Session tokens are opaque 32-byte values, valid 30 days; passwords are scrypt-hashed. There is no password reset — a forgotten password means deleting that `users` row and re-registering.
+
+**Stale/legacy:** old `ACCESS_CODE` (singular) and `ACCESS_CODES` (plural) vars may still be set from the previous access-code auth — both are now unused (nothing reads them) and safe to leave or remove. A user who registers the username `andrei` inherits the data previously keyed to that identity.
 
 To change any of these: `railway variables --set "KEY=value"`, then redeploy (variable changes alone don't trigger a redeploy).
 
-To rotate/revoke a user's access code: update their entry in `ACCESS_CODES` and redeploy — that device will need the new code on its next request.
+## Deploying a change — automatic via Railway (no PC needed)
 
-## Deploying a change — the actual procedure
+The Railway service is connected directly to this GitHub repo (service → **Settings → Source**): repo `AndreiManache/deep-blue`, branch **`master`**, **auto-deploy on push enabled**. So **any update to `master` — e.g. a merged PR — deploys automatically.** No token, no local CLI, no GitHub secret needed.
 
-**Important: pushing to GitHub does NOT deploy anything.** This project has no Railway↔GitHub auto-deploy hook connected — `git push` only updates the repo. Deploying is a separate, manual step.
+- **To ship a change:** get it onto `master` (merge its PR). Railway builds the repo root — the `package.json` `build`/`start` scripts — and redeploys.
+- **To redeploy or roll back by hand:** Railway dashboard → the service → **Deployments** → redeploy a build.
+
+"Wait for CI" is off, so Railway deploys immediately on push without waiting for any GitHub checks. (There is intentionally no GitHub Actions deploy workflow — Railway's own GitHub integration does the deploying.)
+
+## Deploying manually from a PC (fallback)
+
+**Only needed if the Railway↔GitHub connection above is ever removed.** A plain `git push` deploys via that connection; this `railway up` path is the manual alternative.
 
 1. **Land your change on `master`.** This repo uses feature branches + PRs (not direct commits to `master`). From `D:\DeepBlue`:
    ```bash

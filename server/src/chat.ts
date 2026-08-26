@@ -48,7 +48,10 @@ export async function runTurn(sessionId: string, userId: string, userText: strin
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
     response = await client.messages.create({
       model: MODEL,
-      max_tokens: 1024,
+      // Replies are 1-2 spoken sentences; this caps a runaway long answer
+      // (which is slow to generate, slow to synthesize, and slow to play) while
+      // leaving ample room for a normal reply plus a tool call.
+      max_tokens: 400,
       system: buildSystemPrompt(userId),
       tools,
       messages: history,

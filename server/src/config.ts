@@ -29,11 +29,14 @@ export const ELEVENLABS_VOICE_ID_RO = process.env.ELEVENLABS_VOICE_ID_RO || ELEV
 // Also multilingual (32 languages, including Romanian).
 export const ELEVENLABS_MODEL_ID = "eleven_flash_v2_5";
 
-// Single config value. Upgraded from claude-haiku-4-5 (2026-08-25) for
-// estimation accuracy — Haiku applied the multi-step composition rule only
-// ~75% of the time. ~3x per-token cost, still a few dollars/month at this
-// usage. No date suffix on this ID.
-export const MODEL = "claude-sonnet-5";
+// Back to Haiku 4.5 (2026-08-26) for speed and cost. It was upgraded to
+// Sonnet on 2026-08-25 because Haiku applied the multi-step composition rule
+// inconsistently — but that math now lives in deterministic code (log_food
+// computes the fat/lean split server-side), so Haiku's weakness there no
+// longer applies. Haiku is ~2x cheaper ($1/$5 vs $2/$10 per 1M tokens) and
+// noticeably faster per turn — the right tradeoff for short voice replies.
+// No date suffix on this ID.
+export const MODEL = "claude-haiku-4-5";
 
 // Cap on stored conversation turns — genuine user turns, per spec §7. Tool
 // round-trips add extra messages that don't count against this.

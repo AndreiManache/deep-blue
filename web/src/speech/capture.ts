@@ -21,7 +21,7 @@ export interface CaptureHandlers {
 // VAD tuning. RMS is on a 0..1 scale off the time-domain waveform.
 const START_RMS = 0.025; // speech onset
 const SILENCE_RMS = 0.018; // below this counts as quiet
-const END_SILENCE_MS = 1200; // trailing quiet after speech that ends the turn
+const END_SILENCE_MS = 800; // trailing quiet after speech that ends the turn
 const NO_SPEECH_MS = 8000; // nothing said at all -> onNoSpeech
 const MAX_TURN_MS = 20000; // hard cap on one turn
 const POLL_MS = 50;

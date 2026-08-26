@@ -40,22 +40,18 @@ Check current names (not values) with `railway variables --kv`. As of the last d
 
 To change any of these: `railway variables --set "KEY=value"`, then redeploy (variable changes alone don't trigger a redeploy).
 
-## Deploying a change — via GitHub Actions (no PC needed)
+## Deploying a change — automatic via Railway (no PC needed)
 
-There is now a GitHub Actions workflow ([.github/workflows/deploy.yml](.github/workflows/deploy.yml)) that builds, tests, and deploys to Railway from GitHub — so a deploy needs nothing installed locally.
+The Railway service is connected directly to this GitHub repo (service → **Settings → Source**): repo `AndreiManache/deep-blue`, branch **`master`**, **auto-deploy on push enabled**. So **any update to `master` — e.g. a merged PR — deploys automatically.** No token, no local CLI, no GitHub secret needed.
 
-- **Automatic:** every update to `master` (e.g. a merged PR) triggers a deploy.
-- **Manual:** GitHub → Actions tab → "Deploy to Railway" → **Run workflow**.
+- **To ship a change:** get it onto `master` (merge its PR). Railway builds the repo root — the `package.json` `build`/`start` scripts — and redeploys.
+- **To redeploy or roll back by hand:** Railway dashboard → the service → **Deployments** → redeploy a build.
 
-**One-time setup — the `RAILWAY_TOKEN` secret:**
-1. Railway dashboard → the Deep Blue project → **Settings → Tokens** → create a **Project Token** scoped to the **production** environment. Copy it.
-2. GitHub → repo **Settings → Secrets and variables → Actions → New repository secret** → name it exactly `RAILWAY_TOKEN`, paste the value.
+"Wait for CI" is off, so Railway deploys immediately on push without waiting for any GitHub checks. (There is intentionally no GitHub Actions deploy workflow — Railway's own GitHub integration does the deploying.)
 
-That's it — the workflow authenticates with that token (no `railway login`, no local project link) and runs `railway up --ci --service deep-blue`. The token is scoped to this one project; rotate it from the Railway dashboard any time.
+## Deploying manually from a PC (fallback)
 
-## Deploying manually from a PC (the original procedure)
-
-**Note: a plain `git push` still does NOT deploy** — only the Actions workflow above or the manual `railway up` below deploy. This section is the local fallback.
+**Only needed if the Railway↔GitHub connection above is ever removed.** A plain `git push` deploys via that connection; this `railway up` path is the manual alternative.
 
 1. **Land your change on `master`.** This repo uses feature branches + PRs (not direct commits to `master`). From `D:\DeepBlue`:
    ```bash

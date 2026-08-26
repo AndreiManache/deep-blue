@@ -181,6 +181,24 @@ export async function fetchGreeting(): Promise<GreetingResponse> {
   return res.json();
 }
 
+export interface DailyStat {
+  date: string; // YYYY-MM-DD
+  calories: number;
+  protein_g: number;
+  logged: boolean;
+}
+
+export interface StatsResponse {
+  days: DailyStat[];
+  targets: Targets | null;
+}
+
+export async function fetchStats(days: number): Promise<StatsResponse> {
+  const res = await apiFetch(`/stats?days=${days}`);
+  if (!res.ok) throw new ApiError("Could not load stats.");
+  return res.json();
+}
+
 export async function fetchProfile(): Promise<ProfileResponse> {
   const res = await apiFetch("/profile");
   if (!res.ok) throw new ApiError("Could not load profile.");

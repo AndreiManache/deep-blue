@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { editEntry, fetchEntries, removeEntry, type FoodEntry } from "../api/client";
 import { EntryRow } from "./EntryRow";
+import { StatsPanel } from "./StatsPanel";
 
 interface DashboardProps {
   onBack: () => void;
@@ -73,6 +74,8 @@ export function Dashboard({ onBack, refreshSignal }: DashboardProps) {
           <EntryRow key={entry.id} entry={entry} onSave={handleSave} onDelete={handleDelete} />
         ))}
       </div>
+
+      <StatsPanel refreshSignal={refreshSignal} />
     </div>
   );
 }

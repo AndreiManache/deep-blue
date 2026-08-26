@@ -25,6 +25,7 @@ import {
   upsertProfile,
   type ProfileUpdateInput,
 } from "./profile.js";
+import { getDailyStats } from "./stats.js";
 import { synthesizeSpeech } from "./tts.js";
 import { validateEntryPatch, validateProfileInput } from "./validation.js";
 
@@ -148,7 +149,7 @@ app.post("/auth/logout", (req, res) => {
   res.status(204).end();
 });
 
-app.use(["/chat", "/entries", "/profile", "/greeting", "/auth/me"], requireAuth);
+app.use(["/chat", "/entries", "/profile", "/greeting", "/stats", "/auth/me"], requireAuth);
 
 app.get("/auth/me", (_req, res) => {
   res.json({ username: res.locals.username as string });
@@ -226,6 +227,19 @@ app.get("/greeting", async (_req, res) => {
 app.get("/profile", (_req, res) => {
   const profile = getProfile(res.locals.userId as string);
   res.json({ profile, targets: computeTargets(profile) });
+});
+
+// Per-day rollups for the Dashboard trends chart. days is clamped to a small
+// allowlist; targets come along so the frontend can draw the goal line without
+// a second request.
+app.get("/stats", (req, res) => {
+  const requested = Number(req.query.days);
+  const days = [7, 14, 30, 90].includes(requested) ? requested : 7;
+  const profile = getProfile(res.locals.userId as string);
+  res.json({
+    days: getDailyStats(res.locals.userId as string, days),
+    targets: computeTargets(profile),
+  });
 });
 
 app.put("/profile", (req, res) => {

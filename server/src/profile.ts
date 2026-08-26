@@ -39,6 +39,8 @@ export interface Targets {
   tdee: number;
   calorie_target: number;
   protein_target_g: number;
+  carbs_target_g: number;
+  fat_target_g: number;
 }
 
 const selectStmt = db.prepare(`SELECT * FROM user_profile WHERE id = :id`);
@@ -140,10 +142,24 @@ export function computeTargets(profile: UserProfile | null): Targets | null {
     calorie_target = tdee * (1 + GAIN_SURPLUS[rate]);
   }
 
+  // Macro targets from the calorie target: protein anchored to bodyweight
+  // (1.8 g/kg), fat at ~27% of calories, carbs filling the remainder. Carbs are
+  // clamped at 0 in case a high protein+fat share exceeds the target (small
+  // person on an aggressive cut), so the number is never negative.
+  const calorieTarget = Math.round(calorie_target);
+  const protein_target_g = Math.round(weight_kg * 1.8);
+  const fat_target_g = Math.round((calorieTarget * 0.27) / 9);
+  const carbs_target_g = Math.max(
+    0,
+    Math.round((calorieTarget - protein_target_g * 4 - fat_target_g * 9) / 4),
+  );
+
   return {
     bmr: Math.round(bmr),
     tdee: Math.round(tdee),
-    calorie_target: Math.round(calorie_target),
-    protein_target_g: Math.round(weight_kg * 1.8),
+    calorie_target: calorieTarget,
+    protein_target_g,
+    carbs_target_g,
+    fat_target_g,
   };
 }

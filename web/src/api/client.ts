@@ -43,6 +43,8 @@ export interface Targets {
   tdee: number;
   calorie_target: number;
   protein_target_g: number;
+  carbs_target_g: number;
+  fat_target_g: number;
 }
 
 export interface ProfileResponse {

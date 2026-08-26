@@ -572,6 +572,180 @@ button {
   margin: -12px 0 20px;
 }
 
+/* ---------- Today summary (rings + macros) ---------- */
+
+.ring {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.ring-track {
+  stroke: var(--hairline);
+}
+
+.ring-fill {
+  stroke: var(--accent);
+  transition: stroke-dashoffset 0.45s ease;
+}
+
+.ring-fill.over {
+  stroke: var(--danger);
+}
+
+.ring-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  line-height: 1.1;
+}
+
+.ring-value {
+  font-size: 1.9rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.ring-sub {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+/* Column layout override of the .calorie-total card it shares. */
+.day-summary {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 18px;
+}
+
+.day-summary-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.day-summary-figures {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.summary-figure {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.summary-figure-label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.summary-figure-value {
+  font-size: 1.3rem;
+  font-weight: 650;
+  color: var(--text-primary);
+}
+
+.summary-figure-value em {
+  font-style: normal;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.macro-row {
+  display: flex;
+  gap: 14px;
+  padding-top: 16px;
+  border-top: 1px solid var(--hairline);
+}
+
+.macro {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+
+.macro-name {
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.macro-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--hairline);
+  overflow: hidden;
+}
+
+.macro-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+.macro-bar-fill.over {
+  background: var(--danger);
+}
+
+.macro-sub {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  margin-top: 6px;
+}
+
+/* ---------- Week strip ---------- */
+
+.week-strip {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  justify-items: center;
+  gap: 2px;
+  margin-bottom: 20px;
+}
+
+.week-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 4px 6px;
+  border-radius: 12px;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.week-day.selected {
+  background: var(--surface-strong);
+  box-shadow: var(--sheen);
+}
+
+.week-day-name {
+  font-size: 0.62rem;
+  color: var(--text-secondary);
+}
+
+.week-day-num {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.week-day.selected .week-day-num {
+  color: var(--accent);
+}
+
 .entry-list {
   display: flex;
   flex-direction: column;

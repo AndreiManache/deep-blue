@@ -16,6 +16,10 @@ export interface FoodEntry {
   fat_g: number | null;
   created_at: string;
   edited: boolean;
+  // Food-knowledge provenance: 'estimate' | 'yours' | 'verified' (or null on
+  // older entries / foods without a canonical key).
+  source: string | null;
+  agreement_count: number | null;
 }
 
 export type Sex = "male" | "female";

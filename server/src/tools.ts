@@ -1,5 +1,13 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { createEntry, deleteEntry, getEntriesForDate, updateEntry } from "./entries.js";
+import {
+  normalizeFoodKey,
+  perBasisFromTotal,
+  recordObservation,
+  resolveNutrition,
+  totalFromBasis,
+  type Nutrition,
+} from "./foods.js";
 import { computeCompositionNutrition, type Preparation } from "./nutrition.js";
 import { upsertProfile, type ProfileUpdateInput } from "./profile.js";
 import { validateProfileInput } from "./validation.js";
@@ -18,6 +26,16 @@ export const tools: Anthropic.Tool[] = [
           type: "string",
           description:
             "Clean, short description of the food, e.g. 'two fried eggs'. Write it in the same language you're conversing in.",
+        },
+        food_key: {
+          type: "string",
+          description:
+            "ALWAYS provide this. A canonical, generic name for the food in ENGLISH, lowercase, singular, no quantity and no brand unless essential to identity — e.g. 'butter crackers', 'grilled chicken breast', 'french fries', 'coca-cola'. Used to match the same food across users and languages (Romanian 'biscuiți cu unt' -> 'butter crackers'), so keep it stable and generic.",
+        },
+        grams: {
+          type: "number",
+          description:
+            "Total weight of the logged amount in grams. Estimate it whenever you reasonably can (e.g. '5 sarmale' ≈ 500) — it lets nutrition be stored per-100g and reused accurately. Omit only for discrete branded items where weight is meaningless (e.g. 'a can of coke').",
         },
         calories: { type: "number", description: "Estimated total calories (way 1)" },
         protein_g: { type: "number", description: "Estimated grams of protein (way 1)" },
@@ -177,12 +195,54 @@ export function executeTool(
           };
         }
 
+        // --- Food knowledge base: prefer a known-good value over the estimate ---
+        const totalNutrition: Nutrition = {
+          calories: nutrition.calories,
+          protein_g: nutrition.protein_g ?? null,
+          carbs_g: nutrition.carbs_g ?? null,
+          fat_g: nutrition.fat_g ?? null,
+        };
+        const foodKey = normalizeFoodKey(input.food_key);
+        const grams = hasComposition
+          ? (input.total_weight_g as number)
+          : typeof input.grams === "number" && input.grams > 0
+            ? (input.grams as number)
+            : null;
+
+        let used = totalNutrition;
+        let source: string | null = null;
+        let agreementCount: number | null = null;
+
+        if (foodKey) {
+          const { basis, nutrition: perBasisModel } = perBasisFromTotal(totalNutrition, grams);
+          if (hasComposition) {
+            // The deterministic tissue calc is authoritative for a described
+            // cut — don't override it, but still contribute the observation.
+            source = "estimate";
+          } else {
+            const resolved = resolveNutrition(userId, foodKey, basis, perBasisModel);
+            used = totalFromBasis(resolved.nutrition, basis, grams);
+            source = resolved.source;
+            agreementCount = resolved.agreementCount;
+          }
+          // Seed this user's own value the first time they log this food
+          // (no-op if they already have one; edits record corrections instead).
+          recordObservation(userId, foodKey, basis, perBasisModel, "estimate");
+        }
+
         const entry = createEntry(userId, {
           // Spec: raw_transcript is what the user actually said — the real
           // turn text, not the model's cleaned description.
           raw_transcript: userTranscript ?? (input.description as string),
           description: input.description as string,
-          ...nutrition,
+          calories: used.calories,
+          protein_g: used.protein_g,
+          carbs_g: used.carbs_g,
+          fat_g: used.fat_g,
+          food_key: foodKey,
+          grams,
+          source,
+          agreement_count: agreementCount,
         });
         return { content: JSON.stringify(entry), isError: false, mutated: true, ended: false };
       }

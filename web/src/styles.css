@@ -859,6 +859,15 @@ button {
   font-size: 0.9rem;
 }
 
+.entry-badge {
+  color: var(--text-secondary);
+}
+
+.entry-badge.verified {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 /* Small hint text — e.g. DaySummary's "complete your profile" note. */
 .stats-hint {
   margin: 0;

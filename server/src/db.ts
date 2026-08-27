@@ -116,3 +116,39 @@ db.exec(`
     expires_at TEXT NOT NULL
   );
 `);
+
+// --- Food knowledge base (estimation accuracy) ---------------------------
+
+// Each entry now remembers the canonical food it was, the grams logged (when
+// known), and where its nutrition came from — so an edit can feed a correction
+// back into the knowledge base, and the Dashboard can badge a verified value.
+for (const [col, ddl] of [
+  ["food_key", "ALTER TABLE food_entries ADD COLUMN food_key TEXT;"],
+  ["grams", "ALTER TABLE food_entries ADD COLUMN grams REAL;"],
+  // 'estimate' | 'yours' | 'verified'
+  ["source", "ALTER TABLE food_entries ADD COLUMN source TEXT;"],
+  ["agreement_count", "ALTER TABLE food_entries ADD COLUMN agreement_count INTEGER;"],
+] as const) {
+  if (!entryColumns.some((c) => c.name === col)) db.exec(ddl);
+}
+
+// One nutrition observation per (food_key, user): that user's best value for a
+// food, normalized to a basis (per 100g, or per one item when grams are
+// unknown). A "correction" (from editing an entry) outranks an "estimate".
+// Crowd consensus = enough users' observations for a food_key agreeing; see
+// foods.ts. food_key is a canonical lowercase English name the model emits, so
+// "butter crackers" and "biscuiți cu unt" collapse to the same food.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS food_observations (
+    food_key TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    basis TEXT NOT NULL,        -- 'per_100g' | 'per_item'
+    calories REAL NOT NULL,
+    protein_g REAL,
+    carbs_g REAL,
+    fat_g REAL,
+    source TEXT NOT NULL,       -- 'estimate' | 'correction'
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (food_key, user_id)
+  );
+`);

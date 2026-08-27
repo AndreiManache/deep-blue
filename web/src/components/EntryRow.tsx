@@ -108,6 +108,13 @@ export function EntryRow({ entry, onSave, onDelete }: EntryRowProps) {
           <div className="entry-meta">
             {time}
             {entry.edited ? " · edited" : ""}
+            {entry.source === "verified" && (
+              <span className="entry-badge verified">
+                {" · ✓ verified"}
+                {entry.agreement_count ? ` (${entry.agreement_count})` : ""}
+              </span>
+            )}
+            {entry.source === "yours" && <span className="entry-badge"> · your value</span>}
           </div>
         </div>
         <div className="entry-calories">{entry.calories} cal</div>

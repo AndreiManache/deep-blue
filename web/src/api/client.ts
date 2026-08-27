@@ -236,6 +236,57 @@ export async function saveProfile(fields: Partial<Omit<UserProfile, "updated_at"
   return res.json();
 }
 
+export async function fetchMe(): Promise<{ username: string }> {
+  const res = await apiFetch("/auth/me");
+  if (!res.ok) throw new ApiError("Could not load account.");
+  return res.json();
+}
+
+export interface SubmitFeedbackInput {
+  message: string | null;
+  audio_base64: string | null;
+  audio_mime: string | null;
+  log_snapshot: string | null;
+}
+
+export async function submitFeedback(input: SubmitFeedbackInput): Promise<void> {
+  const res = await apiFetch("/feedback", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new ApiError(data.error ?? "Could not send feedback.");
+  }
+}
+
+export interface FeedbackItem {
+  id: string;
+  username: string;
+  message: string | null;
+  audio_base64: string | null;
+  audio_mime: string | null;
+  log_snapshot: string | null;
+  created_at: string;
+  status: string;
+}
+
+export async function fetchAdminFeedback(): Promise<FeedbackItem[]> {
+  const res = await apiFetch("/admin/feedback");
+  if (!res.ok) throw new ApiError("Could not load feedback.");
+  return res.json();
+}
+
+export async function setFeedbackStatus(id: string, status: "new" | "reviewed"): Promise<void> {
+  const res = await apiFetch(`/admin/feedback/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+  if (!res.ok) throw new ApiError("Could not update status.");
+}
+
 // ---- client-side date helpers -------------------------------------------
 
 // Local day key (YYYY-MM-DD) — server day buckets are computed the same way.

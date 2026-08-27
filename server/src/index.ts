@@ -9,6 +9,7 @@ import {
   deleteSession,
   findUser,
   getSessionUser,
+  isAdmin,
   tokenFromHeaders,
   UsernameTakenError,
   validateCredentials,
@@ -17,6 +18,7 @@ import {
 import { endSession, runTurn } from "./chat.js";
 import { PORT, USERNAME } from "./config.js";
 import { deleteEntry, getEntriesForDate, updateEntry } from "./entries.js";
+import { createFeedback, listFeedback, setFeedbackStatus } from "./feedback.js";
 import {
   computeTargets,
   getProfile,
@@ -37,7 +39,10 @@ const app = express();
 // address and per-IP rate limiting would throttle everyone together.
 app.set("trust proxy", 1);
 app.use(cors());
-app.use(express.json());
+// Default (100kb) is too small for a feedback report with an inline base64
+// voice note attached — raised app-wide rather than per-route since nothing
+// else needs anywhere near this much, and rate limiting already bounds abuse.
+app.use(express.json({ limit: "15mb" }));
 
 // Tiny fixed-window rate limiter — no dependency needed at this scale.
 function makeRateLimiter(limit: number, windowMs: number) {
@@ -151,9 +156,20 @@ app.post("/auth/logout", (req, res) => {
 });
 
 app.use(
-  ["/chat", "/entries", "/profile", "/greeting", "/stats", "/transcribe", "/auth/me"],
+  ["/chat", "/entries", "/profile", "/greeting", "/stats", "/transcribe", "/auth/me", "/feedback"],
   requireAuth,
 );
+
+// Admin-only routes: requireAuth first (real session), then this. 403s rather
+// than 404s — an admin route existing isn't sensitive, only its data is.
+function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  if (!isAdmin(res.locals.userId as string)) {
+    res.status(403).json({ error: "Not authorized." });
+    return;
+  }
+  next();
+}
+app.use("/admin", requireAuth, requireAdmin);
 
 // Speech-to-text: the client records the user's turn and POSTs the raw audio
 // bytes (Content-Type is the recorder's MIME, e.g. audio/mp4 on iOS). Returns
@@ -182,6 +198,50 @@ app.post("/transcribe", express.raw({ type: () => true, limit: "25mb" }), async 
 
 app.get("/auth/me", (_req, res) => {
   res.json({ username: res.locals.username as string });
+});
+
+// Feedback/bug reports sent from Diagnostics → Send feedback. Everything is
+// optional except needing at least a message or a voice note — the log
+// snapshot is opt-in and just passed through as a string the frontend already
+// formatted (see DiagnosticsPage's diag log).
+app.post("/feedback", (req, res) => {
+  const { message, audio_base64, audio_mime, log_snapshot } = (req.body ?? {}) as {
+    message?: unknown;
+    audio_base64?: unknown;
+    audio_mime?: unknown;
+    log_snapshot?: unknown;
+  };
+  const text = typeof message === "string" ? message.trim() : "";
+  const hasAudio = typeof audio_base64 === "string" && audio_base64.length > 0;
+  if (!text && !hasAudio) {
+    res.status(400).json({ error: "Add a message or a voice note before sending." });
+    return;
+  }
+  const id = createFeedback(res.locals.userId as string, {
+    message: text || null,
+    audio_base64: hasAudio ? (audio_base64 as string) : null,
+    audio_mime: typeof audio_mime === "string" ? audio_mime : null,
+    log_snapshot: typeof log_snapshot === "string" ? log_snapshot : null,
+  });
+  res.json({ id });
+});
+
+app.get("/admin/feedback", (_req, res) => {
+  res.json(listFeedback());
+});
+
+app.patch("/admin/feedback/:id", (req, res) => {
+  const status = (req.body as { status?: unknown })?.status;
+  if (status !== "new" && status !== "reviewed") {
+    res.status(400).json({ error: "status must be 'new' or 'reviewed'." });
+    return;
+  }
+  const ok = setFeedbackStatus(req.params.id, status);
+  if (!ok) {
+    res.status(404).json({ error: "Feedback not found." });
+    return;
+  }
+  res.status(204).end();
 });
 
 app.post("/chat", async (req, res) => {

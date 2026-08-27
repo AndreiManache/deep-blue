@@ -132,6 +132,24 @@ for (const [col, ddl] of [
   if (!entryColumns.some((c) => c.name === col)) db.exec(ddl);
 }
 
+// Feedback/bug reports sent from inside the app (Diagnostics → Send feedback).
+// audio_base64 is an optional voice note (small, stored inline like TTS audio
+// elsewhere in this codebase); log_snapshot is the JSON-stringified
+// diagnostics event log at the time of submission, only when the user opted
+// in to attaching it. status lets the admin view mark one triaged.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS feedback (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    message TEXT,
+    audio_base64 TEXT,
+    audio_mime TEXT,
+    log_snapshot TEXT,
+    created_at TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'new'
+  );
+`);
+
 // One nutrition observation per (food_key, user): that user's best value for a
 // food, normalized to a basis (per 100g, or per one item when grams are
 // unknown). A "correction" (from editing an entry) outranks an "estimate".

@@ -1,15 +1,16 @@
 import type { ConversationApi, Phase } from "../conversation/useConversation";
 import { ErrorBanner } from "./ErrorBanner";
 import { Greeting } from "./Greeting";
-import { HamburgerMenu } from "./HamburgerMenu";
+import { HamburgerMenu, type MenuView } from "./HamburgerMenu";
 import { Logo } from "./Logo";
 import { MicPermissionHelp } from "./MicPermissionHelp";
 import { TalkButton } from "./TalkButton";
 
 interface HomeScreenProps {
   conversation: ConversationApi;
-  onNavigate: (view: "dashboard" | "profile" | "diagnostics") => void;
+  onNavigate: (view: MenuView) => void;
   onLogout: () => void;
+  isAdmin?: boolean;
 }
 
 const HINTS: Partial<Record<Phase, string>> = {
@@ -19,7 +20,7 @@ const HINTS: Partial<Record<Phase, string>> = {
   speaking: "Talking — tap anytime to cut in.",
 };
 
-export function HomeScreen({ conversation, onNavigate, onLogout }: HomeScreenProps) {
+export function HomeScreen({ conversation, onNavigate, onLogout, isAdmin }: HomeScreenProps) {
   const { phase, errorMessage, micPermissionDenied, startSession, endTurn, interrupt, endSession } =
     conversation;
 
@@ -38,7 +39,7 @@ export function HomeScreen({ conversation, onNavigate, onLogout }: HomeScreenPro
   return (
     <div className="flex min-h-dvh flex-col px-6 pb-10 pt-5">
       <header className="flex items-center justify-between">
-        <HamburgerMenu onNavigate={onNavigate} onLogout={onLogout} />
+        <HamburgerMenu onNavigate={onNavigate} onLogout={onLogout} isAdmin={isAdmin} />
         <div className="flex items-center gap-2.5">
           <div className="font-display text-lg font-bold lowercase tracking-tight text-ink">
             deep blue

@@ -14,6 +14,8 @@ export default defineConfig({
       "/auth": "http://localhost:3001",
       "/stats": "http://localhost:3001",
       "/transcribe": "http://localhost:3001",
+      "/feedback": "http://localhost:3001",
+      "/admin": "http://localhost:3001",
     },
   },
 });

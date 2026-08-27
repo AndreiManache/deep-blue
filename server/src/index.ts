@@ -286,15 +286,40 @@ app.post("/admin/feedback/:id/transcribe", async (req, res) => {
   }
 });
 
+const IMAGE_MEDIA_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
+type ImageMediaType = (typeof IMAGE_MEDIA_TYPES)[number];
+// Decoded-size cap on an attached photo — the client resizes before sending
+// (see PhotoAttach.tsx), so this is just a defensive ceiling, generous enough
+// for that resize target with real headroom.
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+
 app.post("/chat", async (req, res) => {
-  const { session_id, user_text } = req.body as { session_id?: string; user_text?: string };
+  const { session_id, user_text, image_base64, image_mime } = req.body as {
+    session_id?: string;
+    user_text?: string;
+    image_base64?: unknown;
+    image_mime?: unknown;
+  };
   if (!session_id || typeof session_id !== "string" || !user_text || typeof user_text !== "string") {
     res.status(400).json({ error: "session_id and user_text are required" });
     return;
   }
 
+  let image: Parameters<typeof runTurn>[3];
+  if (typeof image_base64 === "string" && image_base64.length > 0) {
+    if (typeof image_mime !== "string" || !(IMAGE_MEDIA_TYPES as readonly string[]).includes(image_mime)) {
+      res.status(400).json({ error: "image_mime must be one of image/jpeg, image/png, image/gif, image/webp." });
+      return;
+    }
+    if (Buffer.byteLength(image_base64, "base64") > MAX_IMAGE_BYTES) {
+      res.status(400).json({ error: "Image is too large." });
+      return;
+    }
+    image = { base64: image_base64, mediaType: image_mime as ImageMediaType };
+  }
+
   try {
-    const result = await runTurn(session_id, res.locals.userId as string, user_text);
+    const result = await runTurn(session_id, res.locals.userId as string, user_text, image);
     if (result.ended) {
       endSession(session_id);
     }

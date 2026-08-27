@@ -4,6 +4,7 @@ import { Greeting } from "./Greeting";
 import { HamburgerMenu, type MenuView } from "./HamburgerMenu";
 import { Logo } from "./Logo";
 import { MicPermissionHelp } from "./MicPermissionHelp";
+import { PhotoAttach } from "./PhotoAttach";
 import { TalkButton } from "./TalkButton";
 
 interface HomeScreenProps {
@@ -21,8 +22,18 @@ const HINTS: Partial<Record<Phase, string>> = {
 };
 
 export function HomeScreen({ conversation, onNavigate, onLogout, isAdmin }: HomeScreenProps) {
-  const { phase, errorMessage, micPermissionDenied, startSession, endTurn, interrupt, endSession } =
-    conversation;
+  const {
+    phase,
+    errorMessage,
+    micPermissionDenied,
+    startSession,
+    endTurn,
+    interrupt,
+    endSession,
+    pendingImage,
+    attachImage,
+    clearImage,
+  } = conversation;
 
   function handleTap() {
     if (phase === "idle") {
@@ -67,9 +78,12 @@ export function HomeScreen({ conversation, onNavigate, onLogout, isAdmin }: Home
           <>
             <Greeting />
             <TalkButton phase={phase} onTap={handleTap} />
+            <PhotoAttach image={pendingImage} onAttach={attachImage} onClear={clearImage} />
             <p className="min-h-6 text-center text-sm font-semibold text-ink/50">
               {HINTS[phase] ??
-                "Tap the orb and just talk — “I had two eggs and a coffee for breakfast.”"}
+                (pendingImage
+                  ? "Tap the orb and describe what's in the photo."
+                  : "Tap the orb and just talk — “I had two eggs and a coffee for breakfast.”")}
             </p>
           </>
         )}

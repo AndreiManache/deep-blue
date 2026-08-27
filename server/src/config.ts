@@ -38,6 +38,11 @@ export const ELEVENLABS_MODEL_ID = "eleven_flash_v2_5";
 // No date suffix on this ID.
 export const MODEL = "claude-haiku-4-5";
 
+// Used only for turns with a photo attached (log-by-photo). Vision food
+// recognition is a harder, less frequent task than routine text logging, so
+// it gets the better model — Haiku stays the default for everything else.
+export const MODEL_VISION = "claude-sonnet-5";
+
 // Cap on stored conversation turns — genuine user turns, per spec §7. Tool
 // round-trips add extra messages that don't count against this.
 export const MAX_HISTORY_TURNS = 20;

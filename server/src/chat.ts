@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { ANTHROPIC_API_KEY, MAX_TOOL_ITERATIONS, MODEL } from "./config.js";
+import { ANTHROPIC_API_KEY, MAX_TOOL_ITERATIONS, MODEL, MODEL_VISION } from "./config.js";
 import { getProfile, resolveSpeechLang, resolveVoiceId, type UserProfile } from "./profile.js";
 import { clearSession, getHistory, setHistory, truncatePairSafe } from "./sessions.js";
 import { buildSystemPrompt } from "./systemPrompt.js";
@@ -36,9 +36,32 @@ function exhaustionFallback(profile: UserProfile | null): string {
     : "Sorry, that got complicated — can you try again?";
 }
 
-export async function runTurn(sessionId: string, userId: string, userText: string): Promise<ChatTurnResult> {
+export interface ImageInput {
+  base64: string;
+  mediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+}
+
+export async function runTurn(
+  sessionId: string,
+  userId: string,
+  userText: string,
+  image?: ImageInput,
+): Promise<ChatTurnResult> {
   const history = truncatePairSafe(getHistory(sessionId));
-  history.push({ role: "user", content: userText });
+  // A photo is a one-turn attachment, not something the model should expect
+  // to re-see on later turns — it's folded into this turn's content and then
+  // gone, same as it's gone from the client and never touches disk.
+  const content: string | Anthropic.ContentBlockParam[] = image
+    ? [
+        { type: "image", source: { type: "base64", media_type: image.mediaType, data: image.base64 } },
+        { type: "text", text: userText },
+      ]
+    : userText;
+  history.push({ role: "user", content });
+
+  // Food recognition from a photo is a harder, less frequent task than
+  // routine text logging — worth the better (pricier) model just for this turn.
+  const model = image ? MODEL_VISION : MODEL;
 
   let mutated = false;
   let ended = false;
@@ -47,7 +70,7 @@ export async function runTurn(sessionId: string, userId: string, userText: strin
 
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
     response = await client.messages.create({
-      model: MODEL,
+      model,
       // Replies are 1-2 spoken sentences; this caps a runaway long answer
       // (which is slow to generate, slow to synthesize, and slow to play) while
       // leaving ample room for a normal reply plus a tool call.

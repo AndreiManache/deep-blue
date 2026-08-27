@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import { ApiError, fetchGreeting, sendChat, transcribeAudio } from "../api/client";
+import { ApiError, fetchGreeting, sendChat, transcribeAudio, type ImageAttachment } from "../api/client";
 import { SpeechCapture } from "../speech/capture";
 import { getSpeechSupport } from "../speech/support";
 import { cancelSpeech, speak } from "../speech/synthesis";
@@ -31,6 +31,10 @@ export interface ConversationApi {
   mutationSignal: number;
   diagnostics: DiagEvent[];
   clearDiagnostics: () => void;
+  /** A photo attached ahead of the next spoken turn — see PhotoAttach.tsx. */
+  pendingImage: ImageAttachment | null;
+  attachImage: (image: ImageAttachment) => void;
+  clearImage: () => void;
   startSession: () => void;
   endTurn: () => void;
   endSession: () => void;
@@ -47,6 +51,10 @@ export function useConversation(): ConversationApi {
   const [micPermissionDenied, setMicPermissionDenied] = useState(false);
   const [mutationSignal, setMutationSignal] = useState(0);
   const [diagnostics, setDiagnostics] = useState<DiagEvent[]>([]);
+  const [pendingImage, setPendingImage] = useState<ImageAttachment | null>(null);
+  // Read synchronously inside handleFinalTranscript, which closes over stale
+  // state otherwise — same pattern as phaseRef/epochRef below.
+  const pendingImageRef = useRef<ImageAttachment | null>(null);
 
   const captureRef = useRef<SpeechCapture | null>(null);
   if (!captureRef.current) captureRef.current = new SpeechCapture();
@@ -70,6 +78,17 @@ export function useConversation(): ConversationApi {
 
   function clearDiagnostics() {
     setDiagnostics([]);
+  }
+
+  function attachImage(image: ImageAttachment) {
+    pendingImageRef.current = image;
+    setPendingImage(image);
+    logDiag("photo attached");
+  }
+
+  function clearImage() {
+    pendingImageRef.current = null;
+    setPendingImage(null);
   }
 
   // Plain hoisted function declarations on purpose — openMic, speakThenListen
@@ -158,10 +177,15 @@ export function useConversation(): ConversationApi {
     epochRef.current++;
     setPhaseBoth("thinking");
 
+    // A photo describes only the very next turn — consumed here regardless
+    // of outcome, so it never silently attaches to a later, unrelated turn.
+    const image = pendingImageRef.current;
+    if (image) clearImage();
+
     const startedAt = Date.now();
-    logDiag("→ request sent");
+    logDiag("→ request sent", image ? "with photo" : undefined);
     try {
-      const result = await sendChat(sessionIdRef.current, text);
+      const result = await sendChat(sessionIdRef.current, text, image);
       logDiag("← reply", `${Date.now() - startedAt}ms${result.ended ? " (ends session)" : ""}`);
       setErrorMessage(null);
       if (result.mutated) setMutationSignal((n) => n + 1);
@@ -268,6 +292,9 @@ export function useConversation(): ConversationApi {
     mutationSignal,
     diagnostics,
     clearDiagnostics,
+    pendingImage,
+    attachImage,
+    clearImage,
     startSession,
     endTurn,
     endSession,

@@ -138,13 +138,27 @@ export async function logout(): Promise<void> {
   clearStoredToken();
 }
 
-export async function sendChat(sessionId: string, userText: string): Promise<ChatResponse> {
+export interface ImageAttachment {
+  base64: string;
+  mime: string;
+}
+
+export async function sendChat(
+  sessionId: string,
+  userText: string,
+  image?: ImageAttachment | null,
+): Promise<ChatResponse> {
   const res = await apiFetch("/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ session_id: sessionId, user_text: userText }),
+    body: JSON.stringify({
+      session_id: sessionId,
+      user_text: userText,
+      ...(image ? { image_base64: image.base64, image_mime: image.mime } : {}),
+    }),
     // Matches the server's own 60s model timeout (plus one retry's slack) —
     // without this, a hung request strands the UI in "thinking" indefinitely.
+    // A vision turn also runs on the slower model, so give it the same room.
     signal: AbortSignal.timeout(90_000),
   });
   if (!res.ok) {

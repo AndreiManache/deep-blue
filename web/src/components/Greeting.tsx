@@ -52,9 +52,9 @@ export function Greeting() {
   const line = pickLine(new Date(), name);
 
   return (
-    <h1 className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-balance px-2 text-center font-display text-[1.75rem] font-extrabold leading-tight tracking-tight text-ink">
-      <Logo className="size-6 shrink-0" />
-      <span>{line}</span>
+    <h1 className="text-balance px-2 text-center font-display text-[1.75rem] font-extrabold leading-tight tracking-tight text-ink">
+      <Logo className="mr-2 inline-block size-6 align-middle" />
+      {line}
     </h1>
   );
 }

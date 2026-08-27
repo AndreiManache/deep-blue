@@ -64,7 +64,7 @@ export function HamburgerMenu({ onNavigate, onLogout, isAdmin }: HamburgerMenuPr
                 className="block w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-ink transition-colors hover:bg-ink3"
                 onClick={() => go("admin")}
               >
-                Feedback inbox (admin)
+                Feedback inbox
               </button>
             )}
             <button

@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import type Anthropic from "@anthropic-ai/sdk";
 import { computeCompositionNutrition } from "../src/nutrition.js";
-import { truncatePairSafe } from "../src/sessions.js";
+import { repairDanglingToolUse, truncatePairSafe } from "../src/sessions.js";
 import { MAX_HISTORY_TURNS } from "../src/config.js";
 import { validateEntryPatch, validateProfileInput } from "../src/validation.js";
 
@@ -117,5 +117,42 @@ describe("truncatePairSafe", () => {
     assert.equal(truncated[0].role, "user");
     assert.equal(typeof truncated[0].content, "string");
     assert.equal(truncated[0].content, `turn ${total - MAX_HISTORY_TURNS}`);
+  });
+});
+
+describe("repairDanglingToolUse", () => {
+  const userTurn = (i: number): Anthropic.MessageParam => ({ role: "user", content: `turn ${i}` });
+  const assistantText = (i: number): Anthropic.MessageParam => ({
+    role: "assistant",
+    content: [{ type: "text", text: `reply ${i}` }],
+  });
+  const toolUse = (i: number): Anthropic.MessageParam => ({
+    role: "assistant",
+    content: [{ type: "tool_use", id: `t${i}`, name: "get_entries", input: {} }],
+  });
+  const toolResult = (i: number): Anthropic.MessageParam => ({
+    role: "user",
+    content: [{ type: "tool_result", tool_use_id: `t${i}`, content: "[]" }],
+  });
+
+  it("drops a trailing assistant tool_use with no matching tool_result", () => {
+    const history = [userTurn(1), assistantText(1), userTurn(2), toolUse(2)];
+    const repaired = repairDanglingToolUse(history);
+    assert.equal(repaired.length, 3);
+    assert.deepEqual(repaired, history.slice(0, 3));
+  });
+
+  it("leaves a well-formed history (tool_use already paired) untouched", () => {
+    const history = [userTurn(1), toolUse(1), toolResult(1), assistantText(1)];
+    assert.equal(repairDanglingToolUse(history), history);
+  });
+
+  it("leaves a history ending in a genuine user turn untouched", () => {
+    const history = [userTurn(1), assistantText(1), userTurn(2)];
+    assert.equal(repairDanglingToolUse(history), history);
+  });
+
+  it("is a no-op on an empty history", () => {
+    assert.deepEqual(repairDanglingToolUse([]), []);
   });
 });

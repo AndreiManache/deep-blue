@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { ANTHROPIC_API_KEY, MAX_TOOL_ITERATIONS, MODEL, MODEL_VISION } from "./config.js";
 import { getProfile, resolveSpeechLang, resolveVoiceId, type UserProfile } from "./profile.js";
-import { clearSession, getHistory, setHistory, truncatePairSafe } from "./sessions.js";
+import { clearSession, getHistory, repairDanglingToolUse, setHistory, truncatePairSafe } from "./sessions.js";
 import { buildSystemPrompt } from "./systemPrompt.js";
 import { executeTool, tools } from "./tools.js";
 import { synthesizeSpeech } from "./tts.js";
@@ -41,13 +41,38 @@ export interface ImageInput {
   mediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
 }
 
+const inFlight = new Set<string>();
+
 export async function runTurn(
   sessionId: string,
   userId: string,
   userText: string,
   image?: ImageInput,
 ): Promise<ChatTurnResult> {
-  const history = truncatePairSafe(getHistory(sessionId));
+  // A second /chat call for a session already mid-turn must never proceed —
+  // two overlapping runTurn calls both reading, then separately mutating and
+  // saving, the same session's history is exactly how it got corrupted (see
+  // sessions.ts). This can't happen from normal use of one device (the
+  // frontend never fires a second turn before the first resolves), but costs
+  // nothing to guard against directly rather than relying on that alone.
+  if (inFlight.has(sessionId)) {
+    throw new Error("A turn is already in progress for this session");
+  }
+  inFlight.add(sessionId);
+  try {
+    return await runTurnUnguarded(sessionId, userId, userText, image);
+  } finally {
+    inFlight.delete(sessionId);
+  }
+}
+
+async function runTurnUnguarded(
+  sessionId: string,
+  userId: string,
+  userText: string,
+  image?: ImageInput,
+): Promise<ChatTurnResult> {
+  const history = repairDanglingToolUse(truncatePairSafe(getHistory(sessionId)));
   // A photo is a one-turn attachment, not something the model should expect
   // to re-see on later turns — it's folded into this turn's content and then
   // gone, same as it's gone from the client and never touches disk.

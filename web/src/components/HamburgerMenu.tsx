@@ -1,20 +1,24 @@
 import { useState } from "react";
 
+export type MenuView = "dashboard" | "profile" | "diagnostics" | "feedback" | "admin";
+
 interface HamburgerMenuProps {
-  onNavigate: (view: "dashboard" | "profile" | "diagnostics") => void;
+  onNavigate: (view: MenuView) => void;
   onLogout: () => void;
+  isAdmin?: boolean;
 }
 
 const ITEMS = [
   { to: "dashboard", label: "Dashboard" },
   { to: "profile", label: "Profile" },
   { to: "diagnostics", label: "Diagnostics" },
+  { to: "feedback", label: "Send feedback" },
 ] as const;
 
-export function HamburgerMenu({ onNavigate, onLogout }: HamburgerMenuProps) {
+export function HamburgerMenu({ onNavigate, onLogout, isAdmin }: HamburgerMenuProps) {
   const [open, setOpen] = useState(false);
 
-  function go(to: (typeof ITEMS)[number]["to"]) {
+  function go(to: MenuView) {
     setOpen(false);
     onNavigate(to);
   }
@@ -55,6 +59,14 @@ export function HamburgerMenu({ onNavigate, onLogout }: HamburgerMenuProps) {
                 {item.label}
               </button>
             ))}
+            {isAdmin && (
+              <button
+                className="block w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-ink transition-colors hover:bg-ink3"
+                onClick={() => go("admin")}
+              >
+                Feedback inbox (admin)
+              </button>
+            )}
             <button
               className="block w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-coral transition-colors hover:bg-coral/10"
               onClick={handleLogout}

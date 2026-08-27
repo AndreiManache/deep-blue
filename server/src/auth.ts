@@ -138,3 +138,22 @@ export function tokenFromHeaders(authorization?: string, xSessionToken?: string)
   if (authorization?.startsWith("Bearer ")) return authorization.slice("Bearer ".length).trim();
   return xSessionToken?.trim() || undefined;
 }
+
+// --- admin -------------------------------------------------------------
+//
+// Deliberately not a real roles system (see the file header) — just an
+// env-configured allowlist of user ids, same shape as the old ACCESS_CODES
+// var. Set ADMIN_USERNAMES="andrei" (comma-separated for more than one) on
+// the server; unset means nobody is an admin.
+//
+// Read lazily (not a module-load-time constant) — config.ts's dotenv.config()
+// call must run first, and import order between this module and config.ts
+// isn't guaranteed, so caching this at import time can silently see an empty
+// process.env.ADMIN_USERNAMES.
+export function isAdmin(userId: string): boolean {
+  const admins = (process.env.ADMIN_USERNAMES ?? "")
+    .split(",")
+    .map((s) => normalizeUsername(s))
+    .filter(Boolean);
+  return admins.includes(userId);
+}

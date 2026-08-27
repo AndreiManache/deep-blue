@@ -163,6 +163,19 @@
   }
 }
 
+/* iOS Safari zooms the whole page when a focused input's font-size is under
+ * 16px, and the zoom can stay stuck after the field loses focus — the app's
+ * layout should never rescale itself. Every field here uses `text-sm`
+ * (14px) for visual consistency with the rest of the type scale, so this
+ * overrides just the rendered size at the OS's 16px threshold, !important
+ * because Tailwind's utility layer otherwise wins over any plain selector.
+ */
+input,
+select,
+textarea {
+  font-size: 16px !important;
+}
+
 /* ---------------------------------------------------------------------------
  * Voice orb — expanding pulse rings around the talk button.
  * Set --orb to recolor per phase (coral while listening, sky while speaking).

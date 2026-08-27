@@ -1,6 +1,8 @@
-import type { ConversationApi } from "../conversation/useConversation";
+import type { ConversationApi, Phase } from "../conversation/useConversation";
 import { ErrorBanner } from "./ErrorBanner";
+import { Greeting } from "./Greeting";
 import { HamburgerMenu } from "./HamburgerMenu";
+import { Logo } from "./Logo";
 import { MicPermissionHelp } from "./MicPermissionHelp";
 import { TalkButton } from "./TalkButton";
 
@@ -10,28 +12,16 @@ interface HomeScreenProps {
   onLogout: () => void;
 }
 
-export function HomeScreen({ conversation, onNavigate, onLogout }: HomeScreenProps) {
-  const {
-    phase,
-    interimTranscript,
-    errorMessage,
-    micPermissionDenied,
-    startSession,
-    endTurn,
-    endSession,
-    interrupt,
-  } = conversation;
+const HINTS: Partial<Record<Phase, string>> = {
+  "awaiting-mic": "Tap “Allow” when your browser asks for the microphone.",
+  listening: "I'm listening — tell me what you ate.",
+  thinking: "One moment…",
+  speaking: "Talking — tap anytime to cut in.",
+};
 
-  if (phase === "unsupported") {
-    return (
-      <div className="unsupported-screen">
-        <div className="mic-permission-help">
-          <h2>Browser not supported</h2>
-          <p>Deep Blue needs Chrome (or another Chromium-based browser) for speech recognition and voice output.</p>
-        </div>
-      </div>
-    );
-  }
+export function HomeScreen({ conversation, onNavigate, onLogout }: HomeScreenProps) {
+  const { phase, errorMessage, micPermissionDenied, startSession, endTurn, interrupt, endSession } =
+    conversation;
 
   function handleTap() {
     if (phase === "idle") {
@@ -40,32 +30,49 @@ export function HomeScreen({ conversation, onNavigate, onLogout }: HomeScreenPro
       endTurn();
     } else if (phase === "speaking") {
       interrupt(); // barge-in: cut the reply short and listen
+    } else if (phase === "awaiting-mic" || phase === "thinking") {
+      endSession();
     }
-    // thinking: tap is a no-op — there's nothing to interrupt yet.
   }
 
-  const sessionActive = phase !== "idle";
-
   return (
-    <div className="home-screen">
-      <HamburgerMenu onNavigate={onNavigate} onLogout={onLogout} />
-
-      {micPermissionDenied ? (
-        <MicPermissionHelp onRetry={startSession} />
-      ) : (
-        <div className="talk-button-wrap">
-          <TalkButton phase={phase} onTap={handleTap} />
-          <div className="interim-caption">{phase === "listening" ? interimTranscript : ""}</div>
-
-          {sessionActive && (
-            <div className="end-turn-controls">
-              <button className="pill-button danger" onClick={endSession}>
-                End conversation
-              </button>
-            </div>
-          )}
+    <div className="flex min-h-dvh flex-col px-6 pb-10 pt-5">
+      <header className="flex items-center justify-between">
+        <HamburgerMenu onNavigate={onNavigate} onLogout={onLogout} />
+        <div className="flex items-center gap-2.5">
+          <div className="font-display text-lg font-bold lowercase tracking-tight text-ink">
+            deep blue
+          </div>
+          <Logo className="size-8" title="Deep Blue" />
         </div>
-      )}
+      </header>
+
+      <main className="flex flex-1 flex-col items-center justify-center gap-8 py-8">
+        {phase === "unsupported" ? (
+          <div className="w-full max-w-sm rounded-[2rem] bg-white p-7 shadow-sm ring-1 ring-ink/5">
+            <h1 className="font-display text-2xl font-extrabold tracking-tight text-ink">
+              Voice isn't supported here
+            </h1>
+            <p className="mt-2 text-sm font-medium text-ink/60">
+              Deep Blue needs a browser with microphone recording and audio playback. Try the
+              latest Safari (iOS) or Chrome (Android/desktop).
+            </p>
+          </div>
+        ) : micPermissionDenied ? (
+          <div className="w-full max-w-sm">
+            <MicPermissionHelp onRetry={startSession} />
+          </div>
+        ) : (
+          <>
+            <Greeting />
+            <TalkButton phase={phase} onTap={handleTap} />
+            <p className="min-h-6 text-center text-sm font-semibold text-ink/50">
+              {HINTS[phase] ??
+                "Tap the orb and just talk — “I had two eggs and a coffee for breakfast.”"}
+            </p>
+          </>
+        )}
+      </main>
 
       {errorMessage && <ErrorBanner message={errorMessage} />}
     </div>

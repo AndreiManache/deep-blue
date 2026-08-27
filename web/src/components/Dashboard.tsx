@@ -4,9 +4,11 @@ import {
   fetchEntries,
   fetchStats,
   removeEntry,
+  todayKey,
   type FoodEntry,
   type StatsResponse,
 } from "../api/client";
+import { BackHeader } from "./BackHeader";
 import { DaySummary } from "./DaySummary";
 import { EntryRow } from "./EntryRow";
 import { WeekStrip } from "./WeekStrip";
@@ -16,110 +18,79 @@ interface DashboardProps {
   refreshSignal: number;
 }
 
-function localToday(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-    d.getDate(),
-  ).padStart(2, "0")}`;
-}
-
 function parseLocalDate(ymd: string): Date {
   const [y, m, d] = ymd.split("-").map(Number);
   return new Date(y, m - 1, d);
 }
 
-// The week strip shows the last 7 days ending today.
-const WEEK = 7;
-
 export function Dashboard({ onBack, refreshSignal }: DashboardProps) {
-  const [selectedDate, setSelectedDate] = useState<string>(localToday);
+  const [selectedDay, setSelectedDay] = useState(todayKey());
   const [entries, setEntries] = useState<FoodEntry[]>([]);
   const [stats, setStats] = useState<StatsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadEntries = useCallback(async (date: string) => {
+  const load = useCallback(async (day: string) => {
+    setError(null);
     try {
-      setEntries(await fetchEntries(date));
-      setError(null);
-    } catch {
-      setError("Could not load entries.");
+      const [e, s] = await Promise.all([fetchEntries(day), fetchStats(7)]);
+      setEntries(e);
+      setStats(s);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load your data.");
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Week rings + targets. Always the last 7 days ending today, independent of
-  // which day is selected.
-  const loadStats = useCallback(async () => {
-    try {
-      setStats(await fetchStats(WEEK));
-    } catch {
-      /* the summary/rings just fall back to a no-target state */
-    }
-  }, []);
-
   useEffect(() => {
-    void loadEntries(selectedDate);
-  }, [loadEntries, selectedDate, refreshSignal]);
+    void load(selectedDay);
+  }, [selectedDay, load]);
 
+  // Refetch whenever the voice conversation mutated the log.
   useEffect(() => {
-    void loadStats();
-  }, [loadStats, refreshSignal]);
+    if (refreshSignal > 0) void load(selectedDay);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshSignal]);
 
-  async function handleSave(id: string, fields: { description: string; calories: number }) {
-    const updated = await editEntry(id, fields);
-    setEntries((prev) => prev.map((e) => (e.id === id ? updated : e)));
-    void loadStats(); // calories changed — refresh the rings
+  async function handleChanged() {
+    void load(selectedDay);
   }
 
-  async function handleDelete(id: string) {
-    await removeEntry(id);
-    setEntries((prev) => prev.filter((e) => e.id !== id));
-    void loadStats();
-  }
-
-  const isToday = selectedDate === localToday();
-  const selDate = parseLocalDate(selectedDate);
+  const isToday = selectedDay === todayKey();
+  const selDate = parseLocalDate(selectedDay);
   const title = isToday ? "Today" : selDate.toLocaleDateString(undefined, { weekday: "long" });
   const subtitle = selDate.toLocaleDateString(undefined, { month: "long", day: "numeric" });
 
   return (
-    <div className="dashboard">
-      <div className="dashboard-header">
-        <button className="back-button" onClick={onBack} aria-label="Back">
-          ←
-        </button>
-        <div className="dashboard-title">
-          <h1>{title}</h1>
-          <p>{subtitle}</p>
-        </div>
-      </div>
+    <div className="flex min-h-dvh flex-col gap-6 px-6 pb-16 pt-5">
+      <BackHeader title={title} subtitle={subtitle} onBack={onBack} />
 
-      {stats && (
-        <WeekStrip
-          days={stats.days}
-          targets={stats.targets}
-          selected={selectedDate}
-          onSelect={setSelectedDate}
-        />
+      {stats && <WeekStrip selected={selectedDay} stats={stats.days} onSelect={setSelectedDay} />}
+
+      <DaySummary entries={entries} targets={stats?.targets ?? null} selectedDay={selectedDay} />
+
+      {error && (
+        <p className="rounded-2xl bg-coral/10 px-4 py-3 text-sm font-semibold text-coral ring-1 ring-coral/20">
+          {error}
+        </p>
       )}
-
-      <DaySummary entries={entries} targets={stats?.targets ?? null} />
-
-      {error && <div className="empty-state">{error}</div>}
 
       {!loading && !error && entries.length === 0 && (
-        <div className="empty-state">
+        <p className="py-6 text-center text-sm font-medium text-ink/40">
           {isToday ? "Nothing logged yet today." : "Nothing logged on this day."}
-        </div>
+        </p>
       )}
 
-      <div className="entry-list">
-        {entries.map((entry) => (
-          <EntryRow key={entry.id} entry={entry} onSave={handleSave} onDelete={handleDelete} />
-        ))}
-      </div>
+      {entries.length > 0 && (
+        <div className="rounded-[2rem] bg-white px-5 shadow-sm ring-1 ring-ink/5">
+          {entries.map((entry, i) => (
+            <div key={entry.id} className={i > 0 ? "border-t border-ink/5" : ""}>
+              <EntryRow entry={entry} onChanged={handleChanged} />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

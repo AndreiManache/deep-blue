@@ -1,5 +1,5 @@
-import { useState } from "react";
 import type { DiagEvent } from "../conversation/useConversation";
+import { BackHeader } from "./BackHeader";
 
 interface DiagnosticsPageProps {
   events: DiagEvent[];
@@ -7,77 +7,48 @@ interface DiagnosticsPageProps {
   onBack: () => void;
 }
 
-function fmtTime(t: number): string {
-  const d = new Date(t);
-  return `${d.toLocaleTimeString(undefined, { hour12: false })}.${String(d.getMilliseconds()).padStart(3, "0")}`;
-}
-
 export function DiagnosticsPage({ events, onClear, onBack }: DiagnosticsPageProps) {
-  const [copied, setCopied] = useState(false);
-
-  function toText(): string {
-    return events
-      .map((e, i) => {
-        const delta = i === 0 ? 0 : e.t - events[i - 1].t;
-        return `${fmtTime(e.t)}  +${delta}ms  ${e.label}${e.detail ? `: ${e.detail}` : ""}`;
-      })
-      .join("\n");
-  }
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(toText());
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* clipboard blocked — the on-screen list is still screenshot-able */
-    }
-  }
-
   return (
-    <div className="dashboard">
-      <div className="dashboard-header">
-        <button className="back-button" onClick={onBack} aria-label="Back">
-          ←
-        </button>
-        <div className="dashboard-title">
-          <h1>Diagnostics</h1>
-          <p>Speech &amp; latency log — newest at the bottom</p>
+    <div className="flex min-h-dvh flex-col gap-6 px-6 pb-16 pt-5">
+      <BackHeader title="Diagnostics" subtitle="Voice pipeline, live" onBack={onBack} />
+
+      <div className="flex items-center justify-between rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-ink/5">
+        <div>
+          <div className="text-xs font-bold uppercase tracking-wider text-ink/40">Events</div>
+          <div className="mt-1 font-display text-2xl font-extrabold tracking-tight text-ink">
+            {events.length}
+          </div>
         </div>
+        <button
+          className="rounded-2xl bg-ink3 px-4 py-2.5 text-xs font-bold text-ink transition-colors hover:bg-ink/10"
+          onClick={onClear}
+          disabled={events.length === 0}
+        >
+          Clear log
+        </button>
       </div>
 
-      <div className="diag-actions">
-        <button className="pill-button" onClick={copy} disabled={events.length === 0}>
-          {copied ? "Copied" : "Copy"}
-        </button>
-        <button className="pill-button danger" onClick={onClear} disabled={events.length === 0}>
-          Clear
-        </button>
-      </div>
-
-      {events.length === 0 ? (
-        <div className="empty-state">
-          Nothing logged yet. Start a conversation, then come back here to see exactly what the mic
-          heard and how long each reply took.
-        </div>
-      ) : (
-        <ol className="diag-list">
-          {events.map((e, i) => {
-            const delta = i === 0 ? 0 : e.t - events[i - 1].t;
-            const slow = delta >= 2000;
-            return (
-              <li key={i} className="diag-row">
-                <span className="diag-time">{fmtTime(e.t)}</span>
-                <span className={slow ? "diag-delta slow" : "diag-delta"}>+{delta}ms</span>
-                <span className="diag-label">
-                  {e.label}
-                  {e.detail ? <span className="diag-detail"> {e.detail}</span> : null}
+      <section className="flex-1 rounded-[2rem] bg-ink p-5 shadow-sm">
+        {events.length === 0 ? (
+          <p className="py-6 text-center text-sm font-medium text-white/30">
+            Nothing yet — start a conversation and events will stream in here.
+          </p>
+        ) : (
+          <ol className="space-y-2 font-mono text-xs text-white/70">
+            {events.map((d, i) => (
+              <li key={i} className="flex gap-3">
+                <span className="shrink-0 text-white/30">
+                  {new Date(d.t).toLocaleTimeString(undefined, { hour12: false })}
+                </span>
+                <span>
+                  <span className="font-bold text-cream">{d.label}</span>
+                  {d.detail && <span className="text-white/50"> · {d.detail}</span>}
                 </span>
               </li>
-            );
-          })}
-        </ol>
-      )}
+            ))}
+          </ol>
+        )}
+      </section>
     </div>
   );
 }

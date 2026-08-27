@@ -41,6 +41,15 @@ export function validateProfileInput(body: Record<string, unknown>): string | nu
   return null;
 }
 
+export function validateBarcodeEntry(body: Record<string, unknown>): string | null {
+  if (typeof body !== "object" || body === null) return "Body must be an object";
+  if (typeof body.barcode !== "string" || !/^\d{8,14}$/.test(body.barcode))
+    return "barcode must be a string of 8 to 14 digits";
+  if (typeof body.grams !== "number" || !Number.isFinite(body.grams) || body.grams <= 0 || body.grams > 5000)
+    return "grams must be a number between 0 and 5000";
+  return null;
+}
+
 export function validateEntryPatch(body: Record<string, unknown>): string | null {
   if (typeof body !== "object" || body === null) return "Body must be an object";
   if (body.description !== undefined) {

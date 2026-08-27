@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { fetchMe, getStoredToken, logout as logoutRequest, SESSION_INVALIDATED_EVENT } from "./api/client";
 import { AdminFeedbackPage } from "./components/AdminFeedbackPage";
 import { AuthGate } from "./components/AuthGate";
+import { BarcodeScanner } from "./components/BarcodeScanner";
 import { Dashboard } from "./components/Dashboard";
 import { DiagnosticsPage } from "./components/DiagnosticsPage";
 import { FeedbackPage } from "./components/FeedbackPage";
@@ -9,7 +10,7 @@ import { HomeScreen } from "./components/HomeScreen";
 import { ProfilePage } from "./components/ProfilePage";
 import { useConversation, type Phase } from "./conversation/useConversation";
 
-type View = "home" | "dashboard" | "profile" | "diagnostics" | "feedback" | "admin";
+type View = "home" | "dashboard" | "profile" | "diagnostics" | "feedback" | "admin" | "scan";
 
 // Menu visibility only — the real gate is server-side (ADMIN_USERNAMES on
 // /admin/*). Comma-separated to match the server's env var shape.
@@ -34,6 +35,10 @@ export function App() {
   // below), which clears it and flips this back to the login screen.
   const [authed, setAuthed] = useState<boolean>(() => Boolean(getStoredToken()));
   const [username, setUsername] = useState<string | null>(null);
+  // Barcode logging happens outside useConversation (no Claude turn, so
+  // conversation.mutationSignal never bumps) — this stands in for it so the
+  // Dashboard still refetches after a scan.
+  const [scanSignal, setScanSignal] = useState(0);
   const conversation = useConversation();
   const { endSession } = conversation;
 
@@ -79,12 +84,30 @@ export function App() {
         <HomeScreen
           conversation={conversation}
           onNavigate={setView}
+          onScan={() => {
+            // A live session keeps the mic held and speak() running behind
+            // other views — end it before competing with the camera for
+            // device access, an iOS pain point this app has history with.
+            endSession();
+            setView("scan");
+          }}
           onLogout={handleLogout}
           isAdmin={isAdmin}
         />
       )}
+      {view === "scan" && (
+        <BarcodeScanner
+          onDone={() => {
+            setScanSignal((s) => s + 1);
+            setView("home");
+          }}
+        />
+      )}
       {view === "dashboard" && (
-        <Dashboard onBack={() => setView("home")} refreshSignal={conversation.mutationSignal} />
+        <Dashboard
+          onBack={() => setView("home")}
+          refreshSignal={conversation.mutationSignal + scanSignal}
+        />
       )}
       {view === "profile" && <ProfilePage onBack={() => setView("home")} />}
       {view === "diagnostics" && (

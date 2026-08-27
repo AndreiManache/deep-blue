@@ -150,6 +150,11 @@ export function EntryRow({ entry, onChanged, onMutated }: EntryRowProps) {
                   your value
                 </span>
               )}
+              {entry.source === "barcode" && (
+                <span className="inline-flex items-center gap-0.5 rounded-full bg-sky/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky">
+                  barcode
+                </span>
+              )}
             </div>
           </>
         )}

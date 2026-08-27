@@ -1,3 +1,4 @@
+import { ScanBarcode } from "lucide-react";
 import type { ConversationApi, Phase } from "../conversation/useConversation";
 import { ErrorBanner } from "./ErrorBanner";
 import { Greeting } from "./Greeting";
@@ -10,6 +11,7 @@ import { TalkButton } from "./TalkButton";
 interface HomeScreenProps {
   conversation: ConversationApi;
   onNavigate: (view: MenuView) => void;
+  onScan: () => void;
   onLogout: () => void;
   isAdmin?: boolean;
 }
@@ -21,7 +23,7 @@ const HINTS: Partial<Record<Phase, string>> = {
   speaking: "Talking — tap anytime to cut in.",
 };
 
-export function HomeScreen({ conversation, onNavigate, onLogout, isAdmin }: HomeScreenProps) {
+export function HomeScreen({ conversation, onNavigate, onScan, onLogout, isAdmin }: HomeScreenProps) {
   const {
     phase,
     errorMessage,
@@ -78,7 +80,19 @@ export function HomeScreen({ conversation, onNavigate, onLogout, isAdmin }: Home
           <>
             <Greeting />
             <TalkButton phase={phase} onTap={handleTap} />
-            <PhotoAttach image={pendingImage} onAttach={attachImage} onClear={clearImage} />
+            <div className="flex items-center justify-center gap-4">
+              <PhotoAttach image={pendingImage} onAttach={attachImage} onClear={clearImage} />
+              {!pendingImage && (
+                <button
+                  className="grid size-14 place-items-center rounded-full bg-white text-ink/70 shadow-sm ring-1 ring-ink/5 transition-colors hover:bg-ink3"
+                  onClick={onScan}
+                  aria-label="Scan a barcode"
+                  title="Scan a barcode"
+                >
+                  <ScanBarcode className="size-5" />
+                </button>
+              )}
+            </div>
             <p className="min-h-6 text-center text-sm font-semibold text-ink/50">
               {HINTS[phase] ??
                 (pendingImage

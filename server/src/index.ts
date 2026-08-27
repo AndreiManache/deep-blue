@@ -17,7 +17,9 @@ import {
 } from "./auth.js";
 import { endSession, runTurn } from "./chat.js";
 import { PORT, USERNAME } from "./config.js";
-import { deleteEntry, getEntriesForDate, updateEntry } from "./entries.js";
+import { createEntry, deleteEntry, getEntriesForDate, updateEntry } from "./entries.js";
+import { normalizeFoodKey, recordObservation, totalFromBasis } from "./foods.js";
+import { lookupBarcode } from "./openfoodfacts.js";
 import {
   createFeedback,
   deleteFeedback,
@@ -37,7 +39,7 @@ import {
 import { getDailyStats } from "./stats.js";
 import { SttNotConfiguredError, transcribeAudio } from "./stt.js";
 import { synthesizeSpeech } from "./tts.js";
-import { validateEntryPatch, validateProfileInput } from "./validation.js";
+import { validateBarcodeEntry, validateEntryPatch, validateProfileInput } from "./validation.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -163,7 +165,7 @@ app.post("/auth/logout", (req, res) => {
 });
 
 app.use(
-  ["/chat", "/entries", "/profile", "/greeting", "/stats", "/transcribe", "/auth/me", "/feedback"],
+  ["/chat", "/entries", "/profile", "/greeting", "/stats", "/transcribe", "/auth/me", "/feedback", "/barcode"],
   requireAuth,
 );
 
@@ -356,6 +358,71 @@ app.delete("/entries/:id", (req, res) => {
     return;
   }
   res.status(204).end();
+});
+
+// Read-only preview so the client can show the product and let the user
+// confirm/enter grams before committing an entry.
+app.get("/barcode/:code", async (req, res) => {
+  const code = req.params.code;
+  if (!/^\d{8,14}$/.test(code)) {
+    res.status(400).json({ error: "barcode must be 8 to 14 digits" });
+    return;
+  }
+  const product = await lookupBarcode(code);
+  if (!product) {
+    res.status(404).json({ error: "Product not found." });
+    return;
+  }
+  res.json(product);
+});
+
+// Logs a barcode-scanned product deterministically — no Claude call. Nutrition
+// is re-looked-up server-side (the lookup cache makes this ~free) rather than
+// trusting client-supplied numbers.
+app.post("/barcode/entries", async (req, res) => {
+  const validationError = validateBarcodeEntry(req.body ?? {});
+  if (validationError) {
+    res.status(400).json({ error: validationError });
+    return;
+  }
+  const { barcode, grams } = req.body as { barcode: string; grams: number };
+  const product = await lookupBarcode(barcode);
+  if (!product) {
+    res.status(404).json({ error: "Product not found." });
+    return;
+  }
+
+  const total = totalFromBasis(product.nutrition, "per_100g", grams);
+  // Brand-qualified so a specific packaged product never collides with a
+  // generic voice-logged key like "yogurt" — but skip the qualifier when the
+  // brand is already part of the name (e.g. "Coca-Cola"), a common shape in
+  // Open Food Facts data, to avoid "Coca-Cola (Coca-Cola)".
+  const brandRedundant =
+    product.brand && product.name.toLowerCase().includes(product.brand.toLowerCase());
+  const distinctBrand = product.brand && !brandRedundant ? product.brand : null;
+  const foodKey = normalizeFoodKey(distinctBrand ? `${distinctBrand} ${product.name}` : product.name);
+  const description = distinctBrand ? `${product.name} (${distinctBrand})` : product.name;
+
+  const entry = createEntry(res.locals.userId as string, {
+    raw_transcript: `Scanned barcode ${barcode}`,
+    description,
+    calories: total.calories,
+    protein_g: total.protein_g,
+    carbs_g: total.carbs_g,
+    fat_g: total.fat_g,
+    food_key: foodKey,
+    grams,
+    source: "barcode",
+    agreement_count: null,
+  });
+
+  // Official label data is authoritative — feed it in at correction strength
+  // so a later voice-logged mention of the same product resolves as "yours".
+  if (foodKey) {
+    recordObservation(res.locals.userId as string, foodKey, "per_100g", product.nutrition, "correction");
+  }
+
+  res.json(entry);
 });
 
 // The greeting text only changes when the name or language does — no reason

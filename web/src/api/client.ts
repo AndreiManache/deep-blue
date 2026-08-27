@@ -16,8 +16,8 @@ export interface FoodEntry {
   fat_g: number | null;
   created_at: string;
   edited: boolean;
-  // Food-knowledge provenance: 'estimate' | 'yours' | 'verified' (or null on
-  // older entries / foods without a canonical key).
+  // Food-knowledge provenance: 'estimate' | 'yours' | 'verified' | 'barcode'
+  // (or null on older entries / foods without a canonical key).
   source: string | null;
   agreement_count: number | null;
 }
@@ -202,6 +202,33 @@ export async function transcribeAudio(blob: Blob): Promise<string> {
   if (!res.ok) throw new ApiError("Could not transcribe the audio.");
   const data = (await res.json()) as { text?: string };
   return (data.text ?? "").trim();
+}
+
+export interface BarcodeProduct {
+  name: string;
+  brand: string | null;
+  nutrition: { calories: number; protein_g: number | null; carbs_g: number | null; fat_g: number | null };
+}
+
+// Preview lookup — no side effects, just shows what's on the label before the
+// user commits to logging it.
+export async function lookupBarcode(code: string): Promise<BarcodeProduct | null> {
+  const res = await apiFetch(`/barcode/${encodeURIComponent(code)}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new ApiError("Could not look up that barcode.");
+  return res.json();
+}
+
+// Logs a scanned product deterministically — no Claude call involved.
+export async function logBarcodeEntry(barcode: string, grams: number): Promise<FoodEntry> {
+  const res = await apiFetch("/barcode/entries", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ barcode, grams }),
+  });
+  if (res.status === 404) throw new ApiError("Could not find that product anymore.");
+  if (!res.ok) throw new ApiError("Could not log this item.");
+  return res.json();
 }
 
 export interface GreetingResponse {

@@ -60,17 +60,14 @@ export function PhotoAttach({ image, onAttach, onClear }: PhotoAttachProps) {
 
   if (image) {
     return (
-      <div className="flex items-center gap-2 rounded-full bg-white py-1.5 pl-1.5 pr-4 shadow-sm ring-1 ring-ink/5">
-        <div className="relative size-9 shrink-0 overflow-hidden rounded-full">
-          <img
-            src={`data:${image.mime};base64,${image.base64}`}
-            alt="Attached food photo"
-            className="size-full object-cover"
-          />
-        </div>
-        <span className="text-xs font-bold text-ink/70">Photo attached — say what it is</span>
+      <div className="relative size-14">
+        <img
+          src={`data:${image.mime};base64,${image.base64}`}
+          alt="Attached food photo"
+          className="size-full rounded-full object-cover shadow-sm ring-1 ring-ink/5"
+        />
         <button
-          className="grid size-6 shrink-0 place-items-center rounded-full text-ink/40 transition-colors hover:bg-coral/10 hover:text-coral"
+          className="absolute -right-1 -top-1 grid size-6 place-items-center rounded-full bg-coral text-white shadow-sm transition-transform active:scale-95"
           onClick={onClear}
           aria-label="Remove photo"
         >
@@ -81,13 +78,14 @@ export function PhotoAttach({ image, onAttach, onClear }: PhotoAttachProps) {
   }
 
   return (
-    <div className="flex flex-col items-center gap-1.5">
+    <div className="flex flex-col items-center">
       <button
-        className="flex items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-bold text-ink/70 shadow-sm ring-1 ring-ink/5 transition-colors hover:bg-ink3"
+        className="grid size-14 place-items-center rounded-full bg-white text-ink/70 shadow-sm ring-1 ring-ink/5 transition-colors hover:bg-ink3"
         onClick={() => inputRef.current?.click()}
+        aria-label="Add a photo"
+        title="Add a photo"
       >
-        <Camera className="size-4" />
-        Add a photo
+        <Camera className="size-5" />
       </button>
       <input
         ref={inputRef}
@@ -97,7 +95,7 @@ export function PhotoAttach({ image, onAttach, onClear }: PhotoAttachProps) {
         className="hidden"
         onChange={handleFile}
       />
-      {error && <p className="text-[11px] font-semibold text-coral">{error}</p>}
+      {error && <p className="mt-1.5 text-[11px] font-semibold text-coral">{error}</p>}
     </div>
   );
 }

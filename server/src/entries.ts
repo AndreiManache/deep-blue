@@ -15,7 +15,7 @@ export interface FoodEntry {
   // Food-knowledge fields (nullable on old rows / foods without a key).
   food_key: string | null;
   grams: number | null;
-  source: string | null; // 'estimate' | 'yours' | 'verified'
+  source: string | null; // 'estimate' | 'yours' | 'verified' | 'barcode'
   agreement_count: number | null;
 }
 

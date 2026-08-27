@@ -7,7 +7,7 @@ import { db } from "./db.js";
 
 export type Basis = "per_100g" | "per_item";
 export type ObservationSource = "estimate" | "correction";
-export type Provenance = "yours" | "verified" | "estimate";
+export type Provenance = "yours" | "verified" | "estimate" | "barcode";
 
 export interface Nutrition {
   calories: number;

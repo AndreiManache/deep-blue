@@ -34,6 +34,7 @@ export interface FeedbackRow {
   audio_base64: string | null;
   audio_mime: string | null;
   log_snapshot: string | null;
+  transcript: string | null;
   created_at: string;
   status: string;
 }
@@ -41,7 +42,7 @@ export interface FeedbackRow {
 // Newest first — that's what an admin triaging a small trickle of reports
 // wants to see.
 const listStmt = db.prepare(`
-  SELECT f.id, u.username, f.message, f.audio_base64, f.audio_mime, f.log_snapshot, f.created_at, f.status
+  SELECT f.id, u.username, f.message, f.audio_base64, f.audio_mime, f.log_snapshot, f.transcript, f.created_at, f.status
     FROM feedback f
     JOIN users u ON u.id = f.user_id
    ORDER BY f.created_at DESC
@@ -55,5 +56,28 @@ const updateStatusStmt = db.prepare(`UPDATE feedback SET status = :status WHERE 
 
 export function setFeedbackStatus(id: string, status: "new" | "reviewed"): boolean {
   const result = updateStatusStmt.run({ id, status });
+  return Number(result.changes) > 0;
+}
+
+const getAudioStmt = db.prepare(`SELECT audio_base64, audio_mime FROM feedback WHERE id = :id`);
+
+export function getFeedbackAudio(id: string): { audio_base64: string; audio_mime: string | null } | null {
+  const row = getAudioStmt.get({ id }) as unknown as
+    | { audio_base64: string | null; audio_mime: string | null }
+    | undefined;
+  if (!row?.audio_base64) return null;
+  return { audio_base64: row.audio_base64, audio_mime: row.audio_mime };
+}
+
+const setTranscriptStmt = db.prepare(`UPDATE feedback SET transcript = :transcript WHERE id = :id`);
+
+export function setFeedbackTranscript(id: string, transcript: string): void {
+  setTranscriptStmt.run({ id, transcript });
+}
+
+const deleteStmt = db.prepare(`DELETE FROM feedback WHERE id = :id`);
+
+export function deleteFeedback(id: string): boolean {
+  const result = deleteStmt.run({ id });
   return Number(result.changes) > 0;
 }

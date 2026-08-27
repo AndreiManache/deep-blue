@@ -268,6 +268,7 @@ export interface FeedbackItem {
   audio_base64: string | null;
   audio_mime: string | null;
   log_snapshot: string | null;
+  transcript: string | null;
   created_at: string;
   status: string;
 }
@@ -285,6 +286,21 @@ export async function setFeedbackStatus(id: string, status: "new" | "reviewed"):
     body: JSON.stringify({ status }),
   });
   if (!res.ok) throw new ApiError("Could not update status.");
+}
+
+export async function deleteFeedbackItem(id: string): Promise<void> {
+  const res = await apiFetch(`/admin/feedback/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new ApiError("Could not delete this report.");
+}
+
+export async function transcribeFeedback(id: string): Promise<string> {
+  const res = await apiFetch(`/admin/feedback/${id}/transcribe`, { method: "POST" });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new ApiError(data.error ?? "Could not transcribe this voice note.");
+  }
+  const data = (await res.json()) as { transcript: string };
+  return data.transcript;
 }
 
 // ---- client-side date helpers -------------------------------------------

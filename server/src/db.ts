@@ -150,6 +150,15 @@ db.exec(`
   );
 `);
 
+// Cached ElevenLabs Scribe transcript of a feedback voice note — transcribed
+// on demand from the admin inbox (not automatically on submit, to avoid
+// paying for STT on reports nobody ends up needing), then kept so re-opening
+// the inbox doesn't re-transcribe.
+const feedbackColumns = db.prepare(`PRAGMA table_info(feedback)`).all() as { name: string }[];
+if (!feedbackColumns.some((col) => col.name === "transcript")) {
+  db.exec(`ALTER TABLE feedback ADD COLUMN transcript TEXT;`);
+}
+
 // One nutrition observation per (food_key, user): that user's best value for a
 // food, normalized to a basis (per 100g, or per one item when grams are
 // unknown). A "correction" (from editing an entry) outranks an "estimate".

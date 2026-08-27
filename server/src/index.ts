@@ -18,7 +18,14 @@ import {
 import { endSession, runTurn } from "./chat.js";
 import { PORT, USERNAME } from "./config.js";
 import { deleteEntry, getEntriesForDate, updateEntry } from "./entries.js";
-import { createFeedback, listFeedback, setFeedbackStatus } from "./feedback.js";
+import {
+  createFeedback,
+  deleteFeedback,
+  getFeedbackAudio,
+  listFeedback,
+  setFeedbackStatus,
+  setFeedbackTranscript,
+} from "./feedback.js";
 import {
   computeTargets,
   getProfile,
@@ -242,6 +249,41 @@ app.patch("/admin/feedback/:id", (req, res) => {
     return;
   }
   res.status(204).end();
+});
+
+app.delete("/admin/feedback/:id", (req, res) => {
+  const ok = deleteFeedback(req.params.id);
+  if (!ok) {
+    res.status(404).json({ error: "Feedback not found." });
+    return;
+  }
+  res.status(204).end();
+});
+
+// Transcribes a feedback report's voice note on demand (via the same
+// ElevenLabs Scribe pipeline as live conversation STT) and caches the result,
+// so it's readable text instead of audio only Andrei (not Claude) can hear.
+// No language hint — Scribe auto-detects, so a Romanian note works the same
+// as an English one.
+app.post("/admin/feedback/:id/transcribe", async (req, res) => {
+  const audio = getFeedbackAudio(req.params.id);
+  if (!audio) {
+    res.status(404).json({ error: "This report has no voice note." });
+    return;
+  }
+  try {
+    const buffer = Buffer.from(audio.audio_base64, "base64");
+    const result = await transcribeAudio(buffer, audio.audio_mime ?? "audio/mp4");
+    setFeedbackTranscript(req.params.id, result.text);
+    res.json({ transcript: result.text });
+  } catch (err) {
+    if (err instanceof SttNotConfiguredError) {
+      res.status(503).json({ error: "Speech-to-text is not configured on the server." });
+      return;
+    }
+    console.error("[/admin/feedback/:id/transcribe] error:", err);
+    res.status(502).json({ error: "Could not transcribe this voice note." });
+  }
 });
 
 app.post("/chat", async (req, res) => {

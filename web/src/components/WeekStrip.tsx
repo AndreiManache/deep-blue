@@ -1,48 +1,130 @@
-import type { DailyStat, Targets } from "../api/client";
-import { Ring } from "./Ring";
+import { useMemo } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { dayKey, todayKey, type DailyStat } from "../api/client";
+import { cn } from "../lib/utils";
 
 interface WeekStripProps {
-  days: DailyStat[];
-  targets: Targets | null;
   selected: string; // YYYY-MM-DD
-  onSelect: (date: string) => void;
+  stats: DailyStat[]; // recent days from fetchStats
+  onSelect: (day: string) => void;
 }
 
-function parseLocalDate(ymd: string): Date {
-  const [y, m, d] = ymd.split("-").map(Number);
-  return new Date(y, m - 1, d);
-}
+// The 7-day strip (Mon..Sun) that contains the selected day. A coral dot marks
+// days that have logged food; a sky dot marks today.
+export function WeekStrip({ selected, stats, onSelect }: WeekStripProps) {
+  const today = todayKey();
+  const daysWithData = useMemo(
+    () => new Set(stats.filter((s) => s.logged).map((s) => s.date)),
+    [stats],
+  );
 
-// A tappable week of progress rings — each day's ring fills toward the calorie
-// target, turns to the danger color when exceeded, and the selected day drives
-// the summary + entry list above/below it.
-export function WeekStrip({ days, targets, selected, onSelect }: WeekStripProps) {
-  const goal = targets?.calorie_target ?? null;
+  const weekDays = useMemo(() => {
+    const sel = new Date(selected + "T00:00:00");
+    const dow = (sel.getDay() + 6) % 7; // Monday = 0
+    const monday = new Date(sel);
+    monday.setDate(sel.getDate() - dow);
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      return dayKey(d);
+    });
+  }, [selected]);
+
+  function shift(days: number) {
+    const sel = new Date(selected + "T00:00:00");
+    sel.setDate(sel.getDate() + days);
+    onSelect(dayKey(sel));
+  }
+
+  const isCurrentWeek = weekDays.includes(today);
+  const first = weekDays[0] ?? today;
+  const last = weekDays[6] ?? today;
 
   return (
-    <div className="week-strip" role="group" aria-label="Select a day">
-      {days.map((day) => {
-        const date = parseLocalDate(day.date);
-        const weekday = date.toLocaleDateString(undefined, { weekday: "short" });
-        const over = goal != null && day.calories > goal;
-        const isSelected = day.date === selected;
-        return (
+    <div>
+      <div className="mb-3 flex items-center justify-between">
+        <span className="text-xs font-bold uppercase tracking-wider text-ink/40">
+          {new Date(first + "T00:00:00").toLocaleDateString(undefined, {
+            month: "short",
+            day: "numeric",
+          })}{" "}
+          –{" "}
+          {new Date(last + "T00:00:00").toLocaleDateString(undefined, {
+            month: "short",
+            day: "numeric",
+          })}
+        </span>
+        <div className="flex gap-2">
           <button
-            key={day.date}
-            className={isSelected ? "week-day selected" : "week-day"}
-            onClick={() => onSelect(day.date)}
-            aria-pressed={isSelected}
-            aria-label={`${weekday} ${date.getDate()}${
-              day.logged ? `, ${day.calories} kcal` : ", nothing logged"
-            }`}
+            className="grid size-9 place-items-center rounded-xl bg-white shadow-sm ring-1 ring-ink/5 transition-colors hover:bg-ink3"
+            onClick={() => shift(-7)}
+            aria-label="Previous week"
           >
-            <span className="week-day-name">{weekday}</span>
-            <Ring size={40} stroke={3} pct={goal && day.logged ? day.calories / goal : 0} over={over}>
-              <span className="week-day-num">{date.getDate()}</span>
-            </Ring>
+            <ChevronLeft className="size-4 text-ink/70" />
           </button>
-        );
-      })}
+          <button
+            className={cn(
+              "grid size-9 place-items-center rounded-xl bg-white shadow-sm ring-1 ring-ink/5 transition-colors",
+              isCurrentWeek ? "cursor-default opacity-40" : "hover:bg-ink3",
+            )}
+            onClick={() => shift(7)}
+            disabled={isCurrentWeek}
+            aria-label="Next week"
+          >
+            <ChevronRight className="size-4 text-ink/70" />
+          </button>
+        </div>
+      </div>
+      <div className="flex gap-1.5">
+        {weekDays.map((day) => {
+          const isSelected = day === selected;
+          const isToday = day === today;
+          const hasData = daysWithData.has(day);
+          return (
+            <button
+              key={day}
+              className={cn(
+                "flex flex-1 flex-col items-center gap-0.5 rounded-2xl px-1 py-2 transition-colors",
+                isSelected ? "bg-ink" : "bg-white ring-1 ring-ink/5 hover:bg-ink3",
+              )}
+              onClick={() => onSelect(day)}
+              aria-pressed={isSelected}
+              aria-label={`${new Date(day + "T00:00:00").toDateString()}${isToday ? " (today)" : ""}${hasData ? ", has entries" : ""}`}
+            >
+              <span
+                className={cn(
+                  "text-[11px] font-bold uppercase",
+                  isSelected ? "text-white/60" : "text-ink/40",
+                )}
+              >
+                {new Date(day + "T00:00:00").toLocaleDateString(undefined, {
+                  weekday: "short",
+                })}
+              </span>
+              <span
+                className={cn(
+                  "font-display text-lg font-extrabold leading-none",
+                  isSelected ? "text-white" : "text-ink",
+                )}
+              >
+                {new Date(day + "T00:00:00").getDate()}
+              </span>
+              <span
+                className={cn(
+                  "mt-1 size-1.5 rounded-full",
+                  hasData
+                    ? "bg-coral"
+                    : isToday
+                      ? "bg-sky"
+                      : isSelected
+                        ? "bg-white/25"
+                        : "bg-ink/10",
+                )}
+              />
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

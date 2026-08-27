@@ -235,3 +235,24 @@ export async function saveProfile(fields: Partial<Omit<UserProfile, "updated_at"
   if (!res.ok) throw new ApiError("Could not save profile.");
   return res.json();
 }
+
+// ---- client-side date helpers -------------------------------------------
+
+// Local day key (YYYY-MM-DD) — server day buckets are computed the same way.
+export function todayKey(): string {
+  return dayKey(new Date());
+}
+
+export function dayKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
+export function timeLabel(iso: string): string {
+  return new Date(iso).toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}

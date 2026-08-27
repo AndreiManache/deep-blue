@@ -46,17 +46,13 @@ export function App() {
   }
 
   if (!authed) {
-    return (
-      <div className="app-shell">
-        <AuthGate onAuthed={() => setAuthed(true)} />
-      </div>
-    );
+    return <AuthGate onAuthed={() => setAuthed(true)} />;
   }
 
   const pillLabel = PILL_LABELS[conversation.phase];
 
   return (
-    <div className="app-shell">
+    <div className="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col">
       {view === "home" && (
         <HomeScreen conversation={conversation} onNavigate={setView} onLogout={handleLogout} />
       )}
@@ -73,12 +69,16 @@ export function App() {
       )}
 
       {view !== "home" && pillLabel && (
-        <div className="conversation-pill">
-          <button className="conversation-pill-status" onClick={() => setView("home")}>
+        <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full bg-ink py-2 pl-5 pr-2 shadow-xl">
+          <button
+            className="flex items-center gap-2 text-sm font-bold text-cream"
+            onClick={() => setView("home")}
+          >
+            <span className="size-2 animate-pulse rounded-full bg-coral" />
             {pillLabel}
           </button>
           <button
-            className="conversation-pill-end"
+            className="grid size-8 place-items-center rounded-full bg-white/10 text-cream transition-colors hover:bg-white/20"
             onClick={conversation.endSession}
             aria-label="End conversation"
           >

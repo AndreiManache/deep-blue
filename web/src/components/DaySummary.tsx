@@ -1,87 +1,99 @@
-import type { FoodEntry, Targets } from "../api/client";
+import { useMemo } from "react";
+import { todayKey, type FoodEntry, type Targets } from "../api/client";
 import { Ring } from "./Ring";
 
 interface DaySummaryProps {
   entries: FoodEntry[];
   targets: Targets | null;
+  selectedDay: string;
 }
 
-// Today-style summary: a remaining-calories ring plus goal/consumed figures and
-// per-macro remaining bars, all computed from the selected day's entries.
-export function DaySummary({ entries, targets }: DaySummaryProps) {
-  const sum = (pick: (e: FoodEntry) => number | null) =>
-    Math.round(entries.reduce((s, e) => s + (pick(e) ?? 0), 0));
+function sum(entries: FoodEntry[]) {
+  return {
+    kcal: entries.reduce((a, e) => a + (e.calories || 0), 0),
+    protein_g: entries.reduce((a, e) => a + (e.protein_g || 0), 0),
+    carbs_g: entries.reduce((a, e) => a + (e.carbs_g || 0), 0),
+    fat_g: entries.reduce((a, e) => a + (e.fat_g || 0), 0),
+  };
+}
 
-  const consumed = sum((e) => e.calories);
-  const protein = sum((e) => e.protein_g);
-  const carbs = sum((e) => e.carbs_g);
-  const fat = sum((e) => e.fat_g);
+const round1 = (n: number) => Math.round(n * 10) / 10;
 
-  const goal = targets?.calorie_target ?? null;
-  const remaining = goal != null ? goal - consumed : null;
-  const over = goal != null && consumed > goal;
+// The white headline card: big calorie ring + small protein/carbs/fat rings.
+export function DaySummary({ entries, targets, selectedDay }: DaySummaryProps) {
+  const totals = useMemo(() => sum(entries), [entries]);
+  const kcalTarget = targets?.calorie_target ?? null;
+
+  const macro = (target: number | null, value: number) => {
+    if (!target) return { pct: 0, over: false, value: null as number | null, target };
+    return { pct: value / target, over: value > target, value, target };
+  };
+
+  const kcalPct = kcalTarget && kcalTarget > 0 ? totals.kcal / kcalTarget : 0;
+  const kcalOver = kcalTarget != null && totals.kcal > kcalTarget;
 
   return (
-    <div className="calorie-total day-summary">
-      <div className="day-summary-top">
-        <div className="day-summary-figures">
-          <div className="summary-figure">
-            <span className="summary-figure-label">Goal</span>
-            <span className="summary-figure-value">
-              {goal != null ? goal : "—"} <em>kcal</em>
-            </span>
+    <div className="rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-ink/5">
+      <div className="flex items-center gap-4">
+        <Ring size={112} stroke={12} pct={kcalPct} over={kcalOver} color="var(--color-sky)">
+          <div className="text-center">
+            <div className="font-display text-2xl font-extrabold leading-none text-ink">
+              {Math.round(totals.kcal)}
+            </div>
+            <div className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-ink/40">
+              kcal
+            </div>
           </div>
-          <div className="summary-figure">
-            <span className="summary-figure-label">Consumed</span>
-            <span className="summary-figure-value">
-              {consumed} <em>kcal</em>
-            </span>
+        </Ring>
+        <div>
+          <div className="text-xs font-bold uppercase tracking-wider text-ink/40">
+            {selectedDay === todayKey() ? "Today" : "Selected day"}
+          </div>
+          <div className="mt-1 text-sm font-semibold text-ink/60">
+            {kcalTarget != null
+              ? `${Math.max(0, Math.round(kcalTarget - totals.kcal))} left of ${kcalTarget}`
+              : "No target set yet"}
+          </div>
+          <div className="mt-0.5 text-xs font-medium text-ink/40">
+            {entries.length} {entries.length === 1 ? "item" : "items"} logged
           </div>
         </div>
-
-        <Ring size={148} stroke={14} pct={goal ? consumed / goal : 0} over={over}>
-          {goal != null ? (
-            <>
-              <span className="ring-value">{Math.abs(remaining as number)}</span>
-              <span className="ring-sub">kcal {over ? "over" : "left"}</span>
-            </>
-          ) : (
-            <>
-              <span className="ring-value">{consumed}</span>
-              <span className="ring-sub">kcal</span>
-            </>
-          )}
-        </Ring>
       </div>
 
-      {targets ? (
-        <div className="macro-row">
-          <Macro name="Protein" consumed={protein} target={targets.protein_target_g} />
-          <Macro name="Carbs" consumed={carbs} target={targets.carbs_target_g} />
-          <Macro name="Fat" consumed={fat} target={targets.fat_target_g} />
-        </div>
-      ) : (
-        <p className="stats-hint">Complete your profile to see your target and macros here.</p>
-      )}
+      <div className="mt-5 grid grid-cols-3 gap-3">
+        <MacroTile label="Protein" {...macro(targets?.protein_target_g ?? null, totals.protein_g)} color="var(--color-sky)" />
+        <MacroTile label="Carbs" {...macro(targets?.carbs_target_g ?? null, totals.carbs_g)} color="var(--color-sun)" />
+        <MacroTile label="Fat" {...macro(targets?.fat_target_g ?? null, totals.fat_g)} color="var(--color-coral)" />
+      </div>
     </div>
   );
 }
 
-function Macro({ name, consumed, target }: { name: string; consumed: number; target: number }) {
-  const pct = target > 0 ? Math.min(1, consumed / target) : 0;
-  const over = consumed > target;
-  const diff = Math.abs(target - consumed);
+interface MacroTileProps {
+  label: string;
+  pct: number;
+  over: boolean;
+  value: number | null;
+  target: number | null;
+  color: string;
+}
+
+function MacroTile({ label, pct, over, value, target, color }: MacroTileProps) {
   return (
-    <div className="macro">
-      <div className="macro-name">{name}</div>
-      <div className="macro-bar">
-        <div
-          className={over ? "macro-bar-fill over" : "macro-bar-fill"}
-          style={{ width: `${pct * 100}%` }}
-        />
-      </div>
-      <div className="macro-sub">
-        {diff}g {over ? "over" : "left"}
+    <div className="flex flex-col items-center gap-2 rounded-2xl bg-cream px-2 py-4">
+      <Ring size={72} stroke={9} pct={pct} over={over} color={color}>
+        <div className="text-center">
+          <div className="font-display text-base font-extrabold leading-none text-ink">
+            {value == null ? "—" : round1(value)}
+          </div>
+          <div className="text-[9px] font-bold uppercase text-ink/40">g</div>
+        </div>
+      </Ring>
+      <div className="text-center">
+        <div className="text-xs font-bold uppercase tracking-wide text-ink/50">{label}</div>
+        <div className="text-[11px] font-semibold text-ink/40">
+          {target == null ? "no target" : `/ ${round1(target)}g`}
+        </div>
       </div>
     </div>
   );

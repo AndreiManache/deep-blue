@@ -5,12 +5,18 @@ interface HamburgerMenuProps {
   onLogout: () => void;
 }
 
+const ITEMS = [
+  { to: "dashboard", label: "Dashboard" },
+  { to: "profile", label: "Profile" },
+  { to: "diagnostics", label: "Diagnostics" },
+] as const;
+
 export function HamburgerMenu({ onNavigate, onLogout }: HamburgerMenuProps) {
   const [open, setOpen] = useState(false);
 
-  function go(view: "dashboard" | "profile" | "diagnostics") {
+  function go(to: (typeof ITEMS)[number]["to"]) {
     setOpen(false);
-    onNavigate(view);
+    onNavigate(to);
   }
 
   function handleLogout() {
@@ -19,32 +25,44 @@ export function HamburgerMenu({ onNavigate, onLogout }: HamburgerMenuProps) {
   }
 
   return (
-    <div className="hamburger-wrap">
+    <div className="relative">
       <button
-        className="hamburger-button"
+        className="grid size-11 place-items-center rounded-2xl bg-white shadow-sm ring-1 ring-ink/5 transition-colors hover:bg-ink3"
         onClick={() => setOpen((o) => !o)}
         aria-label="Open menu"
         aria-expanded={open}
       >
-        <span />
-        <span />
-        <span />
+        <span className="w-5 space-y-1.5">
+          <span className="block h-[3px] rounded-full bg-ink/60" />
+          <span className="block h-[3px] rounded-full bg-ink/60" />
+          <span className="block h-[3px] rounded-full bg-ink/60" />
+        </span>
       </button>
       {open && (
-        <div className="hamburger-dropdown">
-          <button className="dropdown-item" onClick={() => go("dashboard")}>
-            Dashboard
-          </button>
-          <button className="dropdown-item" onClick={() => go("profile")}>
-            Profile
-          </button>
-          <button className="dropdown-item" onClick={() => go("diagnostics")}>
-            Diagnostics
-          </button>
-          <button className="dropdown-item dropdown-item-danger" onClick={handleLogout}>
-            Log out
-          </button>
-        </div>
+        <>
+          <button
+            className="fixed inset-0 z-40 cursor-default"
+            aria-label="Close menu"
+            onClick={() => setOpen(false)}
+          />
+          <div className="absolute left-0 top-14 z-50 w-48 overflow-hidden rounded-2xl bg-white p-1.5 shadow-xl ring-1 ring-ink/5">
+            {ITEMS.map((item) => (
+              <button
+                key={item.to}
+                className="block w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-ink transition-colors hover:bg-ink3"
+                onClick={() => go(item.to)}
+              >
+                {item.label}
+              </button>
+            ))}
+            <button
+              className="block w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-coral transition-colors hover:bg-coral/10"
+              onClick={handleLogout}
+            >
+              Log out
+            </button>
+          </div>
+        </>
       )}
     </div>
   );

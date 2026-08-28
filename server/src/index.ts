@@ -16,7 +16,19 @@ import {
   verifyPassword,
 } from "./auth.js";
 import { endSession, runTurn } from "./llmProvider.js";
-import { PORT, TTS_PROVIDER, USERNAME } from "./config.js";
+import {
+  ELEVENLABS_MODEL_ID,
+  GEMINI_MODEL,
+  GEMINI_THINKING_LEVEL,
+  GEMINI_TTS_MODEL,
+  LLM_PROVIDER,
+  MODEL,
+  MODEL_VISION,
+  PORT,
+  SMALLESTAI_API_KEY,
+  TTS_PROVIDER,
+  USERNAME,
+} from "./config.js";
 import { createEntry, deleteEntry, getEntriesForDate, updateEntry } from "./entries.js";
 import { normalizeFoodKey, recordObservation, totalFromBasis } from "./foods.js";
 import { lookupBarcode } from "./openfoodfacts.js";
@@ -36,7 +48,9 @@ import {
   type ProfileUpdateInput,
 } from "./profile.js";
 import { getDailyStats } from "./stats.js";
-import { SttNotConfiguredError, transcribeAudio } from "./stt.js";
+import { SttNotConfiguredError, transcribeAudio } from "./sttProvider.js";
+import { SMALLESTAI_STT_MODEL } from "./sttSmallest.js";
+import { STT_MODEL_ID } from "./stt.js";
 import { synthesizeSpeech } from "./ttsProvider.js";
 import { validateBarcodeEntry, validateEntryPatch, validateProfileInput } from "./validation.js";
 
@@ -232,6 +246,34 @@ app.post("/feedback", (req, res) => {
     log_snapshot: typeof log_snapshot === "string" ? log_snapshot : null,
   });
   res.json({ id });
+});
+
+// Read-only snapshot of which provider/model is actually active right now —
+// for debugging which stack produced a given reply, since env vars can drift
+// from what you remember setting. Reads the same constants every request
+// path already uses, so it can't drift from reality on its own.
+app.get("/admin/providers", (_req, res) => {
+  res.json({
+    llm: {
+      provider: LLM_PROVIDER,
+      model: LLM_PROVIDER === "gemini" ? GEMINI_MODEL : MODEL,
+      vision_model: LLM_PROVIDER === "anthropic" ? MODEL_VISION : null,
+      thinking_level: LLM_PROVIDER === "gemini" ? GEMINI_THINKING_LEVEL : null,
+    },
+    tts: {
+      provider: TTS_PROVIDER,
+      model: TTS_PROVIDER === "gemini" ? GEMINI_TTS_MODEL : ELEVENLABS_MODEL_ID,
+    },
+    stt: {
+      default_provider: "elevenlabs",
+      default_model: STT_MODEL_ID,
+      english_speedup: {
+        enabled: Boolean(SMALLESTAI_API_KEY),
+        provider: "smallestai",
+        model: SMALLESTAI_STT_MODEL,
+      },
+    },
+  });
 });
 
 app.get("/admin/feedback", (_req, res) => {

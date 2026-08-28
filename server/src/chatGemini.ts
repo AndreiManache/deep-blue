@@ -86,17 +86,25 @@ async function runTurnUnguarded(
   let exhausted = false;
 
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
-    const interaction = await client.interactions.create({
-      model: GEMINI_MODEL,
-      input: steps,
-      system_instruction: buildSystemPrompt(userId),
-      tools: geminiTools,
-      store: false, // this app manages history itself, same as the Anthropic path
-      generation_config: {
-        max_output_tokens: 400,
-        thinking_level: GEMINI_THINKING_LEVEL,
+    const interaction = await client.interactions.create(
+      {
+        model: GEMINI_MODEL,
+        input: steps,
+        system_instruction: buildSystemPrompt(userId),
+        tools: geminiTools,
+        store: false, // this app manages history itself, same as the Anthropic path
+        generation_config: {
+          max_output_tokens: 400,
+          thinking_level: GEMINI_THINKING_LEVEL,
+        },
       },
-    });
+      // Matches chat.ts's Anthropic client timeout (60s) — without this, an
+      // API stall has no ceiling here (unlike ttsGemini.ts, which already
+      // sets one), and can leave a turn hanging well past the client's own
+      // 90s abort in a way that reopens the mic unexpectedly once it
+      // finally resolves. See the epoch-guard fix in useConversation.ts.
+      { timeout: 60_000 },
+    );
 
     lastStepsOut = interaction.steps ?? [];
     const functionCalls = lastStepsOut.filter(

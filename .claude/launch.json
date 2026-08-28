@@ -11,7 +11,8 @@
       "name": "server",
       "runtimeExecutable": "D:\\DeepBlue\\server\\run-dev.cmd",
       "runtimeArgs": [],
-      "port": 3001
+      "port": 3001,
+      "autoPort": false
     }
   ]
 }

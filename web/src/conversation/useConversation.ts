@@ -31,6 +31,13 @@ export interface ConversationApi {
   mutationSignal: number;
   diagnostics: DiagEvent[];
   clearDiagnostics: () => void;
+  /**
+   * Append to the same diagnostics log the voice pipeline writes to. Exposed
+   * so non-conversation features (barcode scanning) can record what happened
+   * too — that log is attachable to a feedback report, which is the only way
+   * a client-side failure on someone else's phone ever reaches us.
+   */
+  addDiagnostic: (label: string, detail?: string) => void;
   /** A photo attached ahead of the next spoken turn — see PhotoAttach.tsx. */
   pendingImage: ImageAttachment | null;
   attachImage: (image: ImageAttachment) => void;
@@ -292,6 +299,7 @@ export function useConversation(): ConversationApi {
     mutationSignal,
     diagnostics,
     clearDiagnostics,
+    addDiagnostic: logDiag,
     pendingImage,
     attachImage,
     clearImage,

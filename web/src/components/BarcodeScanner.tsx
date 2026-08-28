@@ -4,6 +4,8 @@ import { ApiError, lookupBarcode, logBarcodeEntry, type BarcodeProduct } from ".
 
 interface BarcodeScannerProps {
   onDone: () => void;
+  /** Writes into the shared diagnostics log so a failure here is reportable. */
+  log?: (label: string, detail?: string) => void;
 }
 
 type ScanState =
@@ -26,6 +28,14 @@ const SLOW_SCAN_HINT_MS = 7000;
 // "not found") has happened by this point, the scan loop itself never
 // started or died silently — a real error, not just "no barcode yet".
 const STUCK_LOOP_MS = 6000;
+// How often we grab a frame and try to decode it. 200ms is well under
+// zxing's own 500ms default and still cheap — barcode decoding on a single
+// frame is fast, and more attempts per second means a faster lock-on.
+const DECODE_INTERVAL_MS = 200;
+// A usable camera frame is at least this many pixels on its long edge. Any
+// real camera is 480p+, so this only ever catches a broken/degenerate track
+// (0x0, or the 2x2 a dead stream can report) — never a legitimate one.
+const MIN_USABLE_DIMENSION = 160;
 
 function waitForVideoDimensions(video: HTMLVideoElement, timeoutMs = 4000): Promise<void> {
   if (video.videoWidth > 0 && video.videoHeight > 0) return Promise.resolve();
@@ -54,7 +64,7 @@ function waitForVideoDimensions(video: HTMLVideoElement, timeoutMs = 4000): Prom
 // is used unconditionally (no native BarcodeDetector path): the primary test
 // device is an iPhone, where BarcodeDetector doesn't exist, so a native-first
 // strategy would mean the fallback is the only path ever actually exercised.
-export function BarcodeScanner({ onDone }: BarcodeScannerProps) {
+export function BarcodeScanner({ onDone, log }: BarcodeScannerProps) {
   const [state, setState] = useState<ScanState>({ kind: "requesting" });
   const [grams, setGrams] = useState("");
   const [manualCode, setManualCode] = useState("");
@@ -65,8 +75,13 @@ export function BarcodeScanner({ onDone }: BarcodeScannerProps) {
   const readerRef = useRef<import("@zxing/library").BrowserMultiFormatReader | null>(null);
   const decodedRef = useRef(false);
   const lastAttemptAtRef = useRef<number | null>(null);
+  const loopRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   function releaseCamera() {
+    if (loopRef.current) {
+      clearInterval(loopRef.current);
+      loopRef.current = null;
+    }
     readerRef.current?.reset();
     readerRef.current = null;
     if (streamRef.current) {
@@ -80,6 +95,7 @@ export function BarcodeScanner({ onDone }: BarcodeScannerProps) {
 
     async function start() {
       if (!navigator.mediaDevices?.getUserMedia) {
+        log?.("barcode: getUserMedia unavailable");
         setState({ kind: "unavailable" });
         return;
       }
@@ -89,6 +105,7 @@ export function BarcodeScanner({ onDone }: BarcodeScannerProps) {
       } catch (err) {
         if (cancelled) return;
         const name = err instanceof Error ? err.name : "";
+        log?.("barcode: camera request failed", name || "unknown");
         setState(name === "NotAllowedError" || name === "SecurityError" ? { kind: "denied" } : { kind: "unavailable" });
         return;
       }
@@ -97,44 +114,77 @@ export function BarcodeScanner({ onDone }: BarcodeScannerProps) {
         return;
       }
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play().catch(() => {});
-        // zxing sizes its internal capture canvas from videoWidth/videoHeight
-        // on its very first decode attempt, then caches that size for the
-        // whole session — if that first attempt races ahead of the camera
-        // stream actually reporting real dimensions, every frame decodes
-        // against a permanently-0x0 canvas: no error, no crash, it just
-        // never finds anything, forever. This is very likely what "I pointed
-        // at two barcodes and nothing happened" actually was.
-        await waitForVideoDimensions(videoRef.current);
+      const video = videoRef.current;
+      if (!video) return;
+      video.srcObject = stream;
+      await video.play().catch(() => {});
+      // zxing sizes its internal capture canvas from videoWidth/videoHeight
+      // on its very first decode attempt, then caches that size for the
+      // whole session — if that first attempt races ahead of the camera
+      // stream actually reporting real dimensions, every frame decodes
+      // against a permanently-0x0 canvas: no error, no crash, it just
+      // never finds anything, forever.
+      await waitForVideoDimensions(video);
+      if (cancelled) return;
+      if (Math.max(video.videoWidth, video.videoHeight) < MIN_USABLE_DIMENSION) {
+        // Either dimensions never arrived (0x0) or the track is degenerate.
+        // Decoding such a frame can only ever fail, so say so rather than
+        // sitting on "still looking" forever — the exact failure mode we're
+        // fixing. Threshold is far below any real camera, so a legitimate
+        // stream can never trip it.
+        log?.("barcode: unusable video size", `${video.videoWidth}x${video.videoHeight}`);
+        setState({
+          kind: "error",
+          message: "The camera didn't start properly. Try again, or type the barcode in instead.",
+        });
+        return;
       }
-      if (cancelled) return;
 
-      const { BrowserMultiFormatReader } = await import("@zxing/library");
+      const zxing = await import("@zxing/library");
       if (cancelled) return;
-      const reader = new BrowserMultiFormatReader();
+      const reader = new zxing.BrowserMultiFormatReader();
       readerRef.current = reader;
       decodedRef.current = false;
       lastAttemptAtRef.current = Date.now();
       setState({ kind: "scanning" });
       setSlowHint(false);
+      log?.("barcode: scan loop started", `${video.videoWidth}x${video.videoHeight}`);
 
-      if (!videoRef.current) return;
-      // The type declares `result` as non-nullable, but the library actually
-      // calls back as (result, null) on a hit or (null, error) on every miss
-      // frame — NotFoundException fires continuously between frames, expected.
-      // Every invocation (hit or miss) is a heartbeat proving the loop is
-      // still alive — recorded below so the stuck-loop watchdog can tell
-      // "still trying" apart from "silently died".
-      void reader.decodeFromVideoElementContinuously(videoRef.current, (result) => {
+      // We drive the decode loop ourselves instead of using zxing's
+      // decodeFromVideoElementContinuously. That helper first awaits an
+      // internal playVideoOnLoadAsync, which resolves only on the video's
+      // `playing` EVENT — but it attaches that listener and then skips
+      // calling play() when the video is already playing ("Trying to play
+      // video that is already playing"). Since we start playback ourselves
+      // (and now also wait for dimensions before getting here), the video is
+      // ALWAYS already playing at that point, so `playing` never fires again,
+      // the promise never resolves, and the decode loop is never started at
+      // all — no frames, no errors, nothing. Owning the loop sidesteps that
+      // lifecycle entirely and makes every frame's outcome observable.
+      loopRef.current = setInterval(() => {
+        if (cancelled || decodedRef.current || !videoRef.current) return;
         lastAttemptAtRef.current = Date.now();
-        if (decodedRef.current || cancelled || !result) return;
+        let result;
+        try {
+          result = reader.decode(videoRef.current);
+        } catch (err) {
+          // A miss on any given frame is the overwhelmingly common case and
+          // is not an error worth surfacing; anything else is.
+          const expected =
+            err instanceof zxing.NotFoundException ||
+            err instanceof zxing.ChecksumException ||
+            err instanceof zxing.FormatException;
+          if (!expected) {
+            log?.("barcode: decode error", err instanceof Error ? err.message : String(err));
+          }
+          return;
+        }
         decodedRef.current = true;
         const barcode = result.getText();
+        log?.("barcode: decoded", barcode);
         releaseCamera();
         void handleDecoded(barcode);
-      });
+      }, DECODE_INTERVAL_MS);
     }
 
     async function handleDecoded(barcode: string) {
@@ -166,6 +216,7 @@ export function BarcodeScanner({ onDone }: BarcodeScannerProps) {
     const watchdog = setInterval(() => {
       const last = lastAttemptAtRef.current;
       if (last != null && Date.now() - last > STUCK_LOOP_MS) {
+        log?.("barcode: scan loop stalled", `${Math.round((Date.now() - last) / 1000)}s since last attempt`);
         setState({
           kind: "error",
           message: "Scanning got stuck. Try again, or type the barcode in instead.",

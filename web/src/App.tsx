@@ -97,6 +97,7 @@ export function App() {
       )}
       {view === "scan" && (
         <BarcodeScanner
+          log={conversation.addDiagnostic}
           onDone={() => {
             setScanSignal((s) => s + 1);
             setView("home");

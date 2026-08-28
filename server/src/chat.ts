@@ -1,22 +1,15 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { ANTHROPIC_API_KEY, MAX_TOOL_ITERATIONS, MODEL, MODEL_VISION } from "./config.js";
-import { getProfile, resolveSpeechLang, resolveVoiceId, type UserProfile } from "./profile.js";
+import type { ChatTurnResult, ImageInput } from "./llmTypes.js";
+import { getProfile, resolveSpeechLang, type UserProfile } from "./profile.js";
 import { clearSession, getHistory, repairDanglingToolUse, setHistory, truncatePairSafe } from "./sessions.js";
 import { buildSystemPrompt } from "./systemPrompt.js";
-import { executeTool, tools } from "./tools.js";
-import { synthesizeSpeech } from "./tts.js";
+import { anthropicTools, executeTool } from "./tools.js";
+import { synthesizeSpeech } from "./ttsProvider.js";
 
 // 60s timeout (TS SDK default is 10 minutes — a hung request would strand
 // the UI in "thinking" for that long) with one retry for transient failures.
 const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY, timeout: 60_000, maxRetries: 1 });
-
-export interface ChatTurnResult {
-  reply_text: string;
-  ended: boolean;
-  mutated: boolean;
-  audio_base64: string | null;
-  lang: string;
-}
 
 function extractText(content: Anthropic.Message["content"]): string {
   return content
@@ -34,11 +27,6 @@ function exhaustionFallback(profile: UserProfile | null): string {
   return profile?.language === "ro"
     ? "Scuze, s-a complicat prea tare — poți să încerci din nou?"
     : "Sorry, that got complicated — can you try again?";
-}
-
-export interface ImageInput {
-  base64: string;
-  mediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
 }
 
 const inFlight = new Set<string>();
@@ -101,7 +89,7 @@ async function runTurnUnguarded(
       // leaving ample room for a normal reply plus a tool call.
       max_tokens: 400,
       system: buildSystemPrompt(userId),
-      tools,
+      tools: anthropicTools,
       messages: history,
     });
 
@@ -166,9 +154,9 @@ async function runTurnUnguarded(
   }
 
   setHistory(sessionId, history);
-  const audio_base64 = await synthesizeSpeech(reply_text, resolveVoiceId(profile));
+  const { audio_base64, audio_mime } = await synthesizeSpeech(reply_text, profile);
 
-  return { reply_text, ended, mutated, audio_base64, lang: resolveSpeechLang(profile) };
+  return { reply_text, ended, mutated, audio_base64, audio_mime, lang: resolveSpeechLang(profile) };
 }
 
 export function endSession(sessionId: string): void {

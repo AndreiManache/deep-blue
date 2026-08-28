@@ -154,13 +154,14 @@ export function useConversation(): ConversationApi {
     void handleFinalTranscript(text);
   }
 
-  function speakThenListen(text: string, audioBase64?: string | null) {
+  function speakThenListen(text: string, audioBase64?: string | null, audioMime?: string) {
     captureRef.current!.abort(); // never record while the AI talks
     epochRef.current++;
     setPhaseBoth("speaking");
     logDiag("AI speaks", text.slice(0, 60));
     speak(text, {
       audioBase64,
+      audioMime,
       lang: languageRef.current,
       onEnd: () => {
         if (phaseRef.current !== "speaking") return; // session may have ended meanwhile
@@ -204,13 +205,14 @@ export function useConversation(): ConversationApi {
         logDiag("AI speaks", result.reply_text.slice(0, 60));
         speak(result.reply_text, {
           audioBase64: result.audio_base64,
+          audioMime: result.audio_mime,
           lang: result.lang,
           onEnd: () => endSession(),
         });
         return;
       }
 
-      speakThenListen(result.reply_text, result.audio_base64);
+      speakThenListen(result.reply_text, result.audio_base64, result.audio_mime);
     } catch (err) {
       logDiag("✕ request failed", `${Date.now() - startedAt}ms`);
       const message = err instanceof ApiError ? err.message : "Something went wrong. Try again.";
@@ -254,15 +256,17 @@ export function useConversation(): ConversationApi {
 
     let text = `Hello ${FALLBACK_NAME}`;
     let audioBase64: string | null = null;
+    let audioMime: string | undefined;
     const result = await greeting;
     if (result) {
       text = result.text;
       audioBase64 = result.audio_base64;
+      audioMime = result.audio_mime;
       languageRef.current = result.lang;
     }
 
     if (epochRef.current !== myEpoch) return; // endSession() fired while we were fetching
-    speakThenListen(text, audioBase64);
+    speakThenListen(text, audioBase64, audioMime);
   }
 
   // Manual "tap to end my turn": stop recording now and transcribe what we have.

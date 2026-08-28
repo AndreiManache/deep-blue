@@ -3,6 +3,9 @@ export interface ChatResponse {
   ended: boolean;
   mutated: boolean;
   audio_base64: string | null;
+  // Reply audio's real MIME — ElevenLabs returns MP3, Gemini TTS can return
+  // several formats, so this is never assumed on the client. See PROVIDERS.md.
+  audio_mime: string;
   lang: string;
 }
 
@@ -234,6 +237,7 @@ export async function logBarcodeEntry(barcode: string, grams: number): Promise<F
 export interface GreetingResponse {
   text: string;
   audio_base64: string | null;
+  audio_mime: string;
   lang: string;
 }
 

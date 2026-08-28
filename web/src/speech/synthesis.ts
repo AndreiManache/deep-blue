@@ -19,6 +19,8 @@
 export interface SpeakOptions {
   onEnd: () => void;
   audioBase64?: string | null;
+  /** Real MIME of audioBase64 — providers differ (ElevenLabs: MP3, Gemini TTS: configurable). Defaults to MP3 for older callers. */
+  audioMime?: string;
   /** BCP-47 tag (e.g. "ro-RO") — without it the fallback voice reads Romanian text with English phonemes. */
   lang?: string;
 }
@@ -98,7 +100,13 @@ function getAudioElement(): HTMLAudioElement {
   return audioEl;
 }
 
-function playRemoteAudio(base64: string, text: string, onEnd: () => void, lang?: string): void {
+function playRemoteAudio(
+  base64: string,
+  mime: string,
+  text: string,
+  onEnd: () => void,
+  lang?: string,
+): void {
   const el = getAudioElement();
   clearAudioWatchdog();
 
@@ -139,7 +147,7 @@ function playRemoteAudio(base64: string, text: string, onEnd: () => void, lang?:
     clearAudioWatchdog();
     audioWatchdogTimer = window.setTimeout(finish, el.duration * 1000 + 2000);
   };
-  el.src = `data:audio/mpeg;base64,${base64}`;
+  el.src = `data:${mime};base64,${base64}`;
 
   // Deliberately generous initial estimate — only a backstop for the case
   // where metadata never loads; the real deadline is set above.
@@ -149,9 +157,9 @@ function playRemoteAudio(base64: string, text: string, onEnd: () => void, lang?:
   el.play()?.catch(fallbackToLocal);
 }
 
-export function speak(text: string, { onEnd, audioBase64, lang }: SpeakOptions): void {
+export function speak(text: string, { onEnd, audioBase64, audioMime, lang }: SpeakOptions): void {
   if (audioBase64) {
-    playRemoteAudio(audioBase64, text, onEnd, lang);
+    playRemoteAudio(audioBase64, audioMime ?? "audio/mpeg", text, onEnd, lang);
     return;
   }
   speakLocal(text, onEnd, lang);

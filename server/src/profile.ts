@@ -1,4 +1,4 @@
-import { ELEVENLABS_VOICE_ID, ELEVENLABS_VOICE_ID_RO } from "./config.js";
+import { ELEVENLABS_VOICE_ID, ELEVENLABS_VOICE_ID_RO, GEMINI_VOICE_NAME, GEMINI_VOICE_NAME_RO } from "./config.js";
 import { db } from "./db.js";
 
 export type Sex = "male" | "female";
@@ -95,6 +95,10 @@ export function upsertProfile(userId: string, fields: ProfileUpdateInput): UserP
 // agree with each other and with the profile setting.
 export function resolveVoiceId(profile: UserProfile | null): string {
   return profile?.language === "ro" ? ELEVENLABS_VOICE_ID_RO : ELEVENLABS_VOICE_ID;
+}
+
+export function resolveGeminiVoiceName(profile: UserProfile | null): string {
+  return profile?.language === "ro" ? GEMINI_VOICE_NAME_RO : GEMINI_VOICE_NAME;
 }
 
 export function resolveSpeechLang(profile: UserProfile | null): string {

@@ -15,8 +15,8 @@ import {
   validateCredentials,
   verifyPassword,
 } from "./auth.js";
-import { endSession, runTurn } from "./chat.js";
-import { PORT, USERNAME } from "./config.js";
+import { endSession, runTurn } from "./llmProvider.js";
+import { PORT, TTS_PROVIDER, USERNAME } from "./config.js";
 import { createEntry, deleteEntry, getEntriesForDate, updateEntry } from "./entries.js";
 import { normalizeFoodKey, recordObservation, totalFromBasis } from "./foods.js";
 import { lookupBarcode } from "./openfoodfacts.js";
@@ -32,13 +32,12 @@ import {
   computeTargets,
   getProfile,
   resolveSpeechLang,
-  resolveVoiceId,
   upsertProfile,
   type ProfileUpdateInput,
 } from "./profile.js";
 import { getDailyStats } from "./stats.js";
 import { SttNotConfiguredError, transcribeAudio } from "./stt.js";
-import { synthesizeSpeech } from "./tts.js";
+import { synthesizeSpeech } from "./ttsProvider.js";
 import { validateBarcodeEntry, validateEntryPatch, validateProfileInput } from "./validation.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -426,8 +425,11 @@ app.post("/barcode/entries", async (req, res) => {
 });
 
 // The greeting text only changes when the name or language does — no reason
-// to pay ElevenLabs (credits + ~300ms) to re-synthesize it every session.
-const greetingAudioCache = new Map<string, string>();
+// to pay for a resynthesis (credits + ~300ms) every session. Keyed by
+// provider too, not just text — TTS_PROVIDER picks a different voice per
+// language internally, and a stale entry from the other provider would
+// otherwise get served after flipping the switch.
+const greetingAudioCache = new Map<string, { audio_base64: string; audio_mime: string }>();
 
 app.get("/greeting", async (_req, res) => {
   const profile = getProfile(res.locals.userId as string);
@@ -436,15 +438,22 @@ app.get("/greeting", async (_req, res) => {
   // by name before they've filled in a profile.
   const name = profile?.name ?? (res.locals.username as string) ?? USERNAME;
   const text = profile?.language === "ro" ? `Bună, ${name}!` : `Hello ${name}`;
-  const voiceId = resolveVoiceId(profile);
-  const cacheKey = `${voiceId}:${text}`;
+  const cacheKey = `${TTS_PROVIDER}:${profile?.language ?? "en"}:${text}`;
 
-  let audio_base64 = greetingAudioCache.get(cacheKey) ?? null;
-  if (!audio_base64) {
-    audio_base64 = await synthesizeSpeech(text, voiceId);
-    if (audio_base64) greetingAudioCache.set(cacheKey, audio_base64);
+  let cached = greetingAudioCache.get(cacheKey);
+  if (!cached) {
+    const result = await synthesizeSpeech(text, profile);
+    if (result.audio_base64) {
+      cached = { audio_base64: result.audio_base64, audio_mime: result.audio_mime };
+      greetingAudioCache.set(cacheKey, cached);
+    }
   }
-  res.json({ text, audio_base64, lang: resolveSpeechLang(profile) });
+  res.json({
+    text,
+    audio_base64: cached?.audio_base64 ?? null,
+    audio_mime: cached?.audio_mime ?? "audio/mpeg",
+    lang: resolveSpeechLang(profile),
+  });
 });
 
 app.get("/profile", (_req, res) => {

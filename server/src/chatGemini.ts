@@ -25,6 +25,48 @@ import { synthesizeSpeech } from "./ttsProvider.js";
 // wire format and the loop driving it are duplicated.
 const client = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
+// Transient Gemini failures worth one automatic retry rather than failing the
+// whole turn. `malformed_tool_call` (a 400 where the model emitted invalid
+// tool-call JSON) is the big one — a real production hit (2026-08-28, a photo
+// turn + long rambling transcript) where Google's own error body literally
+// said "Please retry the request" and sent retry-after: 1. It's stochastic,
+// so a re-run of the identical request usually succeeds. Also covers the
+// "experiencing high demand" 5xx blips. Not retried: anything else (bad key,
+// malformed request, etc.) — those won't fix themselves.
+const RETRYABLE_GEMINI = /malformed_tool_call|invalid JSON|high demand/i;
+
+function isRetryableGeminiError(err: unknown): boolean {
+  const status = (err as { statusCode?: number } | null)?.statusCode;
+  if (typeof status === "number" && status >= 500) return true;
+  const msg = err instanceof Error ? err.message : String(err);
+  return RETRYABLE_GEMINI.test(msg);
+}
+
+// One retry only (2 attempts total): each attempt carries its own 20s
+// timeout, and the turn still needs headroom for a possible second
+// tool-loop iteration plus TTS, all inside the client's 90s abort — so the
+// worst case here stays bounded rather than stacking into another hang.
+// Takes a thunk (rather than params) so the create() call's own overload
+// resolution — which distinguishes the non-streaming return type — is
+// preserved through the wrapper.
+async function withGeminiRetry<T>(fn: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (attempt === 0 && isRetryableGeminiError(err)) {
+        console.warn(
+          `[chatGemini] retryable error, retrying once: ${err instanceof Error ? err.message.slice(0, 140) : String(err)}`,
+        );
+        await new Promise((r) => setTimeout(r, 500));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("unreachable"); // the loop either returns or throws
+}
+
 function extractText(steps: Step[]): string {
   return steps
     .filter((s): s is Interactions.ModelOutputStep => s.type === "model_output")
@@ -86,30 +128,32 @@ async function runTurnUnguarded(
   let exhausted = false;
 
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
-    const interaction = await client.interactions.create(
-      {
-        model: GEMINI_MODEL,
-        input: steps,
-        system_instruction: buildSystemPrompt(userId),
-        tools: geminiTools,
-        store: false, // this app manages history itself, same as the Anthropic path
-        generation_config: {
-          max_output_tokens: 400,
-          thinking_level: GEMINI_THINKING_LEVEL,
+    const interaction = await withGeminiRetry(() =>
+      client.interactions.create(
+        {
+          model: GEMINI_MODEL,
+          input: steps,
+          system_instruction: buildSystemPrompt(userId),
+          tools: geminiTools,
+          store: false, // this app manages history itself, same as the Anthropic path
+          generation_config: {
+            max_output_tokens: 400,
+            thinking_level: GEMINI_THINKING_LEVEL,
+          },
         },
-      },
-      // 20s per call, not 60s: this call sits inside a loop that can run it
-      // more than once per turn (a tool-call round trip is two calls), and
-      // the whole /chat request still has to leave room for TTS synthesis
-      // afterward, all within the client's 90s abort. A production incident
-      // (2026-08-28) showed a single call taking 60.7s end-to-end before the
-      // connection was dropped — 60s was already too generous for one call,
-      // let alone two. Without any ceiling at all here, an API stall has no
-      // bound (unlike ttsGemini.ts, which already sets one), and can leave a
-      // turn hanging well past the client abort in a way that reopens the
-      // mic unexpectedly once it finally resolves — see the epoch-guard fix
-      // in useConversation.ts.
-      { timeout: 20_000 },
+        // 20s per call, not 60s: this call sits inside a loop that can run it
+        // more than once per turn (a tool-call round trip is two calls), and
+        // the whole /chat request still has to leave room for TTS synthesis
+        // afterward, all within the client's 90s abort. A production incident
+        // (2026-08-28) showed a single call taking 60.7s end-to-end before the
+        // connection was dropped — 60s was already too generous for one call,
+        // let alone two. Without any ceiling at all here, an API stall has no
+        // bound (unlike ttsGemini.ts, which already sets one), and can leave a
+        // turn hanging well past the client abort in a way that reopens the
+        // mic unexpectedly once it finally resolves — see the epoch-guard fix
+        // in useConversation.ts.
+        { timeout: 20_000 },
+      ),
     );
 
     lastStepsOut = interaction.steps ?? [];

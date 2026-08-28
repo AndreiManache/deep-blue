@@ -21,9 +21,20 @@ export interface CaptureHandlers {
 // VAD tuning. RMS is on a 0..1 scale off the time-domain waveform.
 const START_RMS = 0.025; // speech onset
 const SILENCE_RMS = 0.018; // below this counts as quiet
-const END_SILENCE_MS = 800; // trailing quiet after speech that ends the turn
+// Trailing quiet after speech that ends the turn. Bumped from 800ms
+// (2026-08-28) so a mid-thought pause while describing a long meal — "...and
+// then, uh... [pause] ...some garlic sauce" — doesn't end the turn before
+// the user's finished. This is the natural end signal; the user can also tap
+// the orb to end immediately.
+const END_SILENCE_MS = 1200;
 const NO_SPEECH_MS = 8000; // nothing said at all -> onNoSpeech
-const MAX_TURN_MS = 20000; // hard cap on one turn
+// Absolute ceiling on one turn — purely a runaway guard (e.g. constant
+// background noise the VAD never sees drop to silence), NOT a normal stop.
+// Was 20s, which cut people off mid-sentence while describing a full meal
+// (reported twice, 2026-08-28). At ~26KB/s of recorded audio this is ~3MB
+// worst case, well under the 25MB /transcribe limit. The real end signal is
+// END_SILENCE_MS above; this only fires if that somehow never does.
+const MAX_TURN_MS = 120000;
 const POLL_MS = 50;
 
 function pickMimeType(): string {

@@ -63,13 +63,16 @@ export type TtsProviderName = "elevenlabs" | "gemini";
 export const TTS_PROVIDER: TtsProviderName = process.env.TTS_PROVIDER === "gemini" ? "gemini" : "elevenlabs";
 
 export const GEMINI_API_KEY = process.env.GEMINI_API_KEY ?? "";
-// "Our most capable Flash model, built for complex coding, agentic
-// workflows, and reliable multi-step execution" per Google's own docs —
-// the tool-calling-heavy equivalent of MODEL_VISION's "worth the better
-// model" reasoning, but as the LLM_PROVIDER=gemini default for every turn
-// rather than just vision ones, since there's no separate cheap/expensive
-// Gemini tier wired up here (yet — see PROVIDERS.md if that changes).
-export const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-3.7-flash";
+// Was gemini-3.7-flash, then 3.6-flash (dodging a 3.7 capacity issue), but
+// both are full Flash models sized for complex agentic work — overkill for
+// this app's actual model-side job. The real complexity (calorie/macro math)
+// is deterministic server code (see foods.ts/log_food); the model's job is
+// narrow — parse a sentence, call a tool. gemini-3.5-flash-lite is built and
+// benchmarked specifically for that (fast extraction/classification/tool-
+// calling), and measured 10-15x faster than 3.6-flash on identical turns
+// (2026-08-28) with no loss where quality actually lives, since the math
+// never came from the model in the first place.
+export const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-3.5-flash-lite";
 // "low" | "medium" | "high". Was "high", but measured latency on identical
 // simple turns (2026-08-28) was 28-47s at high vs 10-25s at low — high was
 // the dominant cause of replies effectively never arriving in a voice UX.

@@ -356,17 +356,12 @@ export interface ProvidersSnapshot {
     thinking_level: string | null;
   };
   tts: {
-    provider: "elevenlabs" | "gemini";
-    model: string;
+    default: { provider: "murf" | "elevenlabs" | "gemini"; model: string };
+    romanian: { provider: "elevenlabs" | "gemini"; model: string };
   };
   stt: {
-    default_provider: "elevenlabs";
-    default_model: string;
-    english_speedup: {
-      enabled: boolean;
-      provider: "smallestai";
-      model: string;
-    };
+    default: { provider: "smallestai" | "elevenlabs"; model: string };
+    romanian: { provider: "elevenlabs"; model: string };
   };
 }
 

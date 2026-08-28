@@ -24,6 +24,7 @@ import {
   LLM_PROVIDER,
   MODEL,
   MODEL_VISION,
+  MURF_API_KEY,
   PORT,
   SMALLESTAI_API_KEY,
   TTS_PROVIDER,
@@ -261,16 +262,31 @@ app.get("/admin/providers", (_req, res) => {
       thinking_level: LLM_PROVIDER === "gemini" ? GEMINI_THINKING_LEVEL : null,
     },
     tts: {
-      provider: TTS_PROVIDER,
-      model: TTS_PROVIDER === "gemini" ? GEMINI_TTS_MODEL : ELEVENLABS_MODEL_ID,
+      // Matches ttsProvider.ts's actual dispatch: Murf Falcon 2 is the
+      // default whenever it's configured, the TTS_PROVIDER switch's result
+      // only for confirmed Romanian (and as the fallback if Murf is
+      // unconfigured or a request to it fails).
+      default: {
+        provider: MURF_API_KEY ? "murf" : TTS_PROVIDER,
+        model: MURF_API_KEY ? "falcon-2" : TTS_PROVIDER === "gemini" ? GEMINI_TTS_MODEL : ELEVENLABS_MODEL_ID,
+      },
+      romanian: {
+        provider: TTS_PROVIDER,
+        model: TTS_PROVIDER === "gemini" ? GEMINI_TTS_MODEL : ELEVENLABS_MODEL_ID,
+      },
     },
     stt: {
-      default_provider: "elevenlabs",
-      default_model: STT_MODEL_ID,
-      english_speedup: {
-        enabled: Boolean(SMALLESTAI_API_KEY),
-        provider: "smallestai",
-        model: SMALLESTAI_STT_MODEL,
+      // Matches sttProvider.ts's actual dispatch: Smallest AI is the default
+      // whenever it's configured, ElevenLabs Scribe only for confirmed
+      // Romanian (and as the fallback if Smallest AI is unconfigured or a
+      // request to it fails).
+      default: {
+        provider: SMALLESTAI_API_KEY ? "smallestai" : "elevenlabs",
+        model: SMALLESTAI_API_KEY ? SMALLESTAI_STT_MODEL : STT_MODEL_ID,
+      },
+      romanian: {
+        provider: "elevenlabs",
+        model: STT_MODEL_ID,
       },
     },
   });

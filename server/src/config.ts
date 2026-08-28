@@ -79,12 +79,22 @@ export const GEMINI_TTS_MODEL = process.env.GEMINI_TTS_MODEL ?? "gemini-3.1-flas
 export const GEMINI_VOICE_NAME = process.env.GEMINI_VOICE_NAME ?? "Kore";
 export const GEMINI_VOICE_NAME_RO = process.env.GEMINI_VOICE_NAME_RO || GEMINI_VOICE_NAME;
 
-// Optional STT speedup: Smallest AI's Pulse Pro model, English-only, so it's
-// only ever tried for a confirmed language:"en" profile — Romanian and
-// language-unknown turns always go to ElevenLabs Scribe regardless (see
-// sttProvider.ts and PROVIDERS.md). Empty means "skip it, always use
-// Scribe", same graceful-absence pattern as every other optional key here.
+// Default STT provider (2026-08-28): Smallest AI's Pulse Pro, English-only,
+// used for everyone except a confirmed language:"ro" profile, which always
+// gets ElevenLabs Scribe instead (see sttProvider.ts and PROVIDERS.md).
+// Empty means "skip it, always use Scribe" — the original, fully
+// multilingual-safe behavior.
 export const SMALLESTAI_API_KEY = process.env.SMALLESTAI_API_KEY ?? "";
+
+// Default TTS provider (2026-08-28): Murf's Falcon 2, used for everyone
+// except a confirmed language:"ro" profile — which instead uses whatever
+// TTS_PROVIDER already resolves to (Gemini, per how it's set today), by
+// deliberate choice rather than Murf's own cross-lingual Romanian voices
+// (confirmed to work, but untested for quality — see ttsProvider.ts).
+export const MURF_API_KEY = process.env.MURF_API_KEY ?? "";
+// A real, verified voiceId (confirmed against GET /v1/speech/voices).
+// Swappable; that endpoint lists the full 162-voice catalog.
+export const MURF_VOICE_ID = process.env.MURF_VOICE_ID ?? "en-US-natalie";
 
 if (LLM_PROVIDER === "anthropic" && !ANTHROPIC_API_KEY) {
   console.warn(

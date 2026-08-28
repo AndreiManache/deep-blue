@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import type Anthropic from "@anthropic-ai/sdk";
+import type { Interactions } from "@google/genai";
 import { computeCompositionNutrition } from "../src/nutrition.js";
+import { repairDanglingFunctionCall, truncateSteps } from "../src/geminiSessions.js";
 import { repairDanglingToolUse, truncatePairSafe } from "../src/sessions.js";
 import { MAX_HISTORY_TURNS } from "../src/config.js";
+import { anthropicTools, geminiTools, toolDefs } from "../src/tools.js";
 import { validateEntryPatch, validateProfileInput } from "../src/validation.js";
 
 describe("computeCompositionNutrition", () => {
@@ -154,5 +157,90 @@ describe("repairDanglingToolUse", () => {
 
   it("is a no-op on an empty history", () => {
     assert.deepEqual(repairDanglingToolUse([]), []);
+  });
+});
+
+describe("tool schema derivation (Anthropic/Gemini drift guard)", () => {
+  it("derives the same tool names, in the same order, for both providers", () => {
+    const names = toolDefs.map((t) => t.name);
+    assert.deepEqual(anthropicTools.map((t) => t.name), names);
+    assert.deepEqual(geminiTools.map((t) => t.name), names);
+  });
+
+  it("carries the same description and parameters through to both shapes", () => {
+    for (const def of toolDefs) {
+      const a = anthropicTools.find((t) => t.name === def.name)!;
+      const g = geminiTools.find((t) => t.name === def.name)!;
+      assert.equal(a.description, def.description);
+      assert.equal(g.description, def.description);
+      assert.deepEqual(a.input_schema, def.parameters);
+      assert.deepEqual(g.parameters, def.parameters);
+      assert.equal(g.type, "function");
+    }
+  });
+});
+
+describe("truncateSteps (Gemini)", () => {
+  const userInput = (text: string): Interactions.Step => ({
+    type: "user_input",
+    content: [{ type: "text", text }],
+  });
+  const modelOutput = (text: string): Interactions.Step => ({
+    type: "model_output",
+    content: [{ type: "text", text }],
+  });
+  const functionCall = (id: string): Interactions.Step => ({
+    type: "function_call",
+    id,
+    name: "get_entries",
+    arguments: {},
+  });
+  const functionResult = (id: string): Interactions.Step => ({
+    type: "function_result",
+    call_id: id,
+    result: "[]",
+  });
+
+  it("leaves short histories untouched", () => {
+    const steps = [userInput("turn 1"), modelOutput("reply 1"), userInput("turn 2"), modelOutput("reply 2")];
+    assert.equal(truncateSteps(steps), steps);
+  });
+
+  it("keeps the last MAX_HISTORY_TURNS user turns even when tool traffic inflates the step count", () => {
+    const steps: Interactions.Step[] = [];
+    const total = MAX_HISTORY_TURNS + 10;
+    for (let i = 0; i < total; i++) {
+      steps.push(userInput(`turn ${i}`), functionCall(`t${i}`), functionResult(`t${i}`), modelOutput(`reply ${i}`));
+    }
+    const truncated = truncateSteps(steps);
+    const genuineTurns = truncated.filter((s) => s.type === "user_input");
+    assert.equal(genuineTurns.length, MAX_HISTORY_TURNS);
+    assert.equal(truncated[0].type, "user_input");
+  });
+});
+
+describe("repairDanglingFunctionCall (Gemini)", () => {
+  it("drops a trailing function_call with no matching function_result", () => {
+    const steps: Interactions.Step[] = [
+      { type: "user_input", content: [{ type: "text", text: "turn 1" }] },
+      { type: "function_call", id: "c1", name: "get_entries", arguments: {} },
+    ];
+    const repaired = repairDanglingFunctionCall(steps);
+    assert.equal(repaired.length, 1);
+    assert.equal(repaired[0].type, "user_input");
+  });
+
+  it("leaves a well-formed history untouched", () => {
+    const steps: Interactions.Step[] = [
+      { type: "user_input", content: [{ type: "text", text: "turn 1" }] },
+      { type: "function_call", id: "c1", name: "get_entries", arguments: {} },
+      { type: "function_result", call_id: "c1", result: "[]" },
+      { type: "model_output", content: [{ type: "text", text: "reply 1" }] },
+    ];
+    assert.equal(repairDanglingFunctionCall(steps), steps);
+  });
+
+  it("is a no-op on an empty history", () => {
+    assert.deepEqual(repairDanglingFunctionCall([]), []);
   });
 });

@@ -12,14 +12,33 @@ import { computeCompositionNutrition, type Preparation } from "./nutrition.js";
 import { upsertProfile, type ProfileUpdateInput } from "./profile.js";
 import { validateProfileInput } from "./validation.js";
 
-export const tools: Anthropic.Tool[] = [
+// Plain JSON Schema — the shape both Anthropic's `input_schema` and Gemini's
+// `parameters` already use natively, so one definition covers both providers.
+export interface JsonSchema {
+  type: string;
+  properties?: Record<string, JsonSchema | { type: string; enum?: string[]; description?: string }>;
+  required?: string[];
+  enum?: string[];
+  description?: string;
+}
+
+export interface ToolDef {
+  name: string;
+  description: string;
+  parameters: JsonSchema;
+}
+
+// Single source of truth for every tool the model can call. Defined once,
+// provider-agnostic, and adapted below — so Anthropic's and Gemini's tool
+// lists can never silently drift out of sync with each other.
+export const toolDefs: ToolDef[] = [
   {
     name: "log_food",
     description:
       "Create a new food log entry. Two ways to provide nutrition — pick exactly one: " +
       "(1) For normal foods, pass your own `calories` estimate (plus optional macros). Use reasonable estimates for common foods — do not ask the user for exact numbers. " +
       "(2) When the user gives a fat/lean composition ratio for a meat-based food along with a total weight (e.g. '250 grams, 60% fat 40% meat'), pass `total_weight_g`, `fat_ratio_pct` and `preparation` INSTEAD of estimating — the server computes calories and macros deterministically from tissue composition, which is more accurate than estimating such cuts as one generic value.",
-    input_schema: {
+    parameters: {
       type: "object",
       properties: {
         description: {
@@ -64,7 +83,7 @@ export const tools: Anthropic.Tool[] = [
     name: "get_entries",
     description:
       "Read logged food entries for a day. Defaults to today. Use this when the user asks about their day, OR when you need an entry's id to edit/delete it.",
-    input_schema: {
+    parameters: {
       type: "object",
       properties: {
         date: { type: "string", description: "YYYY-MM-DD, defaults to today if omitted" },
@@ -74,7 +93,7 @@ export const tools: Anthropic.Tool[] = [
   {
     name: "update_entry",
     description: "Modify an existing food entry by id (e.g. correcting the quantity or description).",
-    input_schema: {
+    parameters: {
       type: "object",
       properties: {
         id: { type: "string" },
@@ -90,7 +109,7 @@ export const tools: Anthropic.Tool[] = [
   {
     name: "delete_entry",
     description: "Remove a food entry by id.",
-    input_schema: {
+    parameters: {
       type: "object",
       properties: {
         id: { type: "string" },
@@ -102,7 +121,7 @@ export const tools: Anthropic.Tool[] = [
     name: "update_profile",
     description:
       "Create or update the user's profile: name, height, weight, age, biological sex, activity level, fitness goal, and conversation language. Call this whenever the user states or changes any of this info by voice. All fields optional — only pass what changed.",
-    input_schema: {
+    parameters: {
       type: "object",
       properties: {
         name: { type: "string" },
@@ -137,12 +156,34 @@ export const tools: Anthropic.Tool[] = [
     name: "end_conversation",
     description:
       "Call this when the user is clearly done talking (says goodbye, 'that's all', 'I'm done', etc). Say a brief goodbye in your reply text at the same time.",
-    input_schema: {
+    parameters: {
       type: "object",
       properties: {},
     },
   },
 ];
+
+export const anthropicTools: Anthropic.Tool[] = toolDefs.map((t) => ({
+  name: t.name,
+  description: t.description,
+  input_schema: t.parameters as Anthropic.Tool["input_schema"],
+}));
+
+// Gemini's Interactions API function-tool shape: a flat object per function
+// (not wrapped in a `functionDeclarations` array like the older Gemini SDKs).
+export interface GeminiFunctionTool {
+  type: "function";
+  name: string;
+  description: string;
+  parameters: JsonSchema;
+}
+
+export const geminiTools: GeminiFunctionTool[] = toolDefs.map((t) => ({
+  type: "function",
+  name: t.name,
+  description: t.description,
+  parameters: t.parameters,
+}));
 
 export interface ToolExecutionResult {
   content: string;

@@ -50,8 +50,43 @@ export const MAX_HISTORY_TURNS = 20;
 // Hard ceiling on tool-use round-trips within a single /chat turn.
 export const MAX_TOOL_ITERATIONS = 5;
 
-if (!ANTHROPIC_API_KEY) {
+// --- Provider switches (see PROVIDERS.md) --------------------------------
+//
+// Independent toggles — either one can point at Gemini while the other
+// stays on the original provider, which is the point: comparing the LLM and
+// the voice separately, not just as an all-or-nothing swap.
+
+export type LlmProviderName = "anthropic" | "gemini";
+export const LLM_PROVIDER: LlmProviderName = process.env.LLM_PROVIDER === "gemini" ? "gemini" : "anthropic";
+
+export type TtsProviderName = "elevenlabs" | "gemini";
+export const TTS_PROVIDER: TtsProviderName = process.env.TTS_PROVIDER === "gemini" ? "gemini" : "elevenlabs";
+
+export const GEMINI_API_KEY = process.env.GEMINI_API_KEY ?? "";
+// "Our most capable Flash model, built for complex coding, agentic
+// workflows, and reliable multi-step execution" per Google's own docs —
+// the tool-calling-heavy equivalent of MODEL_VISION's "worth the better
+// model" reasoning, but as the LLM_PROVIDER=gemini default for every turn
+// rather than just vision ones, since there's no separate cheap/expensive
+// Gemini tier wired up here (yet — see PROVIDERS.md if that changes).
+export const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-3.7-flash";
+// "low" | "medium" | "high" — high maximizes reasoning, at more latency/cost.
+export const GEMINI_THINKING_LEVEL = process.env.GEMINI_THINKING_LEVEL ?? "high";
+
+export const GEMINI_TTS_MODEL = process.env.GEMINI_TTS_MODEL ?? "gemini-3.1-flash-tts-preview";
+// One of Gemini TTS's ~30 prebuilt voice names (e.g. "Kore", "Puck") — a
+// name, not an opaque ID like ElevenLabs' ELEVENLABS_VOICE_ID.
+export const GEMINI_VOICE_NAME = process.env.GEMINI_VOICE_NAME ?? "Kore";
+export const GEMINI_VOICE_NAME_RO = process.env.GEMINI_VOICE_NAME_RO || GEMINI_VOICE_NAME;
+
+if (LLM_PROVIDER === "anthropic" && !ANTHROPIC_API_KEY) {
   console.warn(
     "[config] ANTHROPIC_API_KEY is not set — /chat requests will fail. Copy .env.example to .env and fill it in.",
   );
+}
+if (LLM_PROVIDER === "gemini" && !GEMINI_API_KEY) {
+  console.warn("[config] LLM_PROVIDER=gemini but GEMINI_API_KEY is not set — /chat requests will fail.");
+}
+if (TTS_PROVIDER === "gemini" && !GEMINI_API_KEY) {
+  console.warn("[config] TTS_PROVIDER=gemini but GEMINI_API_KEY is not set — replies will have no audio.");
 }

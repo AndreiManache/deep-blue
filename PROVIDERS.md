@@ -99,6 +99,58 @@ but keeps "which stack is live right now" an unambiguous, single fact about
 the whole deployment. Revisit if comparing them stops being an occasional
 thing and becomes routine.
 
+## STT: an English-only speedup, not a third switch
+
+Speech-to-text is handled differently from the LLM/TTS switches above — it's
+not a global toggle, because there isn't a drop-in Romanian-capable
+alternative to compare against yet. Instead, one optional key
+(`SMALLESTAI_API_KEY`) opts English-confirmed users into a faster STT model,
+while everyone else keeps using ElevenLabs Scribe exactly as before:
+
+- **Set `SMALLESTAI_API_KEY`** to route STT to Smallest AI's Pulse Pro model
+  (get one at [smallest.ai](https://smallest.ai) — console → API keys, $10
+  free credit to start) — but *only* for a request whose profile already has
+  `language: "en"` confirmed. Romanian profiles, and the language-unknown
+  case for brand-new users, always go to Scribe.
+- **Leave it unset** and STT behaves exactly as it always has — Scribe,
+  auto-detecting, for everyone.
+
+Why gated on confirmed English rather than a blanket switch: Pulse Pro is
+English-only (confirmed against its model card at
+[docs.smallest.ai](https://docs.smallest.ai/models/model-cards/speech-to-text/pulse-pro)).
+Scribe's language-agnostic auto-detect is what lets a brand-new user address
+Deep Blue in Romanian and have the app notice and switch
+(`systemPrompt.ts`'s language-detection rule depends on that first utterance
+being transcribed correctly *before* anyone has told the app which language
+they're using) — routing language-unknown turns to an English-only model
+would break that detection outright. Once a user's profile says
+`language: "en"`, though, every future turn from them is safe to route to
+the faster model. Any Smallest AI failure — including a possible container/
+format rejection, see below — falls back to Scribe transparently on the
+same audio bytes, so this can't make a turn fail that would have worked
+before.
+
+**Live-verified**: a real spoken WAV clip (synthesized via Gemini TTS, so
+genuine speech rather than silence) round-tripped through Pulse Pro came
+back with an exact transcript match, confirming the API contract — auth,
+request shape, response parsing — is correct. Also confirmed the dispatch
+gate itself: `language: "en"` routes to Smallest AI (logged as `[sttProvider]
+transcribed via Smallest AI Pulse Pro`), while `"ro"` and unset both route
+straight to ElevenLabs, untouched.
+
+**Still open**: that test used WAV, one of Smallest AI's explicitly
+documented formats. The real recordings this app captures are containers —
+`audio/webm;codecs=opus` on Chrome/Android, `audio/mp4` on iOS Safari — which
+their docs don't explicitly confirm. `sttSmallest.ts` uploads those bytes
+as-is with no transcoding. Until a real recorded clip from each platform is
+tested, treat that specific compatibility as unverified — the
+fallback-to-Scribe design means a bad guess there costs extra latency, not
+a broken turn, but it's not proof the speedup is actually landing on a real
+phone yet. Watch the server logs for the `[sttProvider]` line after a real
+voice turn from an `language: "en"` account — its presence (or the
+`[sttProvider] Smallest AI failed, falling back to ElevenLabs` line instead)
+tells you which happened.
+
 ## Known constraints worth knowing before you judge a comparison
 
 - **Free-tier Gemini quota is very restrictive.** At verification time, the

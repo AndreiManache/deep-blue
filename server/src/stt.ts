@@ -6,7 +6,7 @@ import { ELEVENLABS_API_KEY } from "./config.js";
 // replaces the browser's flaky webkitSpeechRecognition, which on iOS kept
 // getting starved of audio after the AI spoke.
 
-const STT_MODEL_ID = "scribe_v1";
+export const STT_MODEL_ID = "scribe_v1";
 
 export class SttNotConfiguredError extends Error {}
 

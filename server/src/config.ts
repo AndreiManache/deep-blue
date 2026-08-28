@@ -79,6 +79,13 @@ export const GEMINI_TTS_MODEL = process.env.GEMINI_TTS_MODEL ?? "gemini-3.1-flas
 export const GEMINI_VOICE_NAME = process.env.GEMINI_VOICE_NAME ?? "Kore";
 export const GEMINI_VOICE_NAME_RO = process.env.GEMINI_VOICE_NAME_RO || GEMINI_VOICE_NAME;
 
+// Optional STT speedup: Smallest AI's Pulse Pro model, English-only, so it's
+// only ever tried for a confirmed language:"en" profile — Romanian and
+// language-unknown turns always go to ElevenLabs Scribe regardless (see
+// sttProvider.ts and PROVIDERS.md). Empty means "skip it, always use
+// Scribe", same graceful-absence pattern as every other optional key here.
+export const SMALLESTAI_API_KEY = process.env.SMALLESTAI_API_KEY ?? "";
+
 if (LLM_PROVIDER === "anthropic" && !ANTHROPIC_API_KEY) {
   console.warn(
     "[config] ANTHROPIC_API_KEY is not set — /chat requests will fail. Copy .env.example to .env and fill it in.",

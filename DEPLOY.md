@@ -40,6 +40,10 @@ Check current names (not values) with `railway variables --kv`. As of the last d
 
 To change any of these: `railway variables --set "KEY=value"`, then redeploy (variable changes alone don't trigger a redeploy).
 
+**No CLI? Use the dashboard instead** — the CLI needs Node/npm set up and the `railway` command on PATH, which isn't always the case on a given machine (e.g. it's not recognized in plain PowerShell if it was installed somewhere PowerShell doesn't look). The dashboard does the exact same thing with no setup:
+1. [railway.app](https://railway.app) → log in → **deep-blue** project → the **deep-blue** service.
+2. **Variables** tab → find the variable (or **+ New Variable** if it doesn't exist yet) → edit its value → **Deploy** (Railway prompts you to redeploy right there, or it picks it up on the next push either way).
+
 ## Deploying a change — automatic via Railway (no PC needed)
 
 The Railway service is connected directly to this GitHub repo (service → **Settings → Source**): repo `AndreiManache/deep-blue`, branch **`master`**, **auto-deploy on push enabled**. So **any update to `master` — e.g. a merged PR — deploys automatically.** No token, no local CLI, no GitHub secret needed.

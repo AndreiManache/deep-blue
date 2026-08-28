@@ -182,7 +182,7 @@ export function useConversation(): ConversationApi {
       return;
     }
 
-    epochRef.current++;
+    const myEpoch = ++epochRef.current;
     setPhaseBoth("thinking");
 
     // A photo describes only the very next turn — consumed here regardless
@@ -195,8 +195,12 @@ export function useConversation(): ConversationApi {
     try {
       const result = await sendChat(sessionIdRef.current, text, image);
       logDiag("← reply", `${Date.now() - startedAt}ms${result.ended ? " (ends session)" : ""}`);
-      setErrorMessage(null);
+      // The food-logging side effect already happened server-side regardless
+      // of what the UI does with it, so let the Dashboard know even if the
+      // session ended while this was in flight.
       if (result.mutated) setMutationSignal((n) => n + 1);
+      if (epochRef.current !== myEpoch) return; // endSession() fired while we were waiting — don't reopen the mic or speak into a session that's over
+      setErrorMessage(null);
       languageRef.current = result.lang;
 
       if (result.ended) {
@@ -215,6 +219,7 @@ export function useConversation(): ConversationApi {
       speakThenListen(result.reply_text, result.audio_base64, result.audio_mime);
     } catch (err) {
       logDiag("✕ request failed", `${Date.now() - startedAt}ms`);
+      if (epochRef.current !== myEpoch) return; // endSession() fired while we were waiting
       const message = err instanceof ApiError ? err.message : "Something went wrong. Try again.";
       setErrorMessage(message);
       speakThenListen(message);

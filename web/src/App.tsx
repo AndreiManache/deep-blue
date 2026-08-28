@@ -8,9 +8,10 @@ import { DiagnosticsPage } from "./components/DiagnosticsPage";
 import { FeedbackPage } from "./components/FeedbackPage";
 import { HomeScreen } from "./components/HomeScreen";
 import { ProfilePage } from "./components/ProfilePage";
+import { ProvidersPage } from "./components/ProvidersPage";
 import { useConversation, type Phase } from "./conversation/useConversation";
 
-type View = "home" | "dashboard" | "profile" | "diagnostics" | "feedback" | "admin" | "scan";
+type View = "home" | "dashboard" | "profile" | "diagnostics" | "feedback" | "admin" | "providers" | "scan";
 
 // Menu visibility only — the real gate is server-side (ADMIN_USERNAMES on
 // /admin/*). Comma-separated to match the server's env var shape.
@@ -122,8 +123,9 @@ export function App() {
         <FeedbackPage diagnostics={conversation.diagnostics} onBack={() => setView("home")} />
       )}
       {view === "admin" && <AdminFeedbackPage onBack={() => setView("home")} />}
+      {view === "providers" && <ProvidersPage onBack={() => setView("home")} />}
 
-      {view !== "home" && pillLabel && (
+      {pillLabel && (
         <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full bg-ink py-2 pl-5 pr-2 shadow-xl">
           <button
             className="flex items-center gap-2 text-sm font-bold text-cream"

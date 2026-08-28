@@ -348,6 +348,34 @@ export async function transcribeFeedback(id: string): Promise<string> {
   return data.transcript;
 }
 
+export interface ProvidersSnapshot {
+  llm: {
+    provider: "anthropic" | "gemini";
+    model: string;
+    vision_model: string | null;
+    thinking_level: string | null;
+  };
+  tts: {
+    provider: "elevenlabs" | "gemini";
+    model: string;
+  };
+  stt: {
+    default_provider: "elevenlabs";
+    default_model: string;
+    english_speedup: {
+      enabled: boolean;
+      provider: "smallestai";
+      model: string;
+    };
+  };
+}
+
+export async function fetchProviders(): Promise<ProvidersSnapshot> {
+  const res = await apiFetch("/admin/providers");
+  if (!res.ok) throw new ApiError("Could not load provider info.");
+  return res.json();
+}
+
 // ---- client-side date helpers -------------------------------------------
 
 // Local day key (YYYY-MM-DD) — server day buckets are computed the same way.

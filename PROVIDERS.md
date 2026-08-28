@@ -36,8 +36,8 @@ variable and restart the server.
 Optional overrides (sane defaults already set in `config.ts`):
 
 ```bash
-GEMINI_MODEL=gemini-3.7-flash        # the LLM
-GEMINI_THINKING_LEVEL=high           # low | medium | high
+GEMINI_MODEL=gemini-3.5-flash-lite   # the LLM
+GEMINI_THINKING_LEVEL=low            # low | medium | high (low: latency)
 GEMINI_TTS_MODEL=gemini-3.1-flash-tts-preview
 GEMINI_VOICE_NAME=Kore               # one of ~30 prebuilt voice names
 GEMINI_VOICE_NAME_RO=                # optional distinct Romanian voice
@@ -188,17 +188,25 @@ tells you which happened.
 
 ## Known constraints worth knowing before you judge a comparison
 
-- **Free-tier Gemini quota is very restrictive.** At verification time, the
-  `gemini-3.7-flash` model hard-capped a free-tier Google AI Studio project
-  at **5 requests total** before every call returned `429 Quota exceeded`.
-  That's nowhere near enough for a real usage comparison — you'll need
-  billing enabled on the Google Cloud project behind your API key
-  (aistudio.google.com/apikey → the project → "Set up billing") before
-  `LLM_PROVIDER=gemini` is usable beyond a handful of test turns.
-  `gemini-3.6-flash` was used as a stand-in during development specifically
-  to work around this and verify the integration itself is correct — the
-  code defaults to `gemini-3.7-flash` as requested, but expect to hit this
-  quota fast until billing is on.
+- **Free-tier Gemini quota is very restrictive** on a Google Cloud project
+  with no billing enabled — expect a `429 Quota exceeded` within a handful
+  of requests. Billing has been enabled since (aistudio.google.com/apikey →
+  the project → "Set up billing"), which resolved this.
+- **Model history**: started at `gemini-3.7-flash` (per the original
+  request), moved to `gemini-3.6-flash` when 3.7 hit a real, external
+  capacity issue (`500 "high demand"`, confirmed in production logs), then
+  to `gemini-3.5-flash-lite` (2026-08-28) once profiling showed the LLM call
+  was the dominant source of turn latency — measured 10-15x faster than
+  3.6-flash on identical turns (e.g. "two boiled eggs and a black coffee":
+  47s → 3.4s, including Murf TTS), with `thinking_level: low`.
+- **Why Flash-Lite doesn't cost real quality here**: the model's actual job
+  in this app is narrow — parse a spoken sentence and call a tool
+  (`log_food`, `get_entries`, etc.). It does *not* compute calories/macros;
+  that's deterministic server code (`foods.ts`'s `resolveNutrition`).
+  Flash-Lite is specifically built and benchmarked for fast
+  extraction/classification/tool-calling, which is exactly this app's model
+  workload — so the speed gain isn't a quality tradeoff in the way it would
+  be for, say, open-ended reasoning or creative writing.
 - **Gemini TTS's voice-quality/latency characteristics haven't been
   judged yet** — the WAV-wrapping fix was verified for correctness (a real
   `<audio>` element in a real browser played it start to finish,

@@ -50,22 +50,18 @@ export function ProvidersPage({ onBack }: ProvidersPageProps) {
           </Card>
 
           <Card title="Reply voice (TTS)">
-            <Row label="Provider" value={data.tts.provider} />
-            <Row label="Model" value={data.tts.model} />
+            <Row label="Default" value={`${data.tts.default.provider} · ${data.tts.default.model}`} />
+            <Row label="Romanian profile" value={`${data.tts.romanian.provider} · ${data.tts.romanian.model}`} />
           </Card>
 
           <Card title="Your speech (STT)">
-            <Row label="Default provider" value={data.stt.default_provider} />
-            <Row label="Default model" value={data.stt.default_model} />
-            <Row
-              label="English speedup"
-              value={data.stt.english_speedup.enabled ? `on · ${data.stt.english_speedup.model}` : "off"}
-            />
+            <Row label="Default" value={`${data.stt.default.provider} · ${data.stt.default.model}`} />
+            <Row label="Romanian profile" value={`${data.stt.romanian.provider} · ${data.stt.romanian.model}`} />
           </Card>
 
           <p className="px-1 text-xs font-medium text-ink/40">
-            The English speedup only ever applies once your profile's language is confirmed English —
-            Romanian and not-yet-known always use the default STT provider above.
+            Both defaults apply to everyone except a profile with language explicitly set to Romanian —
+            that's the only thing that switches a user to either Romanian row above.
           </p>
         </div>
       )}

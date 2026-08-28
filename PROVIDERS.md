@@ -99,44 +99,79 @@ but keeps "which stack is live right now" an unambiguous, single fact about
 the whole deployment. Revisit if comparing them stops being an occasional
 thing and becomes routine.
 
-## STT: an English-only speedup, not a third switch
+## TTS: Murf Falcon 2 is the default (2026-08-28), the switch above is the Romanian path
+
+Same pattern as STT below, for the same reason: there's no drop-in
+Romanian-native alternative in the comparison, so it's not a global switch.
+
+- **Set `MURF_API_KEY`** (get one at [murf.ai](https://murf.ai) — console →
+  API keys) and Murf's Falcon 2 model becomes the **default** TTS for every
+  reply *except* one for a profile with `language: "ro"` explicitly set —
+  that one uses whatever the `TTS_PROVIDER` switch above resolves to
+  (Gemini, as currently set), regardless of this key.
+- **Leave it unset** and TTS behaves exactly as the switch above says —
+  no change.
+
+**Deliberate choice, not a technical limitation**: Murf's cross-lingual
+voices (an English-native voice reading non-English text) do produce valid
+Romanian audio — live-verified against the real API (`en-UK-hazel` reading
+a Romanian sentence returned a proper WAV, 200 OK). But an accented,
+non-native voice is an unverified quality bet, so Romanian keeps using
+Gemini's dedicated Romanian voice support instead until someone judges that
+tradeoff worth making. `MURF_VOICE_ID` (default `en-US-natalie`, confirmed
+against Murf's own `GET /v1/speech/voices` catalog of 162 voices) picks the
+English voice.
+
+**Live-verified**: real API calls for both the English path (`en-US-natalie`,
+Falcon 2) and the Romanian cross-lingual path returned proper WAV audio
+(confirmed via `file` — valid RIFF/WAVE, 16-bit PCM, 24kHz). The response is
+raw audio bytes directly in the HTTP body (`Content-Type: audio/wav`,
+chunked) — no JSON wrapper, no PCM-to-WAV hack needed unlike Gemini's TTS.
+Also verified the dispatch itself end-to-end: a `null`/`"en"` profile logs
+`[ttsProvider] synthesized via Murf Falcon 2`; a `"ro"` profile produces no
+such line and falls straight through to Gemini TTS instead. Any Murf
+failure falls back to the `TTS_PROVIDER` switch transparently, same pattern
+as the STT fallback.
+
+## STT: Smallest AI is the default (2026-08-28), ElevenLabs is the Romanian path
 
 Speech-to-text is handled differently from the LLM/TTS switches above — it's
 not a global toggle, because there isn't a drop-in Romanian-capable
-alternative to compare against yet. Instead, one optional key
-(`SMALLESTAI_API_KEY`) opts English-confirmed users into a faster STT model,
-while everyone else keeps using ElevenLabs Scribe exactly as before:
+alternative in the mix. Instead:
 
-- **Set `SMALLESTAI_API_KEY`** to route STT to Smallest AI's Pulse Pro model
-  (get one at [smallest.ai](https://smallest.ai) — console → API keys, $10
-  free credit to start) — but *only* for a request whose profile already has
-  `language: "en"` confirmed. Romanian profiles, and the language-unknown
-  case for brand-new users, always go to Scribe.
-- **Leave it unset** and STT behaves exactly as it always has — Scribe,
-  auto-detecting, for everyone.
+- **Set `SMALLESTAI_API_KEY`** (get one at [smallest.ai](https://smallest.ai)
+  — console → API keys, $10 free credit to start) and Smallest AI's Pulse
+  Pro model becomes the **default** STT for every request *except* one from
+  a profile with `language: "ro"` explicitly set — that one always goes to
+  ElevenLabs Scribe (`scribe_v2`), regardless of this key.
+- **Leave it unset** and STT behaves exactly as it always has — Scribe for
+  everyone.
 
-Why gated on confirmed English rather than a blanket switch: Pulse Pro is
-English-only (confirmed against its model card at
+**Deliberate tradeoff, accepted 2026-08-28**: Pulse Pro is English-only
+(confirmed against its model card at
 [docs.smallest.ai](https://docs.smallest.ai/models/model-cards/speech-to-text/pulse-pro)).
-Scribe's language-agnostic auto-detect is what lets a brand-new user address
-Deep Blue in Romanian and have the app notice and switch
-(`systemPrompt.ts`'s language-detection rule depends on that first utterance
-being transcribed correctly *before* anyone has told the app which language
-they're using) — routing language-unknown turns to an English-only model
-would break that detection outright. Once a user's profile says
-`language: "en"`, though, every future turn from them is safe to route to
-the faster model. Any Smallest AI failure — including a possible container/
-format rejection, see below — falls back to Scribe transparently on the
-same audio bytes, so this can't make a turn fail that would have worked
-before.
+The *previous* design specifically routed the language-unknown case (a
+brand-new user, before they've ever stated a preference) to Scribe, because
+Scribe's auto-detect is what let a first-time Romanian speaker be noticed and
+switched automatically (`systemPrompt.ts`'s language-detection rule depends
+on that first utterance transcribing correctly *before* anyone has told the
+app which language they're using). Making Smallest AI the default gives that
+up: a brand-new user's first Romanian sentence, before they've set Language
+to Romanian in Profile, is likely to transcribe poorly. The intended
+interaction now is that a Romanian speaker sets their language in Profile
+up front, rather than relying on the app to notice from speech alone. Any
+Smallest AI failure — including a possible container/format rejection, see
+below — still falls back to Scribe transparently on the same audio bytes.
 
 **Live-verified**: a real spoken WAV clip (synthesized via Gemini TTS, so
 genuine speech rather than silence) round-tripped through Pulse Pro came
 back with an exact transcript match, confirming the API contract — auth,
-request shape, response parsing — is correct. Also confirmed the dispatch
-gate itself: `language: "en"` routes to Smallest AI (logged as `[sttProvider]
-transcribed via Smallest AI Pulse Pro`), while `"ro"` and unset both route
-straight to ElevenLabs, untouched.
+request shape, response parsing — is correct. The dispatch gate itself was
+verified against the *previous* (opt-in) version of this logic — `"en"`
+routed to Smallest AI, `"ro"`/unset stayed on ElevenLabs — before the
+default flipped; the gate condition changed (`!== "ro"` instead of
+`=== "en"`) but the underlying call to each provider is identical code, so
+this isn't considered a re-verification risk.
 
 **Still open**: that test used WAV, one of Smallest AI's explicitly
 documented formats. The real recordings this app captures are containers —

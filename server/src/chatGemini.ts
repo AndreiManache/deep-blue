@@ -98,12 +98,18 @@ async function runTurnUnguarded(
           thinking_level: GEMINI_THINKING_LEVEL,
         },
       },
-      // Matches chat.ts's Anthropic client timeout (60s) — without this, an
-      // API stall has no ceiling here (unlike ttsGemini.ts, which already
-      // sets one), and can leave a turn hanging well past the client's own
-      // 90s abort in a way that reopens the mic unexpectedly once it
-      // finally resolves. See the epoch-guard fix in useConversation.ts.
-      { timeout: 60_000 },
+      // 20s per call, not 60s: this call sits inside a loop that can run it
+      // more than once per turn (a tool-call round trip is two calls), and
+      // the whole /chat request still has to leave room for TTS synthesis
+      // afterward, all within the client's 90s abort. A production incident
+      // (2026-08-28) showed a single call taking 60.7s end-to-end before the
+      // connection was dropped — 60s was already too generous for one call,
+      // let alone two. Without any ceiling at all here, an API stall has no
+      // bound (unlike ttsGemini.ts, which already sets one), and can leave a
+      // turn hanging well past the client abort in a way that reopens the
+      // mic unexpectedly once it finally resolves — see the epoch-guard fix
+      // in useConversation.ts.
+      { timeout: 20_000 },
     );
 
     lastStepsOut = interaction.steps ?? [];

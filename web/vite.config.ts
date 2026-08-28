@@ -16,6 +16,7 @@ export default defineConfig({
       "/transcribe": "http://localhost:3001",
       "/feedback": "http://localhost:3001",
       "/admin": "http://localhost:3001",
+      "/barcode": "http://localhost:3001",
     },
   },
 });

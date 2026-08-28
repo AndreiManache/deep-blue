@@ -42,19 +42,36 @@ function isRetryableGeminiError(err: unknown): boolean {
   return RETRYABLE_GEMINI.test(msg);
 }
 
-// One retry only (2 attempts total): each attempt carries its own 20s
-// timeout, and the turn still needs headroom for a possible second
-// tool-loop iteration plus TTS, all inside the client's 90s abort — so the
-// worst case here stays bounded rather than stacking into another hang.
-// Takes a thunk (rather than params) so the create() call's own overload
-// resolution — which distinguishes the non-streaming return type — is
-// preserved through the wrapper.
-async function withGeminiRetry<T>(fn: () => Promise<T>): Promise<T> {
+// Per single Gemini call. The turn as a whole is bounded separately by
+// TURN_BUDGET_MS below — this is just the ceiling on any one API round trip.
+const PER_CALL_TIMEOUT_MS = 20_000;
+// Wall-clock budget for the ENTIRE turn (all tool-loop iterations + retries).
+// The per-call timeout alone doesn't bound the turn: the loop can run up to
+// MAX_TOOL_ITERATIONS times, each with a retry, so without this a slow turn
+// stacked to 71s in production (2026-08-28) — long past the point the user
+// gave up, and eating into the client's 90s abort with no room for TTS.
+// When the budget runs out the turn closes with a spoken fallback instead of
+// grinding on. 40s is a ceiling, not a target — normal turns finish in a few
+// seconds; this only catches the pathological photo+long-transcript+retry
+// pile-ups.
+const TURN_BUDGET_MS = 40_000;
+// Below this much remaining budget, don't even start another call — there
+// isn't time for it to plausibly finish and still leave room for TTS.
+const MIN_CALL_HEADROOM_MS = 4_000;
+
+// One retry only (2 attempts total). Takes a thunk (rather than params) so
+// the create() call's own overload resolution — which distinguishes the
+// non-streaming return type — is preserved through the wrapper. `deadline`
+// is the turn's wall-clock cutoff: a retry is skipped if there isn't enough
+// budget left for it to plausibly finish, so retries can't push the turn
+// past TURN_BUDGET_MS.
+async function withGeminiRetry<T>(fn: () => Promise<T>, deadline: number): Promise<T> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       return await fn();
     } catch (err) {
-      if (attempt === 0 && isRetryableGeminiError(err)) {
+      const timeToRetry = deadline - Date.now() > MIN_CALL_HEADROOM_MS;
+      if (attempt === 0 && isRetryableGeminiError(err) && timeToRetry) {
         console.warn(
           `[chatGemini] retryable error, retrying once: ${err instanceof Error ? err.message.slice(0, 140) : String(err)}`,
         );
@@ -75,6 +92,12 @@ function extractText(steps: Step[]): string {
     .map((c) => c.text)
     .join(" ")
     .trim();
+}
+
+function timeoutFallback(profile: UserProfile | null): string {
+  return profile?.language === "ro"
+    ? "Scuze, a durat prea mult — poți să încerci din nou?"
+    : "Sorry, that took too long — can you try again?";
 }
 
 function exhaustionFallback(profile: UserProfile | null): string {
@@ -126,34 +149,37 @@ async function runTurnUnguarded(
   let ended = false;
   let lastStepsOut: Step[] = [];
   let exhausted = false;
+  let timedOut = false;
+
+  const deadline = Date.now() + TURN_BUDGET_MS;
 
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
-    const interaction = await withGeminiRetry(() =>
-      client.interactions.create(
-        {
-          model: GEMINI_MODEL,
-          input: steps,
-          system_instruction: buildSystemPrompt(userId),
-          tools: geminiTools,
-          store: false, // this app manages history itself, same as the Anthropic path
-          generation_config: {
-            max_output_tokens: 400,
-            thinking_level: GEMINI_THINKING_LEVEL,
+    const remaining = deadline - Date.now();
+    if (remaining < MIN_CALL_HEADROOM_MS) {
+      timedOut = true;
+      break;
+    }
+    // Each call is capped at the smaller of PER_CALL_TIMEOUT_MS and the
+    // budget still left for the whole turn, so a single call can never
+    // overshoot the turn deadline.
+    const perCallTimeout = Math.min(PER_CALL_TIMEOUT_MS, remaining);
+    const interaction = await withGeminiRetry(
+      () =>
+        client.interactions.create(
+          {
+            model: GEMINI_MODEL,
+            input: steps,
+            system_instruction: buildSystemPrompt(userId),
+            tools: geminiTools,
+            store: false, // this app manages history itself, same as the Anthropic path
+            generation_config: {
+              max_output_tokens: 400,
+              thinking_level: GEMINI_THINKING_LEVEL,
+            },
           },
-        },
-        // 20s per call, not 60s: this call sits inside a loop that can run it
-        // more than once per turn (a tool-call round trip is two calls), and
-        // the whole /chat request still has to leave room for TTS synthesis
-        // afterward, all within the client's 90s abort. A production incident
-        // (2026-08-28) showed a single call taking 60.7s end-to-end before the
-        // connection was dropped — 60s was already too generous for one call,
-        // let alone two. Without any ceiling at all here, an API stall has no
-        // bound (unlike ttsGemini.ts, which already sets one), and can leave a
-        // turn hanging well past the client abort in a way that reopens the
-        // mic unexpectedly once it finally resolves — see the epoch-guard fix
-        // in useConversation.ts.
-        { timeout: 20_000 },
-      ),
+          { timeout: perCallTimeout },
+        ),
+      deadline,
     );
 
     lastStepsOut = interaction.steps ?? [];
@@ -187,7 +213,13 @@ async function runTurnUnguarded(
   const profile = getProfile(userId);
 
   let reply_text: string;
-  if (exhausted) {
+  if (timedOut) {
+    console.warn(
+      `[chatGemini] turn exceeded TURN_BUDGET_MS (${TURN_BUDGET_MS}ms) for session ${sessionId} — closing the turn with a fallback reply. Any tool side-effects already ran (mutated=${mutated}).`,
+    );
+    reply_text = timeoutFallback(profile);
+    steps.push({ type: "model_output", content: [{ type: "text", text: reply_text }] });
+  } else if (exhausted) {
     console.warn(
       `[chatGemini] tool loop hit MAX_TOOL_ITERATIONS (${MAX_TOOL_ITERATIONS}) for session ${sessionId} — closing the turn with a fallback reply`,
     );

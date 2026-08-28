@@ -70,8 +70,12 @@ export const GEMINI_API_KEY = process.env.GEMINI_API_KEY ?? "";
 // rather than just vision ones, since there's no separate cheap/expensive
 // Gemini tier wired up here (yet — see PROVIDERS.md if that changes).
 export const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-3.7-flash";
-// "low" | "medium" | "high" — high maximizes reasoning, at more latency/cost.
-export const GEMINI_THINKING_LEVEL = process.env.GEMINI_THINKING_LEVEL ?? "high";
+// "low" | "medium" | "high". Was "high", but measured latency on identical
+// simple turns (2026-08-28) was 28-47s at high vs 10-25s at low — high was
+// the dominant cause of replies effectively never arriving in a voice UX.
+// Food logging ("parse two eggs -> log_food") isn't a deep-reasoning task,
+// so "low" is the default; override via env to trade latency for reasoning.
+export const GEMINI_THINKING_LEVEL = process.env.GEMINI_THINKING_LEVEL ?? "low";
 
 export const GEMINI_TTS_MODEL = process.env.GEMINI_TTS_MODEL ?? "gemini-3.1-flash-tts-preview";
 // One of Gemini TTS's ~30 prebuilt voice names (e.g. "Kore", "Puck") — a

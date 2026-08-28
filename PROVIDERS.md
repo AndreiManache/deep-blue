@@ -37,7 +37,7 @@ Optional overrides (sane defaults already set in `config.ts`):
 
 ```bash
 GEMINI_MODEL=gemini-3.7-flash        # the LLM
-GEMINI_THINKING_LEVEL=high           # low | medium | high
+GEMINI_THINKING_LEVEL=low            # low | medium | high (low: latency)
 GEMINI_TTS_MODEL=gemini-3.1-flash-tts-preview
 GEMINI_VOICE_NAME=Kore               # one of ~30 prebuilt voice names
 GEMINI_VOICE_NAME_RO=                # optional distinct Romanian voice

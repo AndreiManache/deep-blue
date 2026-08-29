@@ -15,17 +15,16 @@ Ideas and open items to consider going forward. Shipped/completed work has been 
 
 Transcribed and triaged from the feedback inbox (10 voice notes + 1 text
 note, Aug 27-28, from Andrei/Maria/Daniel — Daniel is a friend Andrei showed
-the app to at a bar). Five reports are resolved and not listed below: two
+the app to at a bar). Six reports are resolved and not listed below: two
 matched bugs already fixed earlier this session (a conversation freezing
 mid-turn while the user paused to think, and getting cut off mid-sentence
 describing a full day of eating — both addressed by the turn-hang and
-`MAX_TURN_MS` fixes, PRs #20/#22/#23), and three were addressed directly in
-the 2026-08-29 backlog-burn-down pass: the "send another feedback" button,
+`MAX_TURN_MS` fixes, PRs #20/#22/#23), three were addressed directly in the
+2026-08-29 backlog-burn-down pass (the "send another feedback" button,
 surfacing the Mifflin-St Jeor BMR formula in Profile, and renaming the
-Dashboard menu label to "Jurnal alimentar" for Romanian profiles. Everything
-below is still open.
-
-- [ ] **HIGH PRIORITY — spoken calorie total didn't match what was actually recorded.** Maria: the AI verbally confirmed 1,900 calories logged for the day, but only 1,200 actually showed up in her entries. Unlike the other items here, this isn't a UX request — it's a correctness bug in a tracking app, which is the category of bug most likely to break trust in the numbers. Not yet investigated. Worth checking whether the model is being asked to *state* a running total from memory/reasoning rather than actually calling `get_entries` and reporting the real query result — that would explain a plausible-but-wrong number.
+Dashboard menu label to "Jurnal alimentar" for Romanian profiles), and the
+spoken-calorie-mismatch bug (below) was root-caused and fixed the same day.
+Everything below is still open.
 - [ ] **Recording doesn't work with a photo attached.** Andrei: "Nu merge să înregistrez cu poza." Not yet investigated — unclear if this is a permissions/state issue in `PhotoAttach.tsx`/`useConversation.ts`, or something else.
 - [ ] **Barcode scan is slow to identify.** Andrei: had to hold the camera on a barcode for 5-10 seconds. `BarcodeScanner.tsx` already went through a couple of fixes earlier in the project (the decode loop not running, silent failures) — this may be a genuine scan-speed/frame-rate tuning issue rather than a correctness bug.
 - [ ] **Swipe-to-go-back navigation.** Andrei: wants to swipe back between pages, not just tap an explicit back button.

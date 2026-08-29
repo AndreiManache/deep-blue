@@ -2,9 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import {
   editEntry,
   fetchEntries,
+  fetchFoodDbStats,
   fetchStats,
   removeEntry,
   todayKey,
+  type FoodDbStats,
   type FoodEntry,
   type StatsResponse,
 } from "../api/client";
@@ -29,6 +31,9 @@ export function Dashboard({ onBack, refreshSignal }: DashboardProps) {
   const [stats, setStats] = useState<StatsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Growth snapshot ("14 foods verified, 46 are yours") — a nice-to-have, so
+  // failure just leaves it unshown rather than surfacing an error banner.
+  const [foodStats, setFoodStats] = useState<FoodDbStats | null>(null);
 
   const load = useCallback(async (day: string) => {
     setError(null);
@@ -50,6 +55,16 @@ export function Dashboard({ onBack, refreshSignal }: DashboardProps) {
   // Refetch whenever the voice conversation mutated the log.
   useEffect(() => {
     if (refreshSignal > 0) void load(selectedDay);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshSignal]);
+
+  // Once on open, then again whenever logging might have added a new food —
+  // cheap enough at this scale (see getFoodDbStats) that refetching on every
+  // mutation isn't a concern.
+  useEffect(() => {
+    fetchFoodDbStats()
+      .then(setFoodStats)
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshSignal]);
 
@@ -90,6 +105,13 @@ export function Dashboard({ onBack, refreshSignal }: DashboardProps) {
             </div>
           ))}
         </div>
+      )}
+
+      {foodStats && (foodStats.yours > 0 || foodStats.verified > 0) && (
+        <p className="text-center text-xs font-medium text-ink/35">
+          {foodStats.verified} food{foodStats.verified === 1 ? "" : "s"} verified · {foodStats.yours}{" "}
+          {foodStats.yours === 1 ? "is" : "are"} yours
+        </p>
       )}
     </div>
   );

@@ -6,17 +6,24 @@ interface HamburgerMenuProps {
   onNavigate: (view: MenuView) => void;
   onLogout: () => void;
   isAdmin?: boolean;
+  language?: "en" | "ro" | null;
 }
 
-const ITEMS = [
-  { to: "dashboard", label: "Dashboard" },
-  { to: "profile", label: "Profile" },
-  { to: "diagnostics", label: "Diagnostics" },
-  { to: "feedback", label: "Send feedback" },
-] as const;
+// "Dashboard" doesn't read as "this is your food log" to a Romanian
+// speaker (feedback, 2026-08-29) — the fix is a per-language label, not a
+// permanent rename, since English users still want the English word.
+function getItems(language: "en" | "ro" | null | undefined) {
+  return [
+    { to: "dashboard", label: language === "ro" ? "Jurnal alimentar" : "Dashboard" },
+    { to: "profile", label: "Profile" },
+    { to: "diagnostics", label: "Diagnostics" },
+    { to: "feedback", label: "Send feedback" },
+  ] as const;
+}
 
-export function HamburgerMenu({ onNavigate, onLogout, isAdmin }: HamburgerMenuProps) {
+export function HamburgerMenu({ onNavigate, onLogout, isAdmin, language }: HamburgerMenuProps) {
   const [open, setOpen] = useState(false);
+  const items = getItems(language);
 
   function go(to: MenuView) {
     setOpen(false);
@@ -50,7 +57,7 @@ export function HamburgerMenu({ onNavigate, onLogout, isAdmin }: HamburgerMenuPr
             onClick={() => setOpen(false)}
           />
           <div className="absolute left-0 top-14 z-50 w-48 overflow-hidden rounded-2xl bg-white p-1.5 shadow-xl ring-1 ring-ink/5">
-            {ITEMS.map((item) => (
+            {items.map((item) => (
               <button
                 key={item.to}
                 className="block w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-ink transition-colors hover:bg-ink3"

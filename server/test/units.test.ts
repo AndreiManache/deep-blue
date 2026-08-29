@@ -5,10 +5,30 @@ import type Anthropic from "@anthropic-ai/sdk";
 import type { Interactions } from "@google/genai";
 import { computeCompositionNutrition } from "../src/nutrition.js";
 import { repairDanglingFunctionCall, truncateSteps } from "../src/geminiSessions.js";
+import { computeTargets, type UserProfile } from "../src/profile.js";
 import { repairDanglingToolUse, truncatePairSafe } from "../src/sessions.js";
 import { MAX_HISTORY_TURNS } from "../src/config.js";
 import { anthropicTools, geminiTools, toolDefs } from "../src/tools.js";
 import { validateEntryPatch, validateProfileInput } from "../src/validation.js";
+
+// Every field computeTargets doesn't care about for a given case still has to
+// be present to satisfy UserProfile — this is the base a test overrides.
+function baseProfile(overrides: Partial<UserProfile>): UserProfile {
+  return {
+    name: null,
+    height_cm: null,
+    weight_kg: null,
+    age: null,
+    sex: null,
+    activity_level: null,
+    goal_type: null,
+    goal_rate: null,
+    goal_notes: null,
+    language: null,
+    updated_at: "2026-01-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
 
 describe("computeCompositionNutrition", () => {
   it("matches the canonical pastramă case: 250g at 60% fat, cooked", () => {
@@ -48,6 +68,119 @@ describe("computeCompositionNutrition", () => {
     });
     const defaulted = computeCompositionNutrition({ total_weight_g: 250, fat_ratio_pct: 60 });
     assert.deepEqual(defaulted, explicit);
+  });
+});
+
+describe("computeTargets", () => {
+  it("returns null with no profile", () => {
+    assert.equal(computeTargets(null), null);
+  });
+
+  it("returns null when a required field is missing (age unset)", () => {
+    const profile = baseProfile({
+      height_cm: 180,
+      weight_kg: 80,
+      sex: "male",
+      activity_level: "moderate",
+      goal_type: "maintain",
+    });
+    assert.equal(computeTargets(profile), null);
+  });
+
+  it("Mifflin-St Jeor, male, maintain: matches hand-computed targets", () => {
+    // BMR = 10*80 + 6.25*180 - 5*30 + 5 = 1780; TDEE = 1780*1.55 = 2759
+    const profile = baseProfile({
+      height_cm: 180,
+      weight_kg: 80,
+      age: 30,
+      sex: "male",
+      activity_level: "moderate",
+      goal_type: "maintain",
+    });
+    assert.deepEqual(computeTargets(profile), {
+      bmr: 1780,
+      tdee: 2759,
+      calorie_target: 2759,
+      protein_target_g: 144,
+      fat_target_g: 83,
+      carbs_target_g: 359,
+    });
+  });
+
+  it("Mifflin-St Jeor, female, lose (moderate deficit): matches hand-computed targets", () => {
+    // BMR = 10*60 + 6.25*165 - 5*25 - 161 = 1345.25; TDEE = 1345.25*1.2 = 1614.3
+    // calorie_target = 1614.3 * (1 - 0.2) = 1291.44 -> 1291
+    const profile = baseProfile({
+      height_cm: 165,
+      weight_kg: 60,
+      age: 25,
+      sex: "female",
+      activity_level: "sedentary",
+      goal_type: "lose",
+      goal_rate: "moderate",
+    });
+    assert.deepEqual(computeTargets(profile), {
+      bmr: 1345,
+      tdee: 1614,
+      calorie_target: 1291,
+      protein_target_g: 108,
+      fat_target_g: 39,
+      carbs_target_g: 127,
+    });
+  });
+
+  it("goal_rate defaults to moderate when unset", () => {
+    const withDefault = computeTargets(
+      baseProfile({
+        height_cm: 165,
+        weight_kg: 60,
+        age: 25,
+        sex: "female",
+        activity_level: "sedentary",
+        goal_type: "lose",
+        goal_rate: null,
+      }),
+    );
+    const explicit = computeTargets(
+      baseProfile({
+        height_cm: 165,
+        weight_kg: 60,
+        age: 25,
+        sex: "female",
+        activity_level: "sedentary",
+        goal_type: "lose",
+        goal_rate: "moderate",
+      }),
+    );
+    assert.deepEqual(withDefault, explicit);
+  });
+
+  it("gain pushes the calorie target above maintenance", () => {
+    const profile = baseProfile({
+      height_cm: 180,
+      weight_kg: 80,
+      age: 30,
+      sex: "male",
+      activity_level: "moderate",
+      goal_type: "gain",
+      goal_rate: "moderate",
+    });
+    const targets = computeTargets(profile)!;
+    assert.ok(targets.calorie_target > targets.tdee);
+  });
+
+  it("never returns negative carbs even for a very small deficit-heavy profile", () => {
+    const profile = baseProfile({
+      height_cm: 145,
+      weight_kg: 40,
+      age: 70,
+      sex: "female",
+      activity_level: "sedentary",
+      goal_type: "lose",
+      goal_rate: "aggressive",
+    });
+    const targets = computeTargets(profile)!;
+    assert.ok(targets.carbs_target_g >= 0);
   });
 });
 

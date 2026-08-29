@@ -108,6 +108,15 @@ export function FeedbackPage({ diagnostics, onBack }: FeedbackPageProps) {
     }
   }
 
+  function resetForm() {
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    setMessage("");
+    setAudioBlob(null);
+    setAudioUrl(null);
+    setError(null);
+    setSent(false);
+  }
+
   if (sent) {
     return (
       <div className="flex min-h-dvh flex-col gap-6 px-6 pb-16 pt-5">
@@ -121,6 +130,12 @@ export function FeedbackPage({ diagnostics, onBack }: FeedbackPageProps) {
           </p>
           <button
             className="mt-6 w-full rounded-2xl bg-coral py-4 text-sm font-bold text-white shadow-lg shadow-coral/40 transition-transform active:scale-[0.98]"
+            onClick={resetForm}
+          >
+            Send another
+          </button>
+          <button
+            className="mt-3 w-full rounded-2xl bg-ink3 py-4 text-sm font-bold text-ink/70 transition-colors hover:bg-ink/10"
             onClick={onBack}
           >
             Back to Deep Blue

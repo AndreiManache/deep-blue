@@ -254,7 +254,8 @@ export function ProfilePage({ onBack }: ProfilePageProps) {
                 <TargetStat label="Fat" value={`${Math.round(targets.fat_target_g)} g`} accent="text-coral" />
               </div>
               <p className="mt-4 text-xs font-medium text-white/40">
-                BMR {Math.round(targets.bmr)} · TDEE {Math.round(targets.tdee)} — recomputed when you save.
+                BMR {Math.round(targets.bmr)} · TDEE {Math.round(targets.tdee)} — Mifflin-St Jeor formula,
+                recomputed when you save.
               </p>
             </section>
           )}

@@ -31,7 +31,7 @@ import {
   USERNAME,
 } from "./config.js";
 import { createEntry, deleteEntry, getEntriesForDate, updateEntry } from "./entries.js";
-import { normalizeFoodKey, recordObservation, totalFromBasis } from "./foods.js";
+import { getFoodDbStats, normalizeFoodKey, recordObservation, totalFromBasis } from "./foods.js";
 import { lookupBarcode } from "./openfoodfacts.js";
 import {
   createFeedback,
@@ -179,7 +179,18 @@ app.post("/auth/logout", (req, res) => {
 });
 
 app.use(
-  ["/chat", "/entries", "/profile", "/greeting", "/stats", "/transcribe", "/auth/me", "/feedback", "/barcode"],
+  [
+    "/chat",
+    "/entries",
+    "/profile",
+    "/greeting",
+    "/stats",
+    "/transcribe",
+    "/auth/me",
+    "/feedback",
+    "/barcode",
+    "/synthesize",
+  ],
   requireAuth,
 );
 
@@ -514,6 +525,43 @@ app.get("/greeting", async (_req, res) => {
   });
 });
 
+// Synthesizes short, server-controlled text through whichever TTS provider
+// is active — for local client-side phrases ("Sorry, I didn't catch that",
+// and dynamic /chat error messages) that previously always fell back to the
+// browser's speechSynthesis regardless of which premium voice was
+// configured (2026-08-29 backlog item). Reuses the greeting cache — same
+// key shape, same provider/language keying, and canned phrases repeat often
+// enough to benefit from it even though most dynamic error text won't hit
+// twice. Capped well below a real reply's length; this is for short fixed
+// phrases, not general-purpose TTS.
+const MAX_SYNTHESIZE_CHARS = 200;
+app.post("/synthesize", async (req, res) => {
+  const { text } = req.body as { text?: unknown };
+  if (typeof text !== "string" || !text.trim()) {
+    res.status(400).json({ error: "text is required" });
+    return;
+  }
+  if (text.length > MAX_SYNTHESIZE_CHARS) {
+    res.status(400).json({ error: `text must be ${MAX_SYNTHESIZE_CHARS} characters or fewer` });
+    return;
+  }
+  const profile = getProfile(res.locals.userId as string);
+  const cacheKey = `${TTS_PROVIDER}:${profile?.language ?? "en"}:${text}`;
+
+  let cached = greetingAudioCache.get(cacheKey);
+  if (!cached) {
+    const result = await synthesizeSpeech(text, profile);
+    if (result.audio_base64) {
+      cached = { audio_base64: result.audio_base64, audio_mime: result.audio_mime };
+      greetingAudioCache.set(cacheKey, cached);
+    }
+  }
+  res.json({
+    audio_base64: cached?.audio_base64 ?? null,
+    audio_mime: cached?.audio_mime ?? "audio/mpeg",
+  });
+});
+
 app.get("/profile", (_req, res) => {
   const profile = getProfile(res.locals.userId as string);
   res.json({ profile, targets: computeTargets(profile) });
@@ -530,6 +578,10 @@ app.get("/stats", (req, res) => {
     days: getDailyStats(res.locals.userId as string, days),
     targets: computeTargets(profile),
   });
+});
+
+app.get("/stats/foods", (_req, res) => {
+  res.json(getFoodDbStats(res.locals.userId as string));
 });
 
 app.put("/profile", (req, res) => {

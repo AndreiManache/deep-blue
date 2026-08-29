@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchMe, getStoredToken, logout as logoutRequest, SESSION_INVALIDATED_EVENT } from "./api/client";
+import { fetchMe, fetchProfile, getStoredToken, logout as logoutRequest, SESSION_INVALIDATED_EVENT } from "./api/client";
 import { AdminFeedbackPage } from "./components/AdminFeedbackPage";
 import { AuthGate } from "./components/AuthGate";
 import { BarcodeScanner } from "./components/BarcodeScanner";
@@ -36,6 +36,10 @@ export function App() {
   // below), which clears it and flips this back to the login screen.
   const [authed, setAuthed] = useState<boolean>(() => Boolean(getStoredToken()));
   const [username, setUsername] = useState<string | null>(null);
+  // Just for the Dashboard menu-label wording (see HamburgerMenu) — not
+  // threaded anywhere else in App.tsx. Harmless to stay null on failure;
+  // the label just falls back to English.
+  const [language, setLanguage] = useState<"en" | "ro" | null>(null);
   // Barcode logging happens outside useConversation (no Claude turn, so
   // conversation.mutationSignal never bumps) — this stands in for it so the
   // Dashboard still refetches after a scan.
@@ -63,6 +67,23 @@ export function App() {
     fetchMe()
       .then((res) => setUsername(res.username))
       .catch(() => {});
+    fetchProfile()
+      .then((res) => setLanguage(res.profile?.language ?? null))
+      .catch(() => {});
+  }, [authed]);
+
+  // Warm the greeting as soon as we know we're actually logged in, so the
+  // tap that starts a session usually finds it already resolved instead of
+  // fetching cold. useConversation() has no auth state of its own, hence
+  // triggering this from here rather than inside the hook.
+  useEffect(() => {
+    if (!authed) return;
+    conversation.prefetchGreeting();
+    // Deliberately only re-run on an auth transition, not on every render
+    // that happens to produce a new prefetchGreeting reference — refetching
+    // the greeting on unrelated re-renders would defeat the point of a
+    // one-shot prefetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authed]);
 
   async function handleLogout() {
@@ -94,6 +115,7 @@ export function App() {
           }}
           onLogout={handleLogout}
           isAdmin={isAdmin}
+          language={language}
         />
       )}
       {view === "scan" && (

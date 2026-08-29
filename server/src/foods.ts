@@ -55,6 +55,11 @@ const getAllObsStmt = db.prepare(
      FROM food_observations WHERE food_key = ?`,
 );
 
+const countUserFoodsStmt = db.prepare(
+  `SELECT COUNT(DISTINCT food_key) AS n FROM food_observations WHERE user_id = ?`,
+);
+const distinctFoodKeysStmt = db.prepare(`SELECT DISTINCT food_key FROM food_observations`);
+
 const upsertObsStmt = db.prepare(`
   INSERT INTO food_observations (food_key, user_id, basis, calories, protein_g, carbs_g, fat_g, source, updated_at)
   VALUES (:food_key, :user_id, :basis, :calories, :protein_g, :carbs_g, :fat_g, :source, :updated_at)
@@ -164,6 +169,21 @@ export function getConsensus(foodKey: string): Consensus | null {
     },
     agreementCount: clustered.length,
   };
+}
+
+// Growth snapshot for the Dashboard (2026-08-29 backlog item: "surface how
+// big the database has gotten"). "yours" is a cheap COUNT; "verified" has no
+// stored flag to count directly (see getConsensus above — it's computed
+// on demand per food_key, not cached), so this re-runs that same clustering
+// check across every distinct food_key. Fine at this scale (a few dozen
+// foods for a friends-beta app); would need caching well before it wouldn't
+// be. Note VERIFY_MIN_USERS=5 means "verified" is expected to read 0 until
+// there are genuinely 5+ users logging overlapping foods.
+export function getFoodDbStats(userId: string): { yours: number; verified: number } {
+  const yours = (countUserFoodsStmt.get(userId) as { n: number }).n;
+  const allKeys = distinctFoodKeysStmt.all() as { food_key: string }[];
+  const verified = allKeys.filter((row) => getConsensus(row.food_key) !== null).length;
+  return { yours, verified };
 }
 
 // Decide the nutrition to actually use for this log, best source first:

@@ -1,6 +1,14 @@
 import { useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import { ApiError, fetchGreeting, sendChat, transcribeAudio, type ImageAttachment } from "../api/client";
+import {
+  ApiError,
+  fetchGreeting,
+  sendChat,
+  synthesizeText,
+  transcribeAudio,
+  type GreetingResponse,
+  type ImageAttachment,
+} from "../api/client";
 import { SpeechCapture } from "../speech/capture";
 import { getSpeechSupport } from "../speech/support";
 import { cancelSpeech, speak } from "../speech/synthesis";
@@ -47,6 +55,12 @@ export interface ConversationApi {
   endSession: () => void;
   /** Barge-in: cut the AI off mid-reply and open the mic. */
   interrupt: () => void;
+  /**
+   * Call once known to be authenticated (useConversation() has no auth
+   * state of its own) to warm the greeting ahead of the tap that would
+   * otherwise fetch it cold — see the ref this populates for why.
+   */
+  prefetchGreeting: () => void;
 }
 
 export function useConversation(): ConversationApi {
@@ -75,6 +89,16 @@ export function useConversation(): ConversationApi {
   const epochRef = useRef(0);
   // A synchronous phase check readable inside async/event callbacks.
   const phaseRef = useRef<Phase>(phase);
+  // Populated by prefetchGreeting() (called once the caller knows we're
+  // actually authenticated — useConversation() itself has no auth state) —
+  // by the time the user taps to start a session, the network round trip
+  // (and the server-side TTS synthesis behind it, on a cache miss) has
+  // usually already happened, so startSession() sees an already-resolved
+  // promise instead of a fresh multi-hundred-ms wait.
+  const greetingPrefetchRef = useRef<Promise<GreetingResponse | null> | null>(null);
+  function prefetchGreeting() {
+    greetingPrefetchRef.current = fetchGreeting().catch(() => null);
+  }
 
   function logDiag(label: string, detail?: string) {
     setDiagnostics((prev) => {
@@ -146,12 +170,28 @@ export function useConversation(): ConversationApi {
     } catch {
       logDiag("✕ transcribe failed", `${Date.now() - t0}ms`);
       if (epochRef.current !== myEpoch) return;
-      speakThenListen("Sorry, I didn't catch that.");
+      void speakLocalPhrase("Sorry, I didn't catch that.");
       return;
     }
     logDiag("transcript", `"${text}" (${Date.now() - t0}ms)`);
     if (epochRef.current !== myEpoch) return;
     void handleFinalTranscript(text);
+  }
+
+  // Local error/recovery phrases ("didn't catch that", a failed /chat's
+  // message) used to always fall back to the browser's speechSynthesis,
+  // regardless of which premium voice was configured — routes them through
+  // the same server TTS as every other reply instead (2026-08-29 backlog
+  // item). Falls back to no audio (speakThenListen's own local-voice
+  // fallback) on any failure, including a timeout — deliberately, since
+  // this runs in error-recovery paths where the network may itself be down.
+  async function speakLocalPhrase(text: string) {
+    try {
+      const result = await synthesizeText(text);
+      speakThenListen(text, result.audio_base64, result.audio_mime);
+    } catch {
+      speakThenListen(text);
+    }
   }
 
   function speakThenListen(text: string, audioBase64?: string | null, audioMime?: string) {
@@ -178,7 +218,7 @@ export function useConversation(): ConversationApi {
   async function handleFinalTranscript(text: string) {
     if (!text || text.trim().length === 0) {
       logDiag("heard nothing usable");
-      speakThenListen("Sorry, I didn't catch that.");
+      void speakLocalPhrase("Sorry, I didn't catch that.");
       return;
     }
 
@@ -222,7 +262,7 @@ export function useConversation(): ConversationApi {
       if (epochRef.current !== myEpoch) return; // endSession() fired while we were waiting
       const message = err instanceof ApiError ? err.message : "Something went wrong. Try again.";
       setErrorMessage(message);
-      speakThenListen(message);
+      void speakLocalPhrase(message);
     }
   }
 
@@ -237,10 +277,16 @@ export function useConversation(): ConversationApi {
     const myEpoch = ++epochRef.current;
     logDiag("── tap → start session ──");
 
-    // Acquire (and hold) the mic inside the tap gesture, and fetch the greeting
-    // in parallel. Nothing is spoken until permission settles.
+    // Acquire (and hold) the mic inside the tap gesture. The greeting was
+    // already kicked off on mount (see greetingPrefetchRef above) — reuse
+    // that instead of starting a fresh fetch, unless it's already been
+    // consumed by an earlier session this app-load (or never started, e.g.
+    // the effect hasn't run yet), in which case fall back to fetching now.
+    // Cleared after use so a later session in the same app-load re-checks
+    // the name/language rather than replaying a possibly-stale greeting.
     const permission = captureRef.current!.acquire();
-    const greeting = fetchGreeting().catch(() => null);
+    const greeting = greetingPrefetchRef.current ?? fetchGreeting().catch(() => null);
+    greetingPrefetchRef.current = null;
 
     setPhaseBoth("awaiting-mic");
     const granted = await permission;
@@ -316,5 +362,6 @@ export function useConversation(): ConversationApi {
     endTurn,
     endSession,
     interrupt,
+    prefetchGreeting,
   };
 }

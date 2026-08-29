@@ -265,6 +265,41 @@ export async function fetchStats(days: number): Promise<StatsResponse> {
   return res.json();
 }
 
+export interface FoodDbStats {
+  yours: number;
+  verified: number;
+}
+
+export async function fetchFoodDbStats(): Promise<FoodDbStats> {
+  const res = await apiFetch("/stats/foods");
+  if (!res.ok) throw new ApiError("Could not load food database stats.");
+  return res.json();
+}
+
+export interface SynthesizeResponse {
+  audio_base64: string | null;
+  audio_mime: string;
+}
+
+// Short, server-controlled phrases only (200-char server-side cap) — see
+// /synthesize on the server. Callers should treat a thrown/rejected call the
+// same as "no audio" and fall back to local speechSynthesis, since this is
+// specifically used in error-recovery paths where the network may itself be
+// the problem.
+export async function synthesizeText(text: string): Promise<SynthesizeResponse> {
+  const res = await apiFetch("/synthesize", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+    // Short and bounded — this runs in error-recovery paths, so a slow
+    // synthesize call shouldn't make the recovery itself feel broken. Falls
+    // back to local speechSynthesis on any failure, including a timeout.
+    signal: AbortSignal.timeout(5000),
+  });
+  if (!res.ok) throw new ApiError("Could not synthesize speech.");
+  return res.json();
+}
+
 export async function fetchProfile(): Promise<ProfileResponse> {
   const res = await apiFetch("/profile");
   if (!res.ok) throw new ApiError("Could not load profile.");

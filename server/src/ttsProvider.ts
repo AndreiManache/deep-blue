@@ -3,18 +3,23 @@ import { resolveGeminiVoiceName, resolveVoiceId, type UserProfile } from "./prof
 import { synthesizeSpeech as synthesizeElevenLabs } from "./tts.js";
 import { synthesizeSpeech as synthesizeGemini } from "./ttsGemini.js";
 import { synthesizeSpeech as synthesizeMurf } from "./ttsMurf.js";
+import { logUsage, type UsageProvider } from "./usageLog.js";
 
 export interface TtsResult {
   audio_base64: string | null;
   audio_mime: string;
 }
 
-async function synthesizeFromProviderSwitch(text: string, profile: UserProfile | null): Promise<TtsResult> {
+async function synthesizeFromProviderSwitch(
+  text: string,
+  profile: UserProfile | null,
+): Promise<TtsResult & { provider: UsageProvider }> {
   if (TTS_PROVIDER === "gemini") {
-    return synthesizeGemini(text, resolveGeminiVoiceName(profile));
+    const result = await synthesizeGemini(text, resolveGeminiVoiceName(profile));
+    return { ...result, provider: "gemini" };
   }
   const audio_base64 = await synthesizeElevenLabs(text, resolveVoiceId(profile));
-  return { audio_base64, audio_mime: "audio/mpeg" };
+  return { audio_base64, audio_mime: "audio/mpeg", provider: "elevenlabs" };
 }
 
 // The single point every caller (chat.ts, chatGemini.ts, /greeting) goes
@@ -29,17 +34,24 @@ async function synthesizeFromProviderSwitch(text: string, profile: UserProfile |
 // Gemini's dedicated Romanian voice support, so Romanian keeps the
 // established path. Any Murf failure falls back to the TTS_PROVIDER switch
 // too, same graceful-degradation pattern as sttProvider.ts.
-export async function synthesizeSpeech(text: string, profile: UserProfile | null): Promise<TtsResult> {
+export async function synthesizeSpeech(
+  text: string,
+  profile: UserProfile | null,
+  userId: string,
+): Promise<TtsResult> {
   if (MURF_API_KEY && profile?.language !== "ro") {
     try {
       const result = await synthesizeMurf(text, MURF_VOICE_ID);
       if (result.audio_base64) {
         console.log("[ttsProvider] synthesized via Murf Falcon 2");
+        logUsage(userId, "murf", "tts_chars", text.length);
         return result;
       }
     } catch (err) {
       console.error("[ttsProvider] Murf failed, falling back:", err);
     }
   }
-  return synthesizeFromProviderSwitch(text, profile);
+  const { provider, ...result } = await synthesizeFromProviderSwitch(text, profile);
+  logUsage(userId, provider, "tts_chars", text.length);
+  return result;
 }

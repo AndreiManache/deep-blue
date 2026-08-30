@@ -6,6 +6,7 @@ import { clearSession, getHistory, repairDanglingToolUse, setHistory, truncatePa
 import { buildSystemPrompt } from "./systemPrompt.js";
 import { anthropicTools, executeTool } from "./tools.js";
 import { synthesizeSpeech } from "./ttsProvider.js";
+import { logUsage } from "./usageLog.js";
 
 // 60s timeout (TS SDK default is 10 minutes — a hung request would strand
 // the UI in "thinking" for that long) with one retry for transient failures.
@@ -80,6 +81,8 @@ async function runTurnUnguarded(
   let ended = false;
   let response: Anthropic.Message | undefined;
   let exhausted = false;
+  let inputTokens = 0;
+  let outputTokens = 0;
 
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
     response = await client.messages.create({
@@ -92,6 +95,8 @@ async function runTurnUnguarded(
       tools: anthropicTools,
       messages: history,
     });
+    inputTokens += response.usage.input_tokens;
+    outputTokens += response.usage.output_tokens;
 
     if (response.stop_reason !== "tool_use") break;
 
@@ -154,7 +159,9 @@ async function runTurnUnguarded(
   }
 
   setHistory(sessionId, history);
-  const { audio_base64, audio_mime } = await synthesizeSpeech(reply_text, profile);
+  logUsage(userId, "anthropic", "llm_input_tokens", inputTokens);
+  logUsage(userId, "anthropic", "llm_output_tokens", outputTokens);
+  const { audio_base64, audio_mime } = await synthesizeSpeech(reply_text, profile, userId);
 
   return { reply_text, ended, mutated, audio_base64, audio_mime, lang: resolveSpeechLang(profile) };
 }

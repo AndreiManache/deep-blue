@@ -4,15 +4,18 @@ import {
   fetchEntries,
   fetchFoodDbStats,
   fetchStats,
+  fetchUsageSummary,
   removeEntry,
   todayKey,
   type FoodDbStats,
   type FoodEntry,
   type StatsResponse,
+  type UsageSummary,
 } from "../api/client";
 import { BackHeader } from "./BackHeader";
 import { DaySummary } from "./DaySummary";
 import { EntryRow } from "./EntryRow";
+import { UsageCostCard } from "./UsageCostCard";
 import { WeekStrip } from "./WeekStrip";
 
 interface DashboardProps {
@@ -34,6 +37,9 @@ export function Dashboard({ onBack, refreshSignal }: DashboardProps) {
   // Growth snapshot ("14 foods verified, 46 are yours") — a nice-to-have, so
   // failure just leaves it unshown rather than surfacing an error banner.
   const [foodStats, setFoodStats] = useState<FoodDbStats | null>(null);
+  // Rough estimated-spend snapshot — same "fail silently" treatment as
+  // foodStats above.
+  const [usage, setUsage] = useState<UsageSummary | null>(null);
 
   const load = useCallback(async (day: string) => {
     setError(null);
@@ -64,6 +70,9 @@ export function Dashboard({ onBack, refreshSignal }: DashboardProps) {
   useEffect(() => {
     fetchFoodDbStats()
       .then(setFoodStats)
+      .catch(() => {});
+    fetchUsageSummary()
+      .then(setUsage)
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshSignal]);
@@ -113,6 +122,8 @@ export function Dashboard({ onBack, refreshSignal }: DashboardProps) {
           {foodStats.yours === 1 ? "is" : "are"} yours
         </p>
       )}
+
+      {usage && <UsageCostCard usage={usage} />}
     </div>
   );
 }

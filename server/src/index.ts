@@ -32,6 +32,7 @@ import {
 } from "./config.js";
 import { createEntry, deleteEntry, getEntriesForDate, updateEntry } from "./entries.js";
 import { getFoodDbStats, normalizeFoodKey, recordObservation, totalFromBasis } from "./foods.js";
+import { getUsageSummary } from "./usageCost.js";
 import { lookupBarcode } from "./openfoodfacts.js";
 import {
   createFeedback,
@@ -220,7 +221,12 @@ app.post("/transcribe", express.raw({ type: () => true, limit: "25mb" }), async 
   const profile = getProfile(res.locals.userId as string);
   const languageCode = profile?.language === "ro" ? "ro" : profile?.language === "en" ? "en" : undefined;
   try {
-    const result = await transcribeAudio(audio, req.header("content-type") ?? "audio/mp4", languageCode);
+    const result = await transcribeAudio(
+      audio,
+      req.header("content-type") ?? "audio/mp4",
+      res.locals.userId as string,
+      languageCode,
+    );
     res.json({ text: result.text });
   } catch (err) {
     if (err instanceof SttNotConfiguredError) {
@@ -368,7 +374,9 @@ app.post("/admin/feedback/:id/transcribe", async (req, res) => {
   }
   try {
     const buffer = Buffer.from(audio.audio_base64, "base64");
-    const result = await transcribeAudio(buffer, audio.audio_mime ?? "audio/mp4");
+    // Logged against the admin doing the transcribing, not the reporter —
+    // they're the one whose action actually spends the API call.
+    const result = await transcribeAudio(buffer, audio.audio_mime ?? "audio/mp4", res.locals.userId as string);
     setFeedbackTranscript(req.params.id, result.text);
     res.json({ transcript: result.text });
   } catch (err) {
@@ -536,7 +544,7 @@ app.get("/greeting", async (_req, res) => {
 
   let cached = greetingAudioCache.get(cacheKey);
   if (!cached) {
-    const result = await synthesizeSpeech(text, profile);
+    const result = await synthesizeSpeech(text, profile, res.locals.userId as string);
     if (result.audio_base64) {
       cached = { audio_base64: result.audio_base64, audio_mime: result.audio_mime };
       greetingAudioCache.set(cacheKey, cached);
@@ -575,7 +583,7 @@ app.post("/synthesize", async (req, res) => {
 
   let cached = greetingAudioCache.get(cacheKey);
   if (!cached) {
-    const result = await synthesizeSpeech(text, profile);
+    const result = await synthesizeSpeech(text, profile, res.locals.userId as string);
     if (result.audio_base64) {
       cached = { audio_base64: result.audio_base64, audio_mime: result.audio_mime };
       greetingAudioCache.set(cacheKey, cached);
@@ -607,6 +615,14 @@ app.get("/stats", (req, res) => {
 
 app.get("/stats/foods", (_req, res) => {
   res.json(getFoodDbStats(res.locals.userId as string));
+});
+
+// In-app cost tracker (2026-08 backlog item) — a rough today/this-month
+// estimate of this user's own API spend by provider. See usageCost.ts for
+// the reference unit prices and their real, honest imprecision (STT/Gemini
+// TTS are byte/char-based approximations, not exact provider-billed units).
+app.get("/stats/usage", (_req, res) => {
+  res.json(getUsageSummary(res.locals.userId as string));
 });
 
 app.put("/profile", (req, res) => {

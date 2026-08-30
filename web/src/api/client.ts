@@ -432,6 +432,26 @@ export async function fetchProviders(): Promise<ProvidersSnapshot> {
   return res.json();
 }
 
+export interface UsageBreakdownRow {
+  provider: string;
+  kind: string;
+  amount: number;
+  estimated_cost_usd: number;
+}
+
+export interface UsageSummary {
+  today: UsageBreakdownRow[];
+  today_total_usd: number;
+  this_month: UsageBreakdownRow[];
+  this_month_total_usd: number;
+}
+
+export async function fetchUsageSummary(): Promise<UsageSummary> {
+  const res = await apiFetch("/stats/usage");
+  if (!res.ok) throw new ApiError("Could not load usage.");
+  return res.json();
+}
+
 // ---- client-side date helpers -------------------------------------------
 
 // Local day key (YYYY-MM-DD) — server day buckets are computed the same way.

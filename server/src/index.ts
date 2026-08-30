@@ -38,6 +38,8 @@ import {
   deleteFeedback,
   getFeedbackAudio,
   listFeedback,
+  listFeedbackForUser,
+  setFeedbackResolutionNote,
   setFeedbackStatus,
   setFeedbackTranscript,
 } from "./feedback.js";
@@ -260,6 +262,14 @@ app.post("/feedback", (req, res) => {
   res.json({ id });
 });
 
+// The reporter's own read-only view of what they've sent in — status and,
+// once an admin has written one, the resolution note explaining what
+// happened. Not admin-gated (it's the user's own data); no fields beyond
+// what listFeedbackForUser already scopes down to (see feedback.ts).
+app.get("/feedback/mine", (_req, res) => {
+  res.json(listFeedbackForUser(res.locals.userId as string));
+});
+
 // Read-only snapshot of which provider/model is actually active right now —
 // for debugging which stack produced a given reply, since env vars can drift
 // from what you remember setting. Reads the same constants every request
@@ -307,13 +317,28 @@ app.get("/admin/feedback", (_req, res) => {
   res.json(listFeedback());
 });
 
+// Accepts status and/or resolution_note independently — an admin can leave
+// a note without changing status, flip status without a note, or both at
+// once. At least one of the two must be present.
 app.patch("/admin/feedback/:id", (req, res) => {
-  const status = (req.body as { status?: unknown })?.status;
-  if (status !== "new" && status !== "reviewed") {
+  const { status, resolution_note } = req.body as { status?: unknown; resolution_note?: unknown };
+  const hasStatus = status !== undefined;
+  const hasNote = resolution_note !== undefined;
+  if (!hasStatus && !hasNote) {
+    res.status(400).json({ error: "Provide status and/or resolution_note." });
+    return;
+  }
+  if (hasStatus && status !== "new" && status !== "reviewed") {
     res.status(400).json({ error: "status must be 'new' or 'reviewed'." });
     return;
   }
-  const ok = setFeedbackStatus(req.params.id, status);
+  if (hasNote && typeof resolution_note !== "string" && resolution_note !== null) {
+    res.status(400).json({ error: "resolution_note must be a string or null." });
+    return;
+  }
+  let ok = true;
+  if (hasStatus) ok = setFeedbackStatus(req.params.id, status as "new" | "reviewed") && ok;
+  if (hasNote) ok = setFeedbackResolutionNote(req.params.id, resolution_note as string | null) && ok;
   if (!ok) {
     res.status(404).json({ error: "Feedback not found." });
     return;

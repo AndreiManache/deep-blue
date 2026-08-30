@@ -37,12 +37,13 @@ export interface FeedbackRow {
   transcript: string | null;
   created_at: string;
   status: string;
+  resolution_note: string | null;
 }
 
 // Newest first — that's what an admin triaging a small trickle of reports
 // wants to see.
 const listStmt = db.prepare(`
-  SELECT f.id, u.username, f.message, f.audio_base64, f.audio_mime, f.log_snapshot, f.transcript, f.created_at, f.status
+  SELECT f.id, u.username, f.message, f.audio_base64, f.audio_mime, f.log_snapshot, f.transcript, f.created_at, f.status, f.resolution_note
     FROM feedback f
     JOIN users u ON u.id = f.user_id
    ORDER BY f.created_at DESC
@@ -52,10 +53,42 @@ export function listFeedback(): FeedbackRow[] {
   return listStmt.all() as unknown as FeedbackRow[];
 }
 
+export interface MyFeedbackRow {
+  id: string;
+  message: string | null;
+  transcript: string | null;
+  has_audio: number; // SQLite has no boolean; 0/1, cast on the way out
+  created_at: string;
+  status: string;
+  resolution_note: string | null;
+}
+
+// The reporter's own view (2026-08-29's "My Feedback" screen) — no
+// admin-only fields (log_snapshot, raw audio) since this is read-only and
+// scoped to their own submissions; has_audio is enough to show "voice note
+// attached" without shipping the blob back down.
+const listForUserStmt = db.prepare(`
+  SELECT id, message, transcript, (audio_base64 IS NOT NULL) AS has_audio, created_at, status, resolution_note
+    FROM feedback
+   WHERE user_id = :user_id
+   ORDER BY created_at DESC
+`);
+
+export function listFeedbackForUser(userId: string): MyFeedbackRow[] {
+  return listForUserStmt.all({ user_id: userId }) as unknown as MyFeedbackRow[];
+}
+
 const updateStatusStmt = db.prepare(`UPDATE feedback SET status = :status WHERE id = :id`);
 
 export function setFeedbackStatus(id: string, status: "new" | "reviewed"): boolean {
   const result = updateStatusStmt.run({ id, status });
+  return Number(result.changes) > 0;
+}
+
+const updateResolutionNoteStmt = db.prepare(`UPDATE feedback SET resolution_note = :resolution_note WHERE id = :id`);
+
+export function setFeedbackResolutionNote(id: string, note: string | null): boolean {
+  const result = updateResolutionNoteStmt.run({ id, resolution_note: note });
   return Number(result.changes) > 0;
 }
 

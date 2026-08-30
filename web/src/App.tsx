@@ -6,12 +6,13 @@ import { BarcodeScanner } from "./components/BarcodeScanner";
 import { Dashboard } from "./components/Dashboard";
 import { DiagnosticsPage } from "./components/DiagnosticsPage";
 import { FeedbackPage } from "./components/FeedbackPage";
+import { MyFeedbackPage } from "./components/MyFeedbackPage";
 import { HomeScreen } from "./components/HomeScreen";
 import { ProfilePage } from "./components/ProfilePage";
 import { ProvidersPage } from "./components/ProvidersPage";
 import { useConversation, type Phase } from "./conversation/useConversation";
 
-type View = "home" | "dashboard" | "profile" | "diagnostics" | "feedback" | "admin" | "providers" | "scan";
+type View = "home" | "dashboard" | "profile" | "diagnostics" | "feedback" | "my-feedback" | "admin" | "providers" | "scan";
 
 // Menu visibility only — the real gate is server-side (ADMIN_USERNAMES on
 // /admin/*). Comma-separated to match the server's env var shape.
@@ -144,6 +145,7 @@ export function App() {
       {view === "feedback" && (
         <FeedbackPage diagnostics={conversation.diagnostics} onBack={() => setView("home")} />
       )}
+      {view === "my-feedback" && <MyFeedbackPage onBack={() => setView("home")} />}
       {view === "admin" && <AdminFeedbackPage onBack={() => setView("home")} />}
       {view === "providers" && <ProvidersPage onBack={() => setView("home")} />}
 

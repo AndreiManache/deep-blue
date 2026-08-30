@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-export type MenuView = "dashboard" | "profile" | "diagnostics" | "feedback" | "admin" | "providers";
+export type MenuView = "dashboard" | "profile" | "diagnostics" | "feedback" | "my-feedback" | "admin" | "providers";
 
 interface HamburgerMenuProps {
   onNavigate: (view: MenuView) => void;
@@ -18,6 +18,7 @@ function getItems(language: "en" | "ro" | null | undefined) {
     { to: "profile", label: "Profile" },
     { to: "diagnostics", label: "Diagnostics" },
     { to: "feedback", label: "Send feedback" },
+    { to: "my-feedback", label: "My feedback" },
   ] as const;
 }
 

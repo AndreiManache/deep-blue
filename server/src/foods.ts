@@ -60,6 +60,40 @@ const countUserFoodsStmt = db.prepare(
 );
 const distinctFoodKeysStmt = db.prepare(`SELECT DISTINCT food_key FROM food_observations`);
 
+const listUserObsStmt = db.prepare(
+  `SELECT food_key, basis, calories, protein_g, carbs_g, fat_g, source, updated_at
+     FROM food_observations WHERE user_id = :user_id
+    ORDER BY updated_at DESC`,
+);
+
+export interface UserObservation {
+  food_key: string;
+  basis: Basis;
+  calories: number;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  source: ObservationSource;
+  updated_at: string;
+}
+
+// The "My Foods" screen (2026-08-27 backlog item) — every food this user has
+// ever fed into the knowledge base, newest-touched first, so they can see
+// and directly manage what the app remembers about their foods rather than
+// only ever shaping it indirectly through logging/editing entries.
+export function listUserObservations(userId: string): UserObservation[] {
+  return listUserObsStmt.all({ user_id: userId }) as unknown as UserObservation[];
+}
+
+const deleteObsStmt = db.prepare(
+  `DELETE FROM food_observations WHERE food_key = :food_key AND user_id = :user_id`,
+);
+
+export function deleteObservation(userId: string, foodKey: string): boolean {
+  const result = deleteObsStmt.run({ food_key: foodKey, user_id: userId });
+  return Number(result.changes) > 0;
+}
+
 const upsertObsStmt = db.prepare(`
   INSERT INTO food_observations (food_key, user_id, basis, calories, protein_g, carbs_g, fat_g, source, updated_at)
   VALUES (:food_key, :user_id, :basis, :calories, :protein_g, :carbs_g, :fat_g, :source, :updated_at)

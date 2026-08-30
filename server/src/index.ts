@@ -31,7 +31,14 @@ import {
   USERNAME,
 } from "./config.js";
 import { createEntry, deleteEntry, getEntriesForDate, updateEntry } from "./entries.js";
-import { getFoodDbStats, normalizeFoodKey, recordObservation, totalFromBasis } from "./foods.js";
+import {
+  deleteObservation,
+  getFoodDbStats,
+  listUserObservations,
+  normalizeFoodKey,
+  recordObservation,
+  totalFromBasis,
+} from "./foods.js";
 import { lookupBarcode } from "./openfoodfacts.js";
 import {
   createFeedback,
@@ -55,7 +62,12 @@ import { SttNotConfiguredError, transcribeAudio } from "./sttProvider.js";
 import { SMALLESTAI_STT_MODEL } from "./sttSmallest.js";
 import { STT_MODEL_ID } from "./stt.js";
 import { synthesizeSpeech } from "./ttsProvider.js";
-import { validateBarcodeEntry, validateEntryPatch, validateProfileInput } from "./validation.js";
+import {
+  validateBarcodeEntry,
+  validateEntryPatch,
+  validateFoodObservation,
+  validateProfileInput,
+} from "./validation.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -192,6 +204,7 @@ app.use(
     "/feedback",
     "/barcode",
     "/synthesize",
+    "/foods",
   ],
   requireAuth,
 );
@@ -607,6 +620,54 @@ app.get("/stats", (req, res) => {
 
 app.get("/stats/foods", (_req, res) => {
   res.json(getFoodDbStats(res.locals.userId as string));
+});
+
+// "My Foods" — view and directly seed/manage your own remembered value for a
+// food, rather than only ever shaping it indirectly through logging/editing
+// entries (2026-08-27 backlog item).
+app.get("/foods/mine", (_req, res) => {
+  res.json(listUserObservations(res.locals.userId as string));
+});
+
+// Upsert (same food_key -> update, per food_observations' primary key).
+// Always recorded as a "correction" — the user is directly asserting their
+// own value here, not the model producing an "estimate".
+app.put("/foods/mine", (req, res) => {
+  const validationError = validateFoodObservation(req.body ?? {});
+  if (validationError) {
+    res.status(400).json({ error: validationError });
+    return;
+  }
+  const { food_key, basis, calories, protein_g, carbs_g, fat_g } = req.body as {
+    food_key: string;
+    basis: "per_100g" | "per_item";
+    calories: number;
+    protein_g?: number | null;
+    carbs_g?: number | null;
+    fat_g?: number | null;
+  };
+  const foodKey = normalizeFoodKey(food_key);
+  if (!foodKey) {
+    res.status(400).json({ error: "food_key must be a non-empty string." });
+    return;
+  }
+  recordObservation(
+    res.locals.userId as string,
+    foodKey,
+    basis,
+    { calories, protein_g: protein_g ?? null, carbs_g: carbs_g ?? null, fat_g: fat_g ?? null },
+    "correction",
+  );
+  res.json(listUserObservations(res.locals.userId as string).find((o) => o.food_key === foodKey));
+});
+
+app.delete("/foods/mine/:foodKey", (req, res) => {
+  const ok = deleteObservation(res.locals.userId as string, req.params.foodKey);
+  if (!ok) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  res.status(204).end();
 });
 
 app.put("/profile", (req, res) => {

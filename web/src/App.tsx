@@ -7,12 +7,23 @@ import { Dashboard } from "./components/Dashboard";
 import { DiagnosticsPage } from "./components/DiagnosticsPage";
 import { FeedbackPage } from "./components/FeedbackPage";
 import { MyFeedbackPage } from "./components/MyFeedbackPage";
+import { MyFoodsPage } from "./components/MyFoodsPage";
 import { HomeScreen } from "./components/HomeScreen";
 import { ProfilePage } from "./components/ProfilePage";
 import { ProvidersPage } from "./components/ProvidersPage";
 import { useConversation, type Phase } from "./conversation/useConversation";
 
-type View = "home" | "dashboard" | "profile" | "diagnostics" | "feedback" | "my-feedback" | "admin" | "providers" | "scan";
+type View =
+  | "home"
+  | "dashboard"
+  | "profile"
+  | "my-foods"
+  | "diagnostics"
+  | "feedback"
+  | "my-feedback"
+  | "admin"
+  | "providers"
+  | "scan";
 
 // Menu visibility only — the real gate is server-side (ADMIN_USERNAMES on
 // /admin/*). Comma-separated to match the server's env var shape.
@@ -135,6 +146,7 @@ export function App() {
         />
       )}
       {view === "profile" && <ProfilePage onBack={() => setView("home")} />}
+      {view === "my-foods" && <MyFoodsPage onBack={() => setView("home")} />}
       {view === "diagnostics" && (
         <DiagnosticsPage
           events={conversation.diagnostics}

@@ -9,7 +9,7 @@ import { computeTargets, type UserProfile } from "../src/profile.js";
 import { repairDanglingToolUse, truncatePairSafe } from "../src/sessions.js";
 import { MAX_HISTORY_TURNS } from "../src/config.js";
 import { anthropicTools, geminiTools, toolDefs } from "../src/tools.js";
-import { validateEntryPatch, validateProfileInput } from "../src/validation.js";
+import { validateEntryPatch, validateFoodObservation, validateProfileInput } from "../src/validation.js";
 
 // Every field computeTargets doesn't care about for a given case still has to
 // be present to satisfy UserProfile — this is the base a test overrides.
@@ -212,6 +212,32 @@ describe("validateEntryPatch", () => {
     assert.match(validateEntryPatch({ calories: "abc" as unknown as number })!, /calories/);
     assert.match(validateEntryPatch({ description: "   " })!, /description/);
     assert.match(validateEntryPatch({ protein_g: -5 })!, /protein_g/);
+  });
+});
+
+describe("validateFoodObservation", () => {
+  it("accepts a normal entry", () => {
+    assert.equal(
+      validateFoodObservation({ food_key: "greek yogurt", basis: "per_100g", calories: 59, protein_g: 10 }),
+      null,
+    );
+  });
+
+  it("rejects a missing/empty food_key", () => {
+    assert.match(validateFoodObservation({ basis: "per_100g", calories: 59 })!, /food_key/);
+    assert.match(validateFoodObservation({ food_key: "   ", basis: "per_100g", calories: 59 })!, /food_key/);
+  });
+
+  it("rejects an out-of-enum basis", () => {
+    assert.match(
+      validateFoodObservation({ food_key: "x", basis: "per_kg" as unknown as string, calories: 59 })!,
+      /basis/,
+    );
+  });
+
+  it("rejects out-of-range calories", () => {
+    assert.match(validateFoodObservation({ food_key: "x", basis: "per_100g", calories: -1 })!, /calories/);
+    assert.match(validateFoodObservation({ food_key: "x", basis: "per_100g", calories: 5000 })!, /calories/);
   });
 });
 

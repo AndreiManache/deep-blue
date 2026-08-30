@@ -327,6 +327,8 @@ export interface SubmitFeedbackInput {
   audio_base64: string | null;
   audio_mime: string | null;
   log_snapshot: string | null;
+  image_base64?: string | null;
+  image_mime?: string | null;
 }
 
 export async function submitFeedback(input: SubmitFeedbackInput): Promise<void> {
@@ -352,6 +354,10 @@ export interface FeedbackItem {
   created_at: string;
   status: string;
   resolution_note: string | null;
+  title: string | null;
+  summary: string | null;
+  image_base64: string | null;
+  image_mime: string | null;
 }
 
 export async function fetchAdminFeedback(): Promise<FeedbackItem[]> {
@@ -386,6 +392,9 @@ export interface MyFeedbackItem {
   created_at: string;
   status: string;
   resolution_note: string | null;
+  title: string | null;
+  image_base64: string | null;
+  image_mime: string | null;
 }
 
 export async function fetchMyFeedback(): Promise<MyFeedbackItem[]> {
@@ -407,6 +416,20 @@ export async function transcribeFeedback(id: string): Promise<string> {
   }
   const data = (await res.json()) as { transcript: string };
   return data.transcript;
+}
+
+export interface FeedbackSummaryResult {
+  title: string;
+  summary: string;
+}
+
+export async function summarizeFeedback(id: string): Promise<FeedbackSummaryResult> {
+  const res = await apiFetch(`/admin/feedback/${id}/summarize`, { method: "POST" });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new ApiError(data.error ?? "Could not generate a title.");
+  }
+  return res.json();
 }
 
 export interface ProvidersSnapshot {

@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { Check, Clipboard, ClipboardCheck, Mic, Trash2 } from "lucide-react";
+import { Check, Clipboard, ClipboardCheck, Mic, Sparkles, Trash2 } from "lucide-react";
 import {
   ApiError,
   deleteFeedbackItem,
   fetchAdminFeedback,
   setFeedbackResolutionNote,
   setFeedbackStatus,
+  summarizeFeedback,
   transcribeFeedback,
   type FeedbackItem,
 } from "../api/client";
@@ -47,6 +48,7 @@ function buildClaudeBlob(item: FeedbackItem): string {
       ? "\nVoice note: attached, not yet transcribed — transcribe it first."
       : null,
     item.log_snapshot ? `\nDiagnostics log:\n${formatLog(item.log_snapshot)}` : null,
+    item.image_base64 ? "\nPhoto: attached — see the report in the admin inbox to view it." : null,
   ].filter((l): l is string => l != null);
   return lines.join("\n");
 }
@@ -90,6 +92,10 @@ export function AdminFeedbackPage({ onBack }: AdminFeedbackPageProps) {
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, resolution_note: note } : i)));
   }
 
+  function handleSummarized(id: string, title: string, summary: string) {
+    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, title, summary } : i)));
+  }
+
   return (
     <div className="flex min-h-dvh flex-col gap-6 px-6 pb-16 pt-5">
       <BackHeader title="Feedback inbox" subtitle={`${items.length} report${items.length === 1 ? "" : "s"}`} onBack={onBack} />
@@ -113,6 +119,7 @@ export function AdminFeedbackPage({ onBack }: AdminFeedbackPageProps) {
             onDelete={() => handleDelete(item.id)}
             onTranscribed={(text) => handleTranscribed(item.id, text)}
             onNoteSaved={(note) => handleNoteSaved(item.id, note)}
+            onSummarized={(title, summary) => handleSummarized(item.id, title, summary)}
           />
         ))}
       </div>
@@ -126,13 +133,16 @@ interface FeedbackCardProps {
   onDelete: () => void;
   onTranscribed: (transcript: string) => void;
   onNoteSaved: (note: string) => void;
+  onSummarized: (title: string, summary: string) => void;
 }
 
-function FeedbackCard({ item, onToggleStatus, onDelete, onTranscribed, onNoteSaved }: FeedbackCardProps) {
+function FeedbackCard({ item, onToggleStatus, onDelete, onTranscribed, onNoteSaved, onSummarized }: FeedbackCardProps) {
   const [expandedLog, setExpandedLog] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [transcribeError, setTranscribeError] = useState<string | null>(null);
+  const [summarizing, setSummarizing] = useState(false);
+  const [summarizeError, setSummarizeError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   // Local draft — only pushed to the server (and up to the parent) on Save,
   // so typing doesn't refetch/rerender the whole list on every keystroke.
@@ -141,6 +151,20 @@ function FeedbackCard({ item, onToggleStatus, onDelete, onTranscribed, onNoteSav
   const [noteSaved, setNoteSaved] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
 
+  async function handleSummarize() {
+    if (summarizing) return;
+    setSummarizing(true);
+    setSummarizeError(null);
+    try {
+      const result = await summarizeFeedback(item.id);
+      onSummarized(result.title, result.summary);
+    } catch (err) {
+      setSummarizeError(err instanceof ApiError ? err.message : "Could not generate a title.");
+    } finally {
+      setSummarizing(false);
+    }
+  }
+
   async function handleTranscribe() {
     if (transcribing) return;
     setTranscribing(true);
@@ -148,6 +172,11 @@ function FeedbackCard({ item, onToggleStatus, onDelete, onTranscribed, onNoteSav
     try {
       const text = await transcribeFeedback(item.id);
       onTranscribed(text);
+      // One click gets both — no reason to make transcribing and titling
+      // two separate button presses when a transcript is what unblocks the
+      // title in the first place. A failure here is silent by design: the
+      // transcript itself already succeeded and is the thing that mattered.
+      void handleSummarize();
     } catch (err) {
       setTranscribeError(err instanceof ApiError ? err.message : "Could not transcribe this voice note.");
     } finally {
@@ -185,8 +214,19 @@ function FeedbackCard({ item, onToggleStatus, onDelete, onTranscribed, onNoteSav
     <div className="rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-ink/5">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="font-display text-sm font-extrabold tracking-tight text-ink">{item.username}</div>
-          <div className="text-xs font-semibold text-ink/40">{fmtTime(item.created_at)}</div>
+          {item.title ? (
+            <>
+              <div className="font-display text-sm font-extrabold tracking-tight text-ink">{item.title}</div>
+              <div className="text-xs font-semibold text-ink/40">
+                {item.username} · {fmtTime(item.created_at)}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="font-display text-sm font-extrabold tracking-tight text-ink">{item.username}</div>
+              <div className="text-xs font-semibold text-ink/40">{fmtTime(item.created_at)}</div>
+            </>
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           <button
@@ -221,9 +261,35 @@ function FeedbackCard({ item, onToggleStatus, onDelete, onTranscribed, onNoteSav
         </div>
       </div>
 
+      {item.summary && (
+        <p className="mt-3 rounded-xl bg-sky/10 px-3 py-2 text-xs font-semibold leading-relaxed text-ink/60">
+          {item.summary}
+        </p>
+      )}
+
       {item.message && (
         <p className="mt-3 text-sm font-medium leading-relaxed text-ink/80">{item.message}</p>
       )}
+
+      {item.image_base64 && (
+        <img
+          src={`data:${item.image_mime ?? "image/jpeg"};base64,${item.image_base64}`}
+          alt="Attached to this report"
+          className="mt-3 max-h-64 w-full rounded-xl object-contain bg-ink3"
+        />
+      )}
+
+      {!item.title && (item.message || item.transcript) && (
+        <button
+          className="mt-3 flex items-center gap-1.5 text-xs font-bold text-ink/40 transition-colors hover:text-ink/70"
+          onClick={handleSummarize}
+          disabled={summarizing}
+        >
+          <Sparkles className="size-3.5" />
+          {summarizing ? "Generating…" : "Generate title"}
+        </button>
+      )}
+      {summarizeError && <p className="mt-1 text-xs font-semibold text-coral">{summarizeError}</p>}
 
       {item.audio_base64 && (
         <div className="mt-3 space-y-2">

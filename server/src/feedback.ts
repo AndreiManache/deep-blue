@@ -6,11 +6,13 @@ export interface CreateFeedbackInput {
   audio_base64: string | null;
   audio_mime: string | null;
   log_snapshot: string | null;
+  image_base64: string | null;
+  image_mime: string | null;
 }
 
 const insertStmt = db.prepare(`
-  INSERT INTO feedback (id, user_id, message, audio_base64, audio_mime, log_snapshot, created_at, status)
-  VALUES (:id, :user_id, :message, :audio_base64, :audio_mime, :log_snapshot, :created_at, 'new')
+  INSERT INTO feedback (id, user_id, message, audio_base64, audio_mime, log_snapshot, image_base64, image_mime, created_at, status)
+  VALUES (:id, :user_id, :message, :audio_base64, :audio_mime, :log_snapshot, :image_base64, :image_mime, :created_at, 'new')
 `);
 
 export function createFeedback(userId: string, input: CreateFeedbackInput): string {
@@ -22,6 +24,8 @@ export function createFeedback(userId: string, input: CreateFeedbackInput): stri
     audio_base64: input.audio_base64,
     audio_mime: input.audio_mime,
     log_snapshot: input.log_snapshot,
+    image_base64: input.image_base64,
+    image_mime: input.image_mime,
     created_at: new Date().toISOString(),
   });
   return id;
@@ -38,12 +42,16 @@ export interface FeedbackRow {
   created_at: string;
   status: string;
   resolution_note: string | null;
+  title: string | null;
+  summary: string | null;
+  image_base64: string | null;
+  image_mime: string | null;
 }
 
 // Newest first — that's what an admin triaging a small trickle of reports
 // wants to see.
 const listStmt = db.prepare(`
-  SELECT f.id, u.username, f.message, f.audio_base64, f.audio_mime, f.log_snapshot, f.transcript, f.created_at, f.status, f.resolution_note
+  SELECT f.id, u.username, f.message, f.audio_base64, f.audio_mime, f.log_snapshot, f.transcript, f.created_at, f.status, f.resolution_note, f.title, f.summary, f.image_base64, f.image_mime
     FROM feedback f
     JOIN users u ON u.id = f.user_id
    ORDER BY f.created_at DESC
@@ -61,14 +69,21 @@ export interface MyFeedbackRow {
   created_at: string;
   status: string;
   resolution_note: string | null;
+  title: string | null;
+  image_base64: string | null;
+  image_mime: string | null;
 }
 
 // The reporter's own view (2026-08-29's "My Feedback" screen) — no
-// admin-only fields (log_snapshot, raw audio) since this is read-only and
-// scoped to their own submissions; has_audio is enough to show "voice note
-// attached" without shipping the blob back down.
+// admin-only fields (log_snapshot, raw audio, summary — the one-sentence
+// summary is for admin triage, the title alone is enough to tell reports
+// apart here) since this is read-only and scoped to their own submissions;
+// has_audio is enough to show "voice note attached" without shipping the
+// blob back down. The photo IS included, unlike audio — already small
+// after client-side resize, and unlike a raw recording it's cheap to just
+// show back to the reporter so they can confirm what they attached.
 const listForUserStmt = db.prepare(`
-  SELECT id, message, transcript, (audio_base64 IS NOT NULL) AS has_audio, created_at, status, resolution_note
+  SELECT id, message, transcript, (audio_base64 IS NOT NULL) AS has_audio, created_at, status, resolution_note, title, image_base64, image_mime
     FROM feedback
    WHERE user_id = :user_id
    ORDER BY created_at DESC
@@ -90,6 +105,25 @@ const updateResolutionNoteStmt = db.prepare(`UPDATE feedback SET resolution_note
 export function setFeedbackResolutionNote(id: string, note: string | null): boolean {
   const result = updateResolutionNoteStmt.run({ id, resolution_note: note });
   return Number(result.changes) > 0;
+}
+
+const updateTitleSummaryStmt = db.prepare(`UPDATE feedback SET title = :title, summary = :summary WHERE id = :id`);
+
+export function setFeedbackTitleSummary(id: string, title: string, summary: string): boolean {
+  const result = updateTitleSummaryStmt.run({ id, title, summary });
+  return Number(result.changes) > 0;
+}
+
+const getTextStmt = db.prepare(`SELECT message, transcript FROM feedback WHERE id = :id`);
+
+// Whatever there is to summarize for a report — the typed message if any,
+// else the transcript (voice notes have no message). Null if there's
+// nothing yet (e.g. an untranscribed voice note) — the caller should ask
+// for a transcript first in that case.
+export function getFeedbackText(id: string): string | null {
+  const row = getTextStmt.get({ id }) as unknown as { message: string | null; transcript: string | null } | undefined;
+  const text = row?.message ?? row?.transcript ?? null;
+  return text && text.trim() ? text : null;
 }
 
 const getAudioStmt = db.prepare(`SELECT audio_base64, audio_mime FROM feedback WHERE id = :id`);

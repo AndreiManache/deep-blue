@@ -101,7 +101,17 @@ export function BarcodeScanner({ onDone, log }: BarcodeScannerProps) {
       }
       let stream: MediaStream;
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        // No resolution constraint here previously — the browser then
+        // defaults toward the camera's max resolution (easily 4K on a
+        // modern phone), and zxing decodes every captured frame at its
+        // native size with no downscaling. 720p is comfortably more detail
+        // than an EAN/UPC barcode needs to decode reliably, at a fraction
+        // of the per-frame decode cost — a likely real contributor to the
+        // reported 5-10s scan time (2026-08-29 feedback). "ideal", not
+        // "exact": still degrades gracefully on a camera that can't hit it.
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+        });
       } catch (err) {
         if (cancelled) return;
         const name = err instanceof Error ? err.name : "";
@@ -142,7 +152,20 @@ export function BarcodeScanner({ onDone, log }: BarcodeScannerProps) {
 
       const zxing = await import("@zxing/library");
       if (cancelled) return;
-      const reader = new zxing.BrowserMultiFormatReader();
+      // Unrestricted, BrowserMultiFormatReader tries every format it knows
+      // (~17, including QR/DataMatrix/PDF417/Aztec) against every frame —
+      // real per-frame cost for formats that can never actually match here.
+      // The server only ever accepts 8-14 digit numeric codes (see the
+      // /barcode route), which food packaging only ever carries as EAN/UPC,
+      // so restricting to just those is a correctness-preserving speedup,
+      // not a narrower feature (2026-08-29 feedback: scans took 5-10s).
+      const hints = new Map<import("@zxing/library").DecodeHintType, unknown>([
+        [
+          zxing.DecodeHintType.POSSIBLE_FORMATS,
+          [zxing.BarcodeFormat.EAN_13, zxing.BarcodeFormat.EAN_8, zxing.BarcodeFormat.UPC_A, zxing.BarcodeFormat.UPC_E],
+        ],
+      ]);
+      const reader = new zxing.BrowserMultiFormatReader(hints);
       readerRef.current = reader;
       decodedRef.current = false;
       lastAttemptAtRef.current = Date.now();

@@ -15,18 +15,23 @@ Ideas and open items to consider going forward. Shipped/completed work has been 
 
 Transcribed and triaged from the feedback inbox (10 voice notes + 1 text
 note, Aug 27-28, from Andrei/Maria/Daniel — Daniel is a friend Andrei showed
-the app to at a bar). Six reports are resolved and not listed below: two
+the app to at a bar). Eight reports are resolved and not listed below: two
 matched bugs already fixed earlier this session (a conversation freezing
 mid-turn while the user paused to think, and getting cut off mid-sentence
 describing a full day of eating — both addressed by the turn-hang and
 `MAX_TURN_MS` fixes, PRs #20/#22/#23), three were addressed directly in the
 2026-08-29 backlog-burn-down pass (the "send another feedback" button,
 surfacing the Mifflin-St Jeor BMR formula in Profile, and renaming the
-Dashboard menu label to "Jurnal alimentar" for Romanian profiles), and the
-spoken-calorie-mismatch bug (below) was root-caused and fixed the same day.
+Dashboard menu label to "Jurnal alimentar" for Romanian profiles), the
+spoken-calorie-mismatch bug was root-caused and fixed the same day,
+recording-with-a-photo-attached was confirmed resolved by the user
+2026-08-30 (superseded by earlier fixes, not separately root-caused), and
+slow barcode scanning was root-caused and fixed 2026-08-30 too — no
+resolution constraint on the camera stream, and no format restriction on
+the decoder (live-verified: restricting to the four retail formats this
+app can ever use cuts the decoder's internal reader count from 7 to 1 per
+frame, on top of a smaller per-frame resolution).
 Everything below is still open.
-- [ ] **Recording doesn't work with a photo attached.** Andrei: "Nu merge să înregistrez cu poza." Not yet investigated — unclear if this is a permissions/state issue in `PhotoAttach.tsx`/`useConversation.ts`, or something else.
-- [ ] **Barcode scan is slow to identify.** Andrei: had to hold the camera on a barcode for 5-10 seconds. `BarcodeScanner.tsx` already went through a couple of fixes earlier in the project (the decode loop not running, silent failures) — this may be a genuine scan-speed/frame-rate tuning issue rather than a correctness bug.
 - [ ] **Swipe-to-go-back navigation.** Andrei: wants to swipe back between pages, not just tap an explicit back button.
 - [ ] **Favorite/quick-reselect for frequently scanned or logged items.** Andrei: scanned milk two days running and wanted a faster way to pick it again instead of rescanning. Likely overlaps with the existing "My Foods" screen idea below (personal food database) — whoever builds either should consider both angles (viewing/managing your food history vs. quickly re-logging a recent item) together rather than building two separate mechanisms.
 - [ ] **Back button missing/inconsistent, specifically on Profile — investigated 2026-08-29, could not reproduce.** Maria: wants a reliable way to go back, called out the Profile page by name. Tested `BackHeader`'s back button on Profile at both desktop and mobile (375x812) viewport sizes: present, visible, correctly positioned, not obscured by any overlapping element, and navigates back to Home correctly on click every time. Left open rather than closed — a real-device issue (mobile Safari's collapsing toolbar shifting `100dvh` calculations, or a specific navigation path not tested) can't be ruled out from here. Whoever revisits this should ask Maria to reproduce it live before assuming it's fixed by anything above.

@@ -195,3 +195,25 @@ db.exec(`
     PRIMARY KEY (food_key, user_id)
   );
 `);
+
+// Audit trail for calorie edits (2026-08-27 backlog item: "entry-correction
+// capture with reason + evidence"). food_observations already tracks *what*
+// a user's corrected value is (feeds the consensus math); this tracks *why*
+// a given edit happened, so an admin reviewing the food knowledge base can
+// tell a mis-portioned guess from a genuinely ambiguous food from a typo,
+// and "5 people agree" can eventually be weighted by how many of those
+// corrections actually carried a reason/evidence link. Purely additive —
+// doesn't touch food_observations or food_entries.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS entry_corrections (
+    id TEXT PRIMARY KEY,
+    entry_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    food_key TEXT,
+    old_calories INTEGER NOT NULL,
+    new_calories INTEGER NOT NULL,
+    reason TEXT,
+    evidence_url TEXT,
+    created_at TEXT NOT NULL
+  );
+`);

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { fetchMe, fetchProfile, getStoredToken, logout as logoutRequest, SESSION_INVALIDATED_EVENT } from "./api/client";
+import { AdminCorrectionsPage } from "./components/AdminCorrectionsPage";
 import { AdminFeedbackPage } from "./components/AdminFeedbackPage";
 import { AuthGate } from "./components/AuthGate";
 import { BarcodeScanner } from "./components/BarcodeScanner";
@@ -12,7 +13,17 @@ import { ProfilePage } from "./components/ProfilePage";
 import { ProvidersPage } from "./components/ProvidersPage";
 import { useConversation, type Phase } from "./conversation/useConversation";
 
-type View = "home" | "dashboard" | "profile" | "diagnostics" | "feedback" | "my-feedback" | "admin" | "providers" | "scan";
+type View =
+  | "home"
+  | "dashboard"
+  | "profile"
+  | "diagnostics"
+  | "feedback"
+  | "my-feedback"
+  | "admin"
+  | "corrections"
+  | "providers"
+  | "scan";
 
 // Menu visibility only — the real gate is server-side (ADMIN_USERNAMES on
 // /admin/*). Comma-separated to match the server's env var shape.
@@ -147,6 +158,7 @@ export function App() {
       )}
       {view === "my-feedback" && <MyFeedbackPage onBack={() => setView("home")} />}
       {view === "admin" && <AdminFeedbackPage onBack={() => setView("home")} />}
+      {view === "corrections" && <AdminCorrectionsPage onBack={() => setView("home")} />}
       {view === "providers" && <ProvidersPage onBack={() => setView("home")} />}
 
       {pillLabel && (

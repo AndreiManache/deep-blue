@@ -32,6 +32,7 @@ the decoder (live-verified: restricting to the four retail formats this
 app can ever use cuts the decoder's internal reader count from 7 to 1 per
 frame, on top of a smaller per-frame resolution).
 Everything below is still open.
+
 - [ ] **Swipe-to-go-back navigation.** Andrei: wants to swipe back between pages, not just tap an explicit back button.
 - [ ] **Favorite/quick-reselect for frequently scanned or logged items.** Andrei: scanned milk two days running and wanted a faster way to pick it again instead of rescanning. Likely overlaps with the existing "My Foods" screen idea below (personal food database) — whoever builds either should consider both angles (viewing/managing your food history vs. quickly re-logging a recent item) together rather than building two separate mechanisms.
 - [ ] **Back button missing/inconsistent, specifically on Profile — investigated 2026-08-29, could not reproduce.** Maria: wants a reliable way to go back, called out the Profile page by name. Tested `BackHeader`'s back button on Profile at both desktop and mobile (375x812) viewport sizes: present, visible, correctly positioned, not obscured by any overlapping element, and navigates back to Home correctly on click every time. Left open rather than closed — a real-device issue (mobile Safari's collapsing toolbar shifting `100dvh` calculations, or a specific navigation path not tested) can't be ruled out from here. Whoever revisits this should ask Maria to reproduce it live before assuming it's fixed by anything above.

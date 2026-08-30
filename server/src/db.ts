@@ -164,6 +164,16 @@ if (!feedbackColumns.some((col) => col.name === "transcript")) {
 if (!feedbackColumns.some((col) => col.name === "resolution_note")) {
   db.exec(`ALTER TABLE feedback ADD COLUMN resolution_note TEXT;`);
 }
+// LLM-generated (2026-08-30, on-demand from the admin inbox) from the
+// report's own message/transcript, purely for faster triage — a report
+// still fully works with these null, same degrade-gracefully pattern as
+// every optional AI feature in this app.
+if (!feedbackColumns.some((col) => col.name === "title")) {
+  db.exec(`ALTER TABLE feedback ADD COLUMN title TEXT;`);
+}
+if (!feedbackColumns.some((col) => col.name === "summary")) {
+  db.exec(`ALTER TABLE feedback ADD COLUMN summary TEXT;`);
+}
 
 // One nutrition observation per (food_key, user): that user's best value for a
 // food, normalized to a basis (per 100g, or per one item when grams are

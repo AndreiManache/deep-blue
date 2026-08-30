@@ -37,12 +37,15 @@ import {
   createFeedback,
   deleteFeedback,
   getFeedbackAudio,
+  getFeedbackText,
   listFeedback,
   listFeedbackForUser,
   setFeedbackResolutionNote,
   setFeedbackStatus,
+  setFeedbackTitleSummary,
   setFeedbackTranscript,
 } from "./feedback.js";
+import { summarizeFeedback } from "./feedbackSummary.js";
 import {
   computeTargets,
   getProfile,
@@ -379,6 +382,27 @@ app.post("/admin/feedback/:id/transcribe", async (req, res) => {
     console.error("[/admin/feedback/:id/transcribe] error:", err);
     res.status(502).json({ error: "Could not transcribe this voice note." });
   }
+});
+
+// Generates a short title + one-sentence summary from whatever text a
+// report already has (message, or a transcript already produced above) —
+// on demand, not automatic on submit, same cost-avoidance reasoning as
+// transcription itself. Works for text-only reports too, not just voice
+// ones (2026-08-30 backlog item was voice-specific, but the underlying
+// "faster triage" value applies equally to a typed report).
+app.post("/admin/feedback/:id/summarize", async (req, res) => {
+  const text = getFeedbackText(req.params.id);
+  if (!text) {
+    res.status(400).json({ error: "Nothing to summarize yet — transcribe the voice note first." });
+    return;
+  }
+  const result = await summarizeFeedback(text);
+  if (!result) {
+    res.status(502).json({ error: "Could not generate a title right now." });
+    return;
+  }
+  setFeedbackTitleSummary(req.params.id, result.title, result.summary);
+  res.json(result);
 });
 
 const IMAGE_MEDIA_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;

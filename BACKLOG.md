@@ -71,7 +71,7 @@ Everything below is still open.
 
 ## Engineering hygiene
 
-- [ ] **No test infrastructure in `web/` at all.** The conversation state machine's ordering guarantees (permission before speech, echo-guard epochs, no listening while the AI talks) aren't permanently testable yet — adding Playwright is the obvious way to get there.
+- [ ] **Cover the voice pipeline's actual ordering guarantees — permission before speech, echo-guard epochs, no listening while the AI talks.** Playwright infrastructure now exists (`web/e2e/`, shipped 2026-08-31 — `npm run test:e2e`), with auth and navigation smoke tests as the foundation, but these specific state-machine guarantees still aren't covered: they need `getUserMedia`/`MediaRecorder`/`AudioContext` mocked realistically enough to actually drive `SpeechCapture`'s real state transitions, not just stubbed to unblock rendering (see `e2e/helpers.ts`'s `/greeting` stub for the difference — that's a network stub, this needs a believable fake device). Real, separate work — the mock shapes need to be right or the tests pass for the wrong reasons.
 
 ## Deployment
 

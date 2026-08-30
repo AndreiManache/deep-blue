@@ -66,7 +66,6 @@ Everything below is still open.
 
 ## Product ideas
 
-- [ ] **On-screen conversation transcript.** There is currently no way to see what the app heard or replied — mishears are invisible, which reads as "the AI is confused" even when it's an STT problem. Show a lightweight running transcript (last few user/assistant turns, text already available client-side) on the home screen under the button. No backend change; also a trust win for debugging estimation quality (you can see exactly what text the model received).
 - [ ] **Online nutrition lookup — deliberately not now.** A web search per food adds seconds of latency to a live voice turn plus per-search cost, and the problem foods that motivated this (homemade/butcher dishes) aren't in databases anyway — model knowledge + deterministic math is the real lever. Revisit only if branded/packaged foods with barcodes/labels become a frequent use case.
 
 ## Engineering hygiene

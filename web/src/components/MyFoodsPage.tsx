@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Check, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import {
   ApiError,
   deleteMyFood,
   fetchMyFoods,
+  logFoodAgain,
   upsertMyFood,
   type FoodBasis,
   type MyFoodItem,
@@ -13,6 +14,10 @@ import { cn } from "../lib/utils";
 
 interface MyFoodsPageProps {
   onBack: () => void;
+  // Bumps the same refetch signal barcode logging uses — quick-relogging
+  // happens outside the conversation pipeline too, so the Dashboard has no
+  // other way to know a new entry appeared.
+  onLogged: () => void;
 }
 
 const inputClass =
@@ -50,7 +55,7 @@ function formFromItem(item: MyFoodItem): FoodFormState {
   };
 }
 
-export function MyFoodsPage({ onBack }: MyFoodsPageProps) {
+export function MyFoodsPage({ onBack, onLogged }: MyFoodsPageProps) {
   const [items, setItems] = useState<MyFoodItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -113,6 +118,7 @@ export function MyFoodsPage({ onBack }: MyFoodsPageProps) {
               setItems((prev) => prev.map((i) => (i.food_key === item.food_key ? updated : i)))
             }
             onDeleted={() => setItems((prev) => prev.filter((i) => i.food_key !== item.food_key))}
+            onLogged={onLogged}
           />
         ))}
       </div>
@@ -124,13 +130,38 @@ interface FoodCardProps {
   item: MyFoodItem;
   onSaved: (item: MyFoodItem) => void;
   onDeleted: () => void;
+  onLogged: () => void;
 }
 
-function FoodCard({ item, onSaved, onDeleted }: FoodCardProps) {
+function FoodCard({ item, onSaved, onDeleted, onLogged }: FoodCardProps) {
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loggingAgain, setLoggingAgain] = useState(false);
+  const [quantity, setQuantity] = useState(item.basis === "per_100g" ? "100" : "1");
+  const [justLogged, setJustLogged] = useState(false);
+
+  async function handleLogAgain() {
+    const qty = Number(quantity);
+    if (quantity.trim() === "" || Number.isNaN(qty) || qty <= 0) {
+      setError("Enter a valid quantity.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await logFoodAgain(item.food_key, qty);
+      onLogged();
+      setLoggingAgain(false);
+      setJustLogged(true);
+      setTimeout(() => setJustLogged(false), 2000);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't log this food.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function handleDelete() {
     if (!confirmingDelete) {
@@ -178,6 +209,13 @@ function FoodCard({ item, onSaved, onDeleted }: FoodCardProps) {
         <div className="flex shrink-0 items-center gap-1">
           <button
             className="grid size-8 place-items-center rounded-lg text-ink/40 transition-colors hover:bg-ink3 hover:text-ink"
+            onClick={() => setLoggingAgain((v) => !v)}
+            aria-label="Log this again"
+          >
+            <RotateCcw className="size-3.5" />
+          </button>
+          <button
+            className="grid size-8 place-items-center rounded-lg text-ink/40 transition-colors hover:bg-ink3 hover:text-ink"
             onClick={() => setEditing(true)}
             aria-label="Edit food"
           >
@@ -204,6 +242,31 @@ function FoodCard({ item, onSaved, onDeleted }: FoodCardProps) {
         {item.carbs_g != null && ` · C ${Math.round(item.carbs_g)}`}
         {item.fat_g != null && ` · F ${Math.round(item.fat_g)}`}
       </div>
+
+      {loggingAgain && (
+        <div className="mt-3 flex items-center gap-2 border-t border-ink/5 pt-3">
+          <input
+            value={quantity}
+            onChange={(e) => setQuantity(e.target.value)}
+            placeholder={item.basis === "per_100g" ? "grams" : "how many"}
+            inputMode="decimal"
+            className={cn(inputClass, "flex-1")}
+            aria-label={item.basis === "per_100g" ? "Grams to log" : "Quantity to log"}
+          />
+          <button
+            className="inline-flex items-center gap-1.5 rounded-xl bg-coral px-4 py-2.5 text-xs font-bold text-white disabled:opacity-60"
+            onClick={handleLogAgain}
+            disabled={busy}
+          >
+            <Check className="size-3.5" /> Log
+          </button>
+        </div>
+      )}
+      {justLogged && (
+        <div className="mt-3 flex items-center gap-1.5 border-t border-ink/5 pt-3 text-xs font-bold text-leaf">
+          <Check className="size-3.5" /> Logged
+        </div>
+      )}
       {error && <div className="mt-2 text-[11px] font-semibold text-coral">{error}</div>}
     </div>
   );

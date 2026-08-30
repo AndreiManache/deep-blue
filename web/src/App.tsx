@@ -146,7 +146,9 @@ export function App() {
         />
       )}
       {view === "profile" && <ProfilePage onBack={() => setView("home")} />}
-      {view === "my-foods" && <MyFoodsPage onBack={() => setView("home")} />}
+      {view === "my-foods" && (
+        <MyFoodsPage onBack={() => setView("home")} onLogged={() => setScanSignal((s) => s + 1)} />
+      )}
       {view === "diagnostics" && (
         <DiagnosticsPage
           events={conversation.diagnostics}

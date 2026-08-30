@@ -60,7 +60,6 @@ Everything below is still open.
 ## Mobile / native shipping
 
 - [ ] **Native / Capacitor migration.** Would fully fix mic permission (one-time OS grant, all browsers) and give reliable speech via Apple's `SFSpeechRecognizer` + explicit audio-session control. Does NOT fix latency by itself. Cost: App Store friction + loss of instant deploy (Capacitor mitigates via OTA JS updates), device toolchains; backend unchanged. Recommended path if web STT ever proves unfixable: **Capacitor** (wraps the existing React app). Don't full-rewrite.
-- [ ] **Ship as a PWA (installable, offline shell).** There's already a `manifest.webmanifest` and icons under `web/public/`; needs verifying/completing the manifest (name, theme/background color, display `standalone`, icon sizes incl. maskable), a service worker for the app-shell (cache the built JS/CSS/HTML so it opens offline and launches fast), and the `<link rel="manifest">` + apple-touch-icon/meta tags in `index.html`. Note: installing as an iOS PWA does **not** reliably persist microphone permission — this is for installability/launch/offline shell, not a mic-prompt fix.
 
 ## Product ideas
 

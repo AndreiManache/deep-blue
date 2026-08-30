@@ -1,9 +1,27 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    // App-shell caching only — precaches the built JS/CSS/HTML/icons so a
+    // repeat launch is instant and doesn't blank-screen on a flaky
+    // connection. Deliberately does NOT cache any API route: /chat,
+    // /entries, /auth etc. must always hit the network fresh (live
+    // conversation state, auth tokens) — see BACKLOG.md's PWA item, this is
+    // an installability/launch-speed win, not offline data sync.
+    VitePWA({
+      registerType: "autoUpdate",
+      manifest: false, // manifest.webmanifest is already hand-authored in public/
+      includeAssets: ["apple-touch-icon.png", "icon-192.png", "icon-512.png"],
+      workbox: {
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+      },
+    }),
+  ],
   server: {
     port: 5173,
     proxy: {

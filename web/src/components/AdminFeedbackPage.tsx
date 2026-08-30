@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { Clipboard, ClipboardCheck, Mic, Trash2 } from "lucide-react";
+import { Check, Clipboard, ClipboardCheck, Mic, Trash2 } from "lucide-react";
 import {
   ApiError,
   deleteFeedbackItem,
   fetchAdminFeedback,
+  setFeedbackResolutionNote,
   setFeedbackStatus,
   transcribeFeedback,
   type FeedbackItem,
@@ -85,6 +86,10 @@ export function AdminFeedbackPage({ onBack }: AdminFeedbackPageProps) {
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, transcript } : i)));
   }
 
+  function handleNoteSaved(id: string, note: string) {
+    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, resolution_note: note } : i)));
+  }
+
   return (
     <div className="flex min-h-dvh flex-col gap-6 px-6 pb-16 pt-5">
       <BackHeader title="Feedback inbox" subtitle={`${items.length} report${items.length === 1 ? "" : "s"}`} onBack={onBack} />
@@ -107,6 +112,7 @@ export function AdminFeedbackPage({ onBack }: AdminFeedbackPageProps) {
             onToggleStatus={() => toggleStatus(item)}
             onDelete={() => handleDelete(item.id)}
             onTranscribed={(text) => handleTranscribed(item.id, text)}
+            onNoteSaved={(note) => handleNoteSaved(item.id, note)}
           />
         ))}
       </div>
@@ -119,14 +125,21 @@ interface FeedbackCardProps {
   onToggleStatus: () => void;
   onDelete: () => void;
   onTranscribed: (transcript: string) => void;
+  onNoteSaved: (note: string) => void;
 }
 
-function FeedbackCard({ item, onToggleStatus, onDelete, onTranscribed }: FeedbackCardProps) {
+function FeedbackCard({ item, onToggleStatus, onDelete, onTranscribed, onNoteSaved }: FeedbackCardProps) {
   const [expandedLog, setExpandedLog] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [transcribeError, setTranscribeError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  // Local draft — only pushed to the server (and up to the parent) on Save,
+  // so typing doesn't refetch/rerender the whole list on every keystroke.
+  const [noteDraft, setNoteDraft] = useState(item.resolution_note ?? "");
+  const [savingNote, setSavingNote] = useState(false);
+  const [noteSaved, setNoteSaved] = useState(false);
+  const [noteError, setNoteError] = useState<string | null>(null);
 
   async function handleTranscribe() {
     if (transcribing) return;
@@ -139,6 +152,22 @@ function FeedbackCard({ item, onToggleStatus, onDelete, onTranscribed }: Feedbac
       setTranscribeError(err instanceof ApiError ? err.message : "Could not transcribe this voice note.");
     } finally {
       setTranscribing(false);
+    }
+  }
+
+  async function handleSaveNote() {
+    if (savingNote) return;
+    setSavingNote(true);
+    setNoteError(null);
+    try {
+      await setFeedbackResolutionNote(item.id, noteDraft.trim() || null);
+      onNoteSaved(noteDraft.trim());
+      setNoteSaved(true);
+      setTimeout(() => setNoteSaved(false), 1500);
+    } catch (err) {
+      setNoteError(err instanceof ApiError ? err.message : "Could not save the note.");
+    } finally {
+      setSavingNote(false);
     }
   }
 
@@ -236,6 +265,29 @@ function FeedbackCard({ item, onToggleStatus, onDelete, onTranscribed }: Feedbac
           )}
         </div>
       )}
+
+      <div className="mt-3 border-t border-ink/5 pt-3">
+        <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-ink/40">
+          Note back to {item.username} — shown on their "My feedback" screen
+        </label>
+        <textarea
+          className="min-h-16 w-full resize-y rounded-xl bg-ink3 px-3 py-2.5 text-sm font-medium text-ink outline-none placeholder:text-ink/35 focus:ring-2 focus:ring-coral/50"
+          placeholder="e.g. “Fixed — should work now, let me know if not.”"
+          value={noteDraft}
+          onChange={(e) => setNoteDraft(e.target.value)}
+        />
+        <div className="mt-2 flex items-center gap-3">
+          <button
+            className="flex items-center gap-1.5 rounded-xl bg-ink px-4 py-2 text-xs font-bold text-cream transition-colors hover:bg-ink/80 disabled:opacity-50"
+            onClick={handleSaveNote}
+            disabled={savingNote || noteDraft.trim() === (item.resolution_note ?? "")}
+          >
+            {noteSaved ? <Check className="size-3.5" /> : null}
+            {savingNote ? "Saving…" : noteSaved ? "Saved" : "Save note"}
+          </button>
+          {noteError && <p className="text-xs font-semibold text-coral">{noteError}</p>}
+        </div>
+      </div>
     </div>
   );
 }

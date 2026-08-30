@@ -351,6 +351,7 @@ export interface FeedbackItem {
   transcript: string | null;
   created_at: string;
   status: string;
+  resolution_note: string | null;
 }
 
 export async function fetchAdminFeedback(): Promise<FeedbackItem[]> {
@@ -366,6 +367,31 @@ export async function setFeedbackStatus(id: string, status: "new" | "reviewed"):
     body: JSON.stringify({ status }),
   });
   if (!res.ok) throw new ApiError("Could not update status.");
+}
+
+export async function setFeedbackResolutionNote(id: string, resolution_note: string | null): Promise<void> {
+  const res = await apiFetch(`/admin/feedback/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ resolution_note }),
+  });
+  if (!res.ok) throw new ApiError("Could not save the note.");
+}
+
+export interface MyFeedbackItem {
+  id: string;
+  message: string | null;
+  transcript: string | null;
+  has_audio: number;
+  created_at: string;
+  status: string;
+  resolution_note: string | null;
+}
+
+export async function fetchMyFeedback(): Promise<MyFeedbackItem[]> {
+  const res = await apiFetch("/feedback/mine");
+  if (!res.ok) throw new ApiError("Could not load your feedback.");
+  return res.json();
 }
 
 export async function deleteFeedbackItem(id: string): Promise<void> {

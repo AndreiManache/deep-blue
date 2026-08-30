@@ -158,6 +158,12 @@ const feedbackColumns = db.prepare(`PRAGMA table_info(feedback)`).all() as { nam
 if (!feedbackColumns.some((col) => col.name === "transcript")) {
   db.exec(`ALTER TABLE feedback ADD COLUMN transcript TEXT;`);
 }
+// Set by an admin when closing a report out — surfaced back to the
+// reporter on the "My Feedback" screen so they can see what happened to
+// what they sent, not just that the inbox marked it "reviewed" (2026-08-29).
+if (!feedbackColumns.some((col) => col.name === "resolution_note")) {
+  db.exec(`ALTER TABLE feedback ADD COLUMN resolution_note TEXT;`);
+}
 
 // One nutrition observation per (food_key, user): that user's best value for a
 // food, normalized to a basis (per 100g, or per one item when grams are

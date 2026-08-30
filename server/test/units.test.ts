@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import type Anthropic from "@anthropic-ai/sdk";
 import type { Interactions } from "@google/genai";
+import { scaleByQuantity } from "../src/foods.js";
 import { computeCompositionNutrition } from "../src/nutrition.js";
 import { repairDanglingFunctionCall, truncateSteps } from "../src/geminiSessions.js";
 import { computeTargets, type UserProfile } from "../src/profile.js";
@@ -238,6 +239,37 @@ describe("validateFoodObservation", () => {
   it("rejects out-of-range calories", () => {
     assert.match(validateFoodObservation({ food_key: "x", basis: "per_100g", calories: -1 })!, /calories/);
     assert.match(validateFoodObservation({ food_key: "x", basis: "per_100g", calories: 5000 })!, /calories/);
+  });
+});
+
+describe("scaleByQuantity", () => {
+  it("per_100g: quantity is grams, scales by grams/100", () => {
+    const perBasis = { calories: 59, protein_g: 10, carbs_g: 4, fat_g: 2 };
+    assert.deepEqual(scaleByQuantity(perBasis, "per_100g", 200), {
+      calories: 118,
+      protein_g: 20,
+      carbs_g: 8,
+      fat_g: 4,
+    });
+  });
+
+  it("per_item: quantity is item count, scales directly (unlike totalFromBasis, which always assumes 1)", () => {
+    const perBasis = { calories: 105, protein_g: 1.3, carbs_g: 27, fat_g: 0.4 };
+    const result = scaleByQuantity(perBasis, "per_item", 3);
+    assert.equal(result.calories, 315);
+    assert.ok(Math.abs(result.protein_g! - 3.9) < 1e-9);
+    assert.equal(result.carbs_g, 81);
+    assert.ok(Math.abs(result.fat_g! - 1.2) < 1e-9);
+  });
+
+  it("null macros stay null rather than becoming 0", () => {
+    const perBasis = { calories: 100, protein_g: null, carbs_g: null, fat_g: null };
+    assert.deepEqual(scaleByQuantity(perBasis, "per_100g", 50), {
+      calories: 50,
+      protein_g: null,
+      carbs_g: null,
+      fat_g: null,
+    });
   });
 });
 

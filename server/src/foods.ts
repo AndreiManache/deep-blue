@@ -85,6 +85,27 @@ export function listUserObservations(userId: string): UserObservation[] {
   return listUserObsStmt.all({ user_id: userId }) as unknown as UserObservation[];
 }
 
+// Single-food lookup for the "log this again" quick action (My Foods
+// screen) — same row recordObservation/resolveNutrition already read via
+// getUserObsStmt, just exposed directly since the caller has one food_key
+// in hand rather than iterating the whole list.
+export function getUserObservation(
+  userId: string,
+  foodKey: string,
+): { basis: Basis; nutrition: Nutrition } | undefined {
+  const row = getUserObsStmt.get(foodKey, userId) as unknown as ObservationRow | undefined;
+  if (!row) return undefined;
+  return {
+    basis: row.basis,
+    nutrition: {
+      calories: row.calories,
+      protein_g: row.protein_g,
+      carbs_g: row.carbs_g,
+      fat_g: row.fat_g,
+    },
+  };
+}
+
 const deleteObsStmt = db.prepare(
   `DELETE FROM food_observations WHERE food_key = :food_key AND user_id = :user_id`,
 );
@@ -156,6 +177,15 @@ export function perBasisFromTotal(
 export function totalFromBasis(perBasis: Nutrition, basis: Basis, grams: number | null): Nutrition {
   if (basis === "per_100g" && grams && grams > 0) return scale(perBasis, grams / 100);
   return { ...perBasis };
+}
+
+// Same idea as totalFromBasis, but for the "log this again" quick action
+// (My Foods screen) where a per_item food can be re-logged more than
+// once at a time — totalFromBasis's per_item branch deliberately always
+// assumes exactly 1 (that's what every existing caller needs), so this is
+// additive rather than a behavior change to it.
+export function scaleByQuantity(perBasis: Nutrition, basis: Basis, quantity: number): Nutrition {
+  return basis === "per_100g" ? scale(perBasis, quantity / 100) : scale(perBasis, quantity);
 }
 
 function median(values: number[]): number {

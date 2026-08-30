@@ -34,9 +34,11 @@ import { createEntry, deleteEntry, getEntriesForDate, updateEntry } from "./entr
 import {
   deleteObservation,
   getFoodDbStats,
+  getUserObservation,
   listUserObservations,
   normalizeFoodKey,
   recordObservation,
+  scaleByQuantity,
   totalFromBasis,
 } from "./foods.js";
 import { lookupBarcode } from "./openfoodfacts.js";
@@ -668,6 +670,43 @@ app.delete("/foods/mine/:foodKey", (req, res) => {
     return;
   }
   res.status(204).end();
+});
+
+// "Log this again" — one tap from the My Foods screen re-logs a remembered
+// food without rescanning/re-describing it (2026-08 backlog item, Andrei:
+// scanned milk two days running and wanted a faster way to pick it again).
+// quantity means grams for a per_100g food, item count for a per_item one —
+// see scaleByQuantity. Always logs as "yours": this *is* the user's own
+// remembered value, the same provenance an edited entry gets.
+app.post("/foods/mine/:foodKey/log", (req, res) => {
+  const userId = res.locals.userId as string;
+  const observation = getUserObservation(userId, req.params.foodKey);
+  if (!observation) {
+    res.status(404).json({ error: "You haven't logged this food before." });
+    return;
+  }
+  const { quantity } = (req.body ?? {}) as { quantity?: unknown };
+  const qty = typeof quantity === "number" && Number.isFinite(quantity) ? quantity : 1;
+  const maxQty = observation.basis === "per_100g" ? 5000 : 50;
+  if (qty <= 0 || qty > maxQty) {
+    res.status(400).json({ error: `quantity must be a number between 0 and ${maxQty}` });
+    return;
+  }
+
+  const total = scaleByQuantity(observation.nutrition, observation.basis, qty);
+  const entry = createEntry(userId, {
+    raw_transcript: "Logged again from My Foods",
+    description: req.params.foodKey,
+    calories: total.calories,
+    protein_g: total.protein_g,
+    carbs_g: total.carbs_g,
+    fat_g: total.fat_g,
+    food_key: req.params.foodKey,
+    grams: observation.basis === "per_100g" ? qty : null,
+    source: "yours",
+    agreement_count: null,
+  });
+  res.json(entry);
 });
 
 app.put("/profile", (req, res) => {

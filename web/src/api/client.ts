@@ -478,6 +478,21 @@ export async function deleteMyFood(foodKey: string): Promise<void> {
   if (!res.ok) throw new ApiError("Could not delete this food.");
 }
 
+// "Log this again" — quantity means grams for a per_100g food, item count
+// for a per_item one (matches the food's own basis, see MyFoodItem.basis).
+export async function logFoodAgain(foodKey: string, quantity: number): Promise<FoodEntry> {
+  const res = await apiFetch(`/foods/mine/${encodeURIComponent(foodKey)}/log`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ quantity }),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new ApiError(data.error ?? "Could not log this food.");
+  }
+  return res.json();
+}
+
 // ---- client-side date helpers -------------------------------------------
 
 // Local day key (YYYY-MM-DD) — server day buckets are computed the same way.

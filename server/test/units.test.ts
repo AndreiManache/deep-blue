@@ -213,6 +213,24 @@ describe("validateEntryPatch", () => {
     assert.match(validateEntryPatch({ description: "   " })!, /description/);
     assert.match(validateEntryPatch({ protein_g: -5 })!, /protein_g/);
   });
+
+  it("accepts a calorie edit with a correction reason and evidence link", () => {
+    assert.equal(
+      validateEntryPatch({
+        calories: 220,
+        correction_reason: "wrong_portion",
+        correction_evidence_url: "https://example.com/label.jpg",
+      }),
+      null,
+    );
+  });
+
+  it("rejects an out-of-enum correction reason", () => {
+    assert.match(
+      validateEntryPatch({ calories: 220, correction_reason: "because_i_said_so" as unknown as string })!,
+      /correction_reason/,
+    );
+  });
 });
 
 describe("truncatePairSafe", () => {

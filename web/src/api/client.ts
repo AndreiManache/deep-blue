@@ -177,7 +177,14 @@ export async function fetchEntries(date?: string): Promise<FoodEntry[]> {
   return res.json();
 }
 
-export async function editEntry(id: string, fields: Partial<Pick<FoodEntry, "description" | "calories">>): Promise<FoodEntry> {
+export type CorrectionReason = "wrong_portion" | "wrong_food" | "has_label" | "skip";
+
+export interface EditEntryFields extends Partial<Pick<FoodEntry, "description" | "calories">> {
+  correction_reason?: CorrectionReason | null;
+  correction_evidence_url?: string | null;
+}
+
+export async function editEntry(id: string, fields: EditEntryFields): Promise<FoodEntry> {
   const res = await apiFetch(`/entries/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -429,6 +436,23 @@ export interface ProvidersSnapshot {
 export async function fetchProviders(): Promise<ProvidersSnapshot> {
   const res = await apiFetch("/admin/providers");
   if (!res.ok) throw new ApiError("Could not load provider info.");
+  return res.json();
+}
+
+export interface CorrectionItem {
+  id: string;
+  username: string;
+  food_key: string | null;
+  old_calories: number;
+  new_calories: number;
+  reason: CorrectionReason | null;
+  evidence_url: string | null;
+  created_at: string;
+}
+
+export async function fetchCorrections(): Promise<CorrectionItem[]> {
+  const res = await apiFetch("/admin/corrections");
+  if (!res.ok) throw new ApiError("Could not load corrections.");
   return res.json();
 }
 

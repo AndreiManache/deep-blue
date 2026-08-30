@@ -5,6 +5,7 @@ import {
   editEntry,
   removeEntry,
   timeLabel,
+  type CorrectionReason,
   type FoodEntry,
 } from "../api/client";
 import { cn } from "../lib/utils";
@@ -18,6 +19,15 @@ interface EntryRowProps {
 const inputClass =
   "w-full rounded-xl bg-white px-3 py-2.5 text-sm font-semibold text-ink shadow-sm ring-1 ring-ink/10 outline-none placeholder:font-medium placeholder:text-ink/30 focus:ring-2 focus:ring-coral/50";
 
+// Quick-select reasons for a calorie edit — see server/src/corrections.ts
+// (CORRECTION_REASONS), same string values on both sides.
+const REASON_CHIPS: { value: CorrectionReason; label: string }[] = [
+  { value: "wrong_portion", label: "Wrong portion size" },
+  { value: "wrong_food", label: "Wrong food or recipe" },
+  { value: "has_label", label: "I have the real label" },
+  { value: "skip", label: "Just a typo, skip this" },
+];
+
 // One logged item with inline edit + delete. Mutations call the API directly
 // and then trigger a refresh via onChanged.
 export function EntryRow({ entry, onChanged, onMutated }: EntryRowProps) {
@@ -29,25 +39,34 @@ export function EntryRow({ entry, onChanged, onMutated }: EntryRowProps) {
     description: entry.description,
     calories: String(entry.calories ?? ""),
   });
+  const [correctionReason, setCorrectionReason] = useState<CorrectionReason | null>(null);
+  const [evidenceUrl, setEvidenceUrl] = useState("");
 
   useEffect(() => {
     setForm({
       description: entry.description,
       calories: String(entry.calories ?? ""),
     });
+    setCorrectionReason(null);
+    setEvidenceUrl("");
     setError(null);
     setConfirmingDelete(false);
   }, [entry]);
+
+  const kcal = Number(form.calories);
+  const caloriesChanged =
+    form.calories.trim() !== "" && !Number.isNaN(kcal) && kcal !== entry.calories;
 
   async function handleSave() {
     if (busy) return;
     setBusy(true);
     setError(null);
     try {
-      const kcal = Number(form.calories);
       await editEntry(entry.id, {
         description: form.description.trim() || entry.description,
-        ...(form.calories.trim() !== "" && !Number.isNaN(kcal) ? { calories: kcal } : {}),
+        ...(caloriesChanged ? { calories: kcal } : {}),
+        ...(caloriesChanged && correctionReason ? { correction_reason: correctionReason } : {}),
+        ...(caloriesChanged && evidenceUrl.trim() ? { correction_evidence_url: evidenceUrl.trim() } : {}),
       });
       setEditing(false);
       onChanged();
@@ -101,6 +120,34 @@ export function EntryRow({ entry, onChanged, onMutated }: EntryRowProps) {
               className={inputClass}
               aria-label="Calories"
             />
+            {caloriesChanged && (
+              <div className="space-y-1.5">
+                <div className="flex flex-wrap gap-1.5">
+                  {REASON_CHIPS.map((chip) => (
+                    <button
+                      key={chip.value}
+                      type="button"
+                      className={cn(
+                        "rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors",
+                        correctionReason === chip.value
+                          ? "bg-coral text-white"
+                          : "bg-white text-ink/50 ring-1 ring-ink/10 hover:bg-ink3",
+                      )}
+                      onClick={() => setCorrectionReason((r) => (r === chip.value ? null : chip.value))}
+                    >
+                      {chip.label}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  value={evidenceUrl}
+                  onChange={(e) => setEvidenceUrl(e.target.value)}
+                  placeholder="Link to a label or menu (optional)"
+                  className={inputClass}
+                  aria-label="Evidence link"
+                />
+              </div>
+            )}
             {error && (
               <div className="rounded-xl bg-coral/10 px-3 py-2 text-xs font-semibold text-coral">
                 {error}

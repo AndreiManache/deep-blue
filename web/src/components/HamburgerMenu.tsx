@@ -1,6 +1,14 @@
 import { useState } from "react";
 
-export type MenuView = "dashboard" | "profile" | "diagnostics" | "feedback" | "my-feedback" | "admin" | "providers";
+export type MenuView =
+  | "dashboard"
+  | "profile"
+  | "diagnostics"
+  | "feedback"
+  | "my-feedback"
+  | "admin"
+  | "corrections"
+  | "providers";
 
 interface HamburgerMenuProps {
   onNavigate: (view: MenuView) => void;
@@ -73,6 +81,14 @@ export function HamburgerMenu({ onNavigate, onLogout, isAdmin, language }: Hambu
                 onClick={() => go("admin")}
               >
                 Feedback inbox
+              </button>
+            )}
+            {isAdmin && (
+              <button
+                className="block w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-ink transition-colors hover:bg-ink3"
+                onClick={() => go("corrections")}
+              >
+                Corrections
               </button>
             )}
             {isAdmin && (

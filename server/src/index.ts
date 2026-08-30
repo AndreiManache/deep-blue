@@ -30,6 +30,7 @@ import {
   TTS_PROVIDER,
   USERNAME,
 } from "./config.js";
+import { listCorrections } from "./corrections.js";
 import { createEntry, deleteEntry, getEntriesForDate, updateEntry } from "./entries.js";
 import { getFoodDbStats, normalizeFoodKey, recordObservation, totalFromBasis } from "./foods.js";
 import { lookupBarcode } from "./openfoodfacts.js";
@@ -315,6 +316,11 @@ app.get("/admin/providers", (_req, res) => {
 
 app.get("/admin/feedback", (_req, res) => {
   res.json(listFeedback());
+});
+
+// Audit trail of calorie edits with a reason/evidence — see corrections.ts.
+app.get("/admin/corrections", (_req, res) => {
+  res.json(listCorrections());
 });
 
 // Accepts status and/or resolution_note independently — an admin can leave

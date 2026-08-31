@@ -263,10 +263,17 @@ export function resolveNutrition(
   if (mine && mine.basis === basis) {
     return {
       nutrition: {
+        // Calories is the one field "yours" exists to protect (a value
+        // this user has already corrected or confirmed), so it's never
+        // overridden. A macro that's null on the remembered value (e.g.
+        // an earlier turn where the model didn't estimate carbs/fat) is
+        // backfilled from this turn's fresh estimate instead of staying
+        // null forever — otherwise one incomplete first log permanently
+        // caps every future log of that food at the same missing data.
         calories: mine.calories,
-        protein_g: mine.protein_g,
-        carbs_g: mine.carbs_g,
-        fat_g: mine.fat_g,
+        protein_g: mine.protein_g ?? modelNutrition.protein_g ?? null,
+        carbs_g: mine.carbs_g ?? modelNutrition.carbs_g ?? null,
+        fat_g: mine.fat_g ?? modelNutrition.fat_g ?? null,
       },
       source: "yours",
       agreementCount: null,

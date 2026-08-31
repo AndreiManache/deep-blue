@@ -15,10 +15,19 @@ export default defineConfig({
     // an installability/launch-speed win, not offline data sync.
     VitePWA({
       registerType: "autoUpdate",
+      // Registered manually in main.tsx instead — the auto-injected
+      // registerSW.js only calls navigator.serviceWorker.register() with no
+      // update-reload logic, so a new deploy's service worker takes over
+      // control in the background (skipWaiting+clientsClaim below) without
+      // ever telling an already-open tab to reload and actually fetch the
+      // new JS/CSS it's now supposed to be serving.
+      injectRegister: false,
       manifest: false, // manifest.webmanifest is already hand-authored in public/
       includeAssets: ["apple-touch-icon.png", "icon-192.png", "icon-512.png"],
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        skipWaiting: true,
+        clientsClaim: true,
       },
     }),
   ],

@@ -1,6 +1,15 @@
 import { useState } from "react";
 
-export type MenuView = "dashboard" | "profile" | "diagnostics" | "feedback" | "my-feedback" | "admin" | "providers";
+export type MenuView =
+  | "dashboard"
+  | "profile"
+  | "my-foods"
+  | "diagnostics"
+  | "feedback"
+  | "my-feedback"
+  | "admin"
+  | "corrections"
+  | "providers";
 
 interface HamburgerMenuProps {
   onNavigate: (view: MenuView) => void;
@@ -16,6 +25,7 @@ function getItems(language: "en" | "ro" | null | undefined) {
   return [
     { to: "dashboard", label: language === "ro" ? "Jurnal alimentar" : "Dashboard" },
     { to: "profile", label: "Profile" },
+    { to: "my-foods", label: "My Foods" },
     { to: "diagnostics", label: "Diagnostics" },
     { to: "feedback", label: "Send feedback" },
     { to: "my-feedback", label: "My feedback" },
@@ -73,6 +83,14 @@ export function HamburgerMenu({ onNavigate, onLogout, isAdmin, language }: Hambu
                 onClick={() => go("admin")}
               >
                 Feedback inbox
+              </button>
+            )}
+            {isAdmin && (
+              <button
+                className="block w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-ink transition-colors hover:bg-ink3"
+                onClick={() => go("corrections")}
+              >
+                Corrections
               </button>
             )}
             {isAdmin && (

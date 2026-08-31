@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { fetchMe, fetchProfile, getStoredToken, logout as logoutRequest, SESSION_INVALIDATED_EVENT } from "./api/client";
+import { AdminCorrectionsPage } from "./components/AdminCorrectionsPage";
 import { AdminFeedbackPage } from "./components/AdminFeedbackPage";
 import { AuthGate } from "./components/AuthGate";
 import { BarcodeScanner } from "./components/BarcodeScanner";
@@ -7,12 +8,24 @@ import { Dashboard } from "./components/Dashboard";
 import { DiagnosticsPage } from "./components/DiagnosticsPage";
 import { FeedbackPage } from "./components/FeedbackPage";
 import { MyFeedbackPage } from "./components/MyFeedbackPage";
+import { MyFoodsPage } from "./components/MyFoodsPage";
 import { HomeScreen } from "./components/HomeScreen";
 import { ProfilePage } from "./components/ProfilePage";
 import { ProvidersPage } from "./components/ProvidersPage";
 import { useConversation, type Phase } from "./conversation/useConversation";
 
-type View = "home" | "dashboard" | "profile" | "diagnostics" | "feedback" | "my-feedback" | "admin" | "providers" | "scan";
+type View =
+  | "home"
+  | "dashboard"
+  | "profile"
+  | "my-foods"
+  | "diagnostics"
+  | "feedback"
+  | "my-feedback"
+  | "admin"
+  | "corrections"
+  | "providers"
+  | "scan";
 
 // Menu visibility only — the real gate is server-side (ADMIN_USERNAMES on
 // /admin/*). Comma-separated to match the server's env var shape.
@@ -135,6 +148,9 @@ export function App() {
         />
       )}
       {view === "profile" && <ProfilePage onBack={() => setView("home")} />}
+      {view === "my-foods" && (
+        <MyFoodsPage onBack={() => setView("home")} onLogged={() => setScanSignal((s) => s + 1)} />
+      )}
       {view === "diagnostics" && (
         <DiagnosticsPage
           events={conversation.diagnostics}
@@ -147,6 +163,7 @@ export function App() {
       )}
       {view === "my-feedback" && <MyFeedbackPage onBack={() => setView("home")} />}
       {view === "admin" && <AdminFeedbackPage onBack={() => setView("home")} />}
+      {view === "corrections" && <AdminCorrectionsPage onBack={() => setView("home")} />}
       {view === "providers" && <ProvidersPage onBack={() => setView("home")} />}
 
       {pillLabel && (

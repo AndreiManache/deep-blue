@@ -3,13 +3,15 @@ import { describe, it } from "node:test";
 
 import type Anthropic from "@anthropic-ai/sdk";
 import type { Interactions } from "@google/genai";
+import { scaleByQuantity } from "../src/foods.js";
 import { computeCompositionNutrition } from "../src/nutrition.js";
 import { repairDanglingFunctionCall, truncateSteps } from "../src/geminiSessions.js";
 import { computeTargets, type UserProfile } from "../src/profile.js";
 import { repairDanglingToolUse, truncatePairSafe } from "../src/sessions.js";
 import { MAX_HISTORY_TURNS } from "../src/config.js";
 import { anthropicTools, geminiTools, toolDefs } from "../src/tools.js";
-import { validateEntryPatch, validateProfileInput } from "../src/validation.js";
+import { unitPrice } from "../src/usageCost.js";
+import { validateEntryPatch, validateFoodObservation, validateProfileInput } from "../src/validation.js";
 
 // Every field computeTargets doesn't care about for a given case still has to
 // be present to satisfy UserProfile — this is the base a test overrides.
@@ -212,6 +214,116 @@ describe("validateEntryPatch", () => {
     assert.match(validateEntryPatch({ calories: "abc" as unknown as number })!, /calories/);
     assert.match(validateEntryPatch({ description: "   " })!, /description/);
     assert.match(validateEntryPatch({ protein_g: -5 })!, /protein_g/);
+  });
+
+  it("accepts a calorie edit with a correction reason and evidence link", () => {
+    assert.equal(
+      validateEntryPatch({
+        calories: 220,
+        correction_reason: "wrong_portion",
+        correction_evidence_url: "https://example.com/label.jpg",
+      }),
+      null,
+    );
+  });
+
+  it("rejects an out-of-enum correction reason", () => {
+    assert.match(
+      validateEntryPatch({ calories: 220, correction_reason: "because_i_said_so" as unknown as string })!,
+      /correction_reason/,
+    );
+  });
+});
+
+describe("validateFoodObservation", () => {
+  it("accepts a normal entry", () => {
+    assert.equal(
+      validateFoodObservation({ food_key: "greek yogurt", basis: "per_100g", calories: 59, protein_g: 10 }),
+      null,
+    );
+  });
+
+  it("rejects a missing/empty food_key", () => {
+    assert.match(validateFoodObservation({ basis: "per_100g", calories: 59 })!, /food_key/);
+    assert.match(validateFoodObservation({ food_key: "   ", basis: "per_100g", calories: 59 })!, /food_key/);
+  });
+
+  it("rejects an out-of-enum basis", () => {
+    assert.match(
+      validateFoodObservation({ food_key: "x", basis: "per_kg" as unknown as string, calories: 59 })!,
+      /basis/,
+    );
+  });
+
+  it("rejects out-of-range calories", () => {
+    assert.match(validateFoodObservation({ food_key: "x", basis: "per_100g", calories: -1 })!, /calories/);
+    assert.match(validateFoodObservation({ food_key: "x", basis: "per_100g", calories: 5000 })!, /calories/);
+  });
+});
+
+describe("scaleByQuantity", () => {
+  it("per_100g: quantity is grams, scales by grams/100", () => {
+    const perBasis = { calories: 59, protein_g: 10, carbs_g: 4, fat_g: 2 };
+    assert.deepEqual(scaleByQuantity(perBasis, "per_100g", 200), {
+      calories: 118,
+      protein_g: 20,
+      carbs_g: 8,
+      fat_g: 4,
+    });
+  });
+
+  it("per_item: quantity is item count, scales directly (unlike totalFromBasis, which always assumes 1)", () => {
+    const perBasis = { calories: 105, protein_g: 1.3, carbs_g: 27, fat_g: 0.4 };
+    const result = scaleByQuantity(perBasis, "per_item", 3);
+    assert.equal(result.calories, 315);
+    assert.ok(Math.abs(result.protein_g! - 3.9) < 1e-9);
+    assert.equal(result.carbs_g, 81);
+    assert.ok(Math.abs(result.fat_g! - 1.2) < 1e-9);
+  });
+
+  it("null macros stay null rather than becoming 0", () => {
+    const perBasis = { calories: 100, protein_g: null, carbs_g: null, fat_g: null };
+    assert.deepEqual(scaleByQuantity(perBasis, "per_100g", 50), {
+      calories: 50,
+      protein_g: null,
+      carbs_g: null,
+      fat_g: null,
+    });
+  });
+});
+
+describe("unitPrice (usage cost estimate)", () => {
+  it("matches the researched reference rates for LLM tokens", () => {
+    // Claude Haiku 4.5: $1/$5 per MTok input/output (platform.claude.com/docs, checked 2026-08-31)
+    assert.equal(unitPrice("anthropic", "llm_input_tokens") * 1_000_000, 1);
+    assert.equal(unitPrice("anthropic", "llm_output_tokens") * 1_000_000, 5);
+    // Gemini 3.5 Flash-Lite: $0.30/$2.50 per MTok input/output (ai.google.dev/gemini-api/docs/pricing)
+    assert.equal(unitPrice("gemini", "llm_input_tokens") * 1_000_000, 0.3);
+    assert.equal(unitPrice("gemini", "llm_output_tokens") * 1_000_000, 2.5);
+  });
+
+  it("matches the researched reference rates for TTS characters", () => {
+    // Murf Falcon 2: $10/M chars (murf.ai/falcon)
+    assert.equal(unitPrice("murf", "tts_chars") * 1_000_000, 10);
+    // ElevenLabs Flash/Turbo v2.5: $50/M chars ($0.05/1000 chars)
+    assert.equal(unitPrice("elevenlabs", "tts_chars") * 1_000_000, 50);
+  });
+
+  it("returns 0 for a provider/kind combination that doesn't apply", () => {
+    // Murf never does STT, Smallest AI never does LLM or TTS — no rate configured.
+    assert.equal(unitPrice("murf", "stt_bytes"), 0);
+    assert.equal(unitPrice("smallestai", "llm_input_tokens"), 0);
+  });
+
+  it("every configured rate is positive and finite", () => {
+    const providers = ["anthropic", "gemini", "murf", "elevenlabs", "smallestai"] as const;
+    const kinds = ["llm_input_tokens", "llm_output_tokens", "tts_chars", "stt_bytes"] as const;
+    for (const provider of providers) {
+      for (const kind of kinds) {
+        const price = unitPrice(provider, kind);
+        assert.ok(Number.isFinite(price) && price >= 0, `${provider}/${kind} should be a finite, non-negative rate`);
+      }
+    }
   });
 });
 

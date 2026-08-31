@@ -177,7 +177,14 @@ export async function fetchEntries(date?: string): Promise<FoodEntry[]> {
   return res.json();
 }
 
-export async function editEntry(id: string, fields: Partial<Pick<FoodEntry, "description" | "calories">>): Promise<FoodEntry> {
+export type CorrectionReason = "wrong_portion" | "wrong_food" | "has_label" | "skip";
+
+export interface EditEntryFields extends Partial<Pick<FoodEntry, "description" | "calories">> {
+  correction_reason?: CorrectionReason | null;
+  correction_evidence_url?: string | null;
+}
+
+export async function editEntry(id: string, fields: EditEntryFields): Promise<FoodEntry> {
   const res = await apiFetch(`/entries/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -452,6 +459,104 @@ export interface ProvidersSnapshot {
 export async function fetchProviders(): Promise<ProvidersSnapshot> {
   const res = await apiFetch("/admin/providers");
   if (!res.ok) throw new ApiError("Could not load provider info.");
+  return res.json();
+}
+
+export interface UsageBreakdownRow {
+  provider: string;
+  kind: string;
+  amount: number;
+  estimated_cost_usd: number;
+}
+
+export interface UsageSummary {
+  today: UsageBreakdownRow[];
+  today_total_usd: number;
+  this_month: UsageBreakdownRow[];
+  this_month_total_usd: number;
+}
+
+export async function fetchUsageSummary(): Promise<UsageSummary> {
+  const res = await apiFetch("/stats/usage");
+  if (!res.ok) throw new ApiError("Could not load usage.");
+  return res.json();
+}
+
+export type FoodBasis = "per_100g" | "per_item";
+
+export interface MyFoodItem {
+  food_key: string;
+  basis: FoodBasis;
+  calories: number;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  source: "estimate" | "correction";
+  updated_at: string;
+}
+
+export async function fetchMyFoods(): Promise<MyFoodItem[]> {
+  const res = await apiFetch("/foods/mine");
+  if (!res.ok) throw new ApiError("Could not load your foods.");
+  return res.json();
+}
+
+export interface UpsertMyFoodInput {
+  food_key: string;
+  basis: FoodBasis;
+  calories: number;
+  protein_g?: number | null;
+  carbs_g?: number | null;
+  fat_g?: number | null;
+}
+
+export async function upsertMyFood(input: UpsertMyFoodInput): Promise<MyFoodItem> {
+  const res = await apiFetch("/foods/mine", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new ApiError(data.error ?? "Could not save this food.");
+  }
+  return res.json();
+}
+
+export async function deleteMyFood(foodKey: string): Promise<void> {
+  const res = await apiFetch(`/foods/mine/${encodeURIComponent(foodKey)}`, { method: "DELETE" });
+  if (!res.ok) throw new ApiError("Could not delete this food.");
+}
+
+// "Log this again" — quantity means grams for a per_100g food, item count
+// for a per_item one (matches the food's own basis, see MyFoodItem.basis).
+export async function logFoodAgain(foodKey: string, quantity: number): Promise<FoodEntry> {
+  const res = await apiFetch(`/foods/mine/${encodeURIComponent(foodKey)}/log`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ quantity }),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new ApiError(data.error ?? "Could not log this food.");
+  }
+  return res.json();
+}
+
+export interface CorrectionItem {
+  id: string;
+  username: string;
+  food_key: string | null;
+  old_calories: number;
+  new_calories: number;
+  reason: CorrectionReason | null;
+  evidence_url: string | null;
+  created_at: string;
+}
+
+export async function fetchCorrections(): Promise<CorrectionItem[]> {
+  const res = await apiFetch("/admin/corrections");
+  if (!res.ok) throw new ApiError("Could not load corrections.");
   return res.json();
 }
 

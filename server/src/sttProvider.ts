@@ -1,6 +1,7 @@
 import { SMALLESTAI_API_KEY } from "./config.js";
 import { SttNotConfiguredError, transcribeAudio as transcribeElevenLabs, type TranscriptionResult } from "./stt.js";
 import { transcribeAudio as transcribeSmallest } from "./sttSmallest.js";
+import { logUsage } from "./usageLog.js";
 
 export { SttNotConfiguredError };
 export type { TranscriptionResult };
@@ -20,16 +21,20 @@ export type { TranscriptionResult };
 export async function transcribeAudio(
   audio: Buffer,
   mimeType: string,
+  userId: string,
   languageCode?: string,
 ): Promise<TranscriptionResult> {
   if (languageCode !== "ro" && SMALLESTAI_API_KEY) {
     try {
       const result = await transcribeSmallest(audio);
       console.log("[sttProvider] transcribed via Smallest AI Pulse Pro");
+      logUsage(userId, "smallestai", "stt_bytes", audio.byteLength);
       return { text: result.text, language_code: "en" };
     } catch (err) {
       console.error("[sttProvider] Smallest AI failed, falling back to ElevenLabs:", err);
     }
   }
-  return transcribeElevenLabs(audio, mimeType, languageCode);
+  const result = await transcribeElevenLabs(audio, mimeType, languageCode);
+  logUsage(userId, "elevenlabs", "stt_bytes", audio.byteLength);
+  return result;
 }

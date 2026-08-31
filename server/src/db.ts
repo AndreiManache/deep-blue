@@ -204,3 +204,47 @@ db.exec(`
     PRIMARY KEY (food_key, user_id)
   );
 `);
+
+// One row per provider call — the raw material for the in-app cost tracker
+// (2026-08 backlog item) and per-user usage visibility. kind's unit varies by
+// what that provider actually bills on: 'llm_input_tokens'/'llm_output_tokens'
+// (split, not summed — priced 4-5x apart), 'tts_chars' (characters
+// synthesized), 'stt_bytes' (raw audio bytes sent — not seconds, since none
+// of the STT providers' responses report duration and decoding compressed
+// audio just to estimate cost isn't worth the complexity/risk; usageCost.ts
+// converts bytes to an estimated minute count). Written by usageLog.ts,
+// which swallows its own errors — logging usage must never be able to break
+// the actual user-facing turn.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS usage_log (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    provider TEXT NOT NULL,     -- 'anthropic' | 'gemini' | 'murf' | 'elevenlabs' | 'smallestai'
+    kind TEXT NOT NULL,         -- 'llm_input_tokens' | 'llm_output_tokens' | 'tts_chars' | 'stt_bytes'
+    amount REAL NOT NULL,
+    created_at TEXT NOT NULL
+  );
+`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_usage_log_user_created ON usage_log (user_id, created_at);`);
+
+// Audit trail for calorie edits (2026-08-27 backlog item: "entry-correction
+// capture with reason + evidence"). food_observations already tracks *what*
+// a user's corrected value is (feeds the consensus math); this tracks *why*
+// a given edit happened, so an admin reviewing the food knowledge base can
+// tell a mis-portioned guess from a genuinely ambiguous food from a typo,
+// and "5 people agree" can eventually be weighted by how many of those
+// corrections actually carried a reason/evidence link. Purely additive —
+// doesn't touch food_observations or food_entries.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS entry_corrections (
+    id TEXT PRIMARY KEY,
+    entry_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    food_key TEXT,
+    old_calories INTEGER NOT NULL,
+    new_calories INTEGER NOT NULL,
+    reason TEXT,
+    evidence_url TEXT,
+    created_at TEXT NOT NULL
+  );
+`);

@@ -38,3 +38,21 @@ export async function transcribeAudio(
   logUsage(userId, "elevenlabs", "stt_bytes", audio.byteLength);
   return result;
 }
+
+// Feedback voice notes skip the fast-path split above entirely. That split
+// exists to keep the live conversation loop fast, and trades away Romanian
+// accuracy for it (Smallest AI is English-only) — a tradeoff that only makes
+// sense when the reporter's profile language is a reliable signal, which it
+// isn't (Maria's is set to "en" even though she reports in Romanian). A
+// feedback voice note isn't in that latency-sensitive loop, so there's no
+// reason to take the same risk: always go straight to ElevenLabs Scribe,
+// which auto-detects the language.
+export async function transcribeFeedbackAudio(
+  audio: Buffer,
+  mimeType: string,
+  userId: string,
+): Promise<TranscriptionResult> {
+  const result = await transcribeElevenLabs(audio, mimeType);
+  logUsage(userId, "elevenlabs", "stt_bytes", audio.byteLength);
+  return result;
+}

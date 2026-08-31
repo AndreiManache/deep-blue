@@ -7,7 +7,7 @@ import {
   setFeedbackTranscript,
 } from "./feedback.js";
 import { summarizeFeedback } from "./feedbackSummary.js";
-import { transcribeAudio } from "./sttProvider.js";
+import { transcribeFeedbackAudio } from "./sttProvider.js";
 
 // Automatically gives every feedback report an AI-generated title + short
 // description (2026-08-31, requested explicitly — supersedes the earlier
@@ -15,10 +15,12 @@ import { transcribeAudio } from "./sttProvider.js";
 //
 // The title/summary come from the report's own text: the typed message for a
 // written report, or — for a voice note — its transcript, which we produce
-// first (the same ElevenLabs/Smallest path the admin "Transcribe" button
-// uses). Runs in the background so submitting feedback stays instant, and is
-// idempotent: a report that already has a title is skipped, so this is safe
-// to call repeatedly.
+// first (the same ElevenLabs Scribe path the admin "Transcribe" button uses
+// — see transcribeFeedbackAudio in sttProvider.ts for why feedback always
+// uses Scribe directly instead of the live-conversation STT split). Runs in
+// the background so submitting feedback stays instant, and is idempotent: a
+// report that already has a title is skipped, so this is safe to call
+// repeatedly.
 
 // Make one report's title/summary exist. No-op if it already has a title, or
 // if there's genuinely nothing to summarize (an image-only report). Never
@@ -36,7 +38,7 @@ export async function ensureFeedbackTitle(id: string): Promise<void> {
     const audio = getFeedbackAudio(id);
     if (audio?.audio_base64) {
       try {
-        const result = await transcribeAudio(
+        const result = await transcribeFeedbackAudio(
           Buffer.from(audio.audio_base64, "base64"),
           audio.audio_mime ?? "audio/mp4",
           meta.user_id,

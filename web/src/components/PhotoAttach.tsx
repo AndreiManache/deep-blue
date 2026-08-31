@@ -58,7 +58,6 @@ export function PhotoAttach({ image, onAttach, onClear }: PhotoAttachProps) {
         ref={inputRef}
         type="file"
         accept="image/*"
-        capture="environment"
         className="hidden"
         onChange={handleFile}
       />

@@ -3,6 +3,7 @@ import { useState } from "react";
 export type MenuView =
   | "dashboard"
   | "profile"
+  | "my-foods"
   | "diagnostics"
   | "feedback"
   | "my-feedback"
@@ -24,6 +25,7 @@ function getItems(language: "en" | "ro" | null | undefined) {
   return [
     { to: "dashboard", label: language === "ro" ? "Jurnal alimentar" : "Dashboard" },
     { to: "profile", label: "Profile" },
+    { to: "my-foods", label: "My Foods" },
     { to: "diagnostics", label: "Diagnostics" },
     { to: "feedback", label: "Send feedback" },
     { to: "my-feedback", label: "My feedback" },

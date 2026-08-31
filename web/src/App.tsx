@@ -8,6 +8,7 @@ import { Dashboard } from "./components/Dashboard";
 import { DiagnosticsPage } from "./components/DiagnosticsPage";
 import { FeedbackPage } from "./components/FeedbackPage";
 import { MyFeedbackPage } from "./components/MyFeedbackPage";
+import { MyFoodsPage } from "./components/MyFoodsPage";
 import { HomeScreen } from "./components/HomeScreen";
 import { ProfilePage } from "./components/ProfilePage";
 import { ProvidersPage } from "./components/ProvidersPage";
@@ -17,6 +18,7 @@ type View =
   | "home"
   | "dashboard"
   | "profile"
+  | "my-foods"
   | "diagnostics"
   | "feedback"
   | "my-feedback"
@@ -146,6 +148,9 @@ export function App() {
         />
       )}
       {view === "profile" && <ProfilePage onBack={() => setView("home")} />}
+      {view === "my-foods" && (
+        <MyFoodsPage onBack={() => setView("home")} onLogged={() => setScanSignal((s) => s + 1)} />
+      )}
       {view === "diagnostics" && (
         <DiagnosticsPage
           events={conversation.diagnostics}

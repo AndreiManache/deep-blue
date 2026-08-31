@@ -70,20 +70,22 @@ export interface MyFeedbackRow {
   status: string;
   resolution_note: string | null;
   title: string | null;
+  summary: string | null;
   image_base64: string | null;
   image_mime: string | null;
 }
 
 // The reporter's own view (2026-08-29's "My Feedback" screen) — no
-// admin-only fields (log_snapshot, raw audio, summary — the one-sentence
-// summary is for admin triage, the title alone is enough to tell reports
-// apart here) since this is read-only and scoped to their own submissions;
-// has_audio is enough to show "voice note attached" without shipping the
-// blob back down. The photo IS included, unlike audio — already small
-// after client-side resize, and unlike a raw recording it's cheap to just
-// show back to the reporter so they can confirm what they attached.
+// admin-only fields (log_snapshot, raw audio) since this is read-only and
+// scoped to their own submissions; has_audio is enough to show "voice note
+// attached" without shipping the blob back down. summary IS included
+// (2026-08-31, card redesign) — the reporter's own card now shows title +
+// short description, same as the admin inbox. The photo is included too,
+// unlike audio — already small after client-side resize, and unlike a raw
+// recording it's cheap to just show back to the reporter so they can
+// confirm what they attached.
 const listForUserStmt = db.prepare(`
-  SELECT id, message, transcript, (audio_base64 IS NOT NULL) AS has_audio, created_at, status, resolution_note, title, image_base64, image_mime
+  SELECT id, message, transcript, (audio_base64 IS NOT NULL) AS has_audio, created_at, status, resolution_note, title, summary, image_base64, image_mime
     FROM feedback
    WHERE user_id = :user_id
    ORDER BY created_at DESC
@@ -95,7 +97,11 @@ export function listFeedbackForUser(userId: string): MyFeedbackRow[] {
 
 const updateStatusStmt = db.prepare(`UPDATE feedback SET status = :status WHERE id = :id`);
 
-export function setFeedbackStatus(id: string, status: "new" | "reviewed"): boolean {
+// 'completed' (2026-08-31) is the explicit "Andrei marked this fixed"
+// signal that moves a report into the reporter's collapsed "Fixed issues"
+// section — distinct from 'reviewed', which is just admin-side triage
+// bookkeeping and doesn't necessarily mean the issue was resolved.
+export function setFeedbackStatus(id: string, status: "new" | "reviewed" | "completed"): boolean {
   const result = updateStatusStmt.run({ id, status });
   return Number(result.changes) > 0;
 }

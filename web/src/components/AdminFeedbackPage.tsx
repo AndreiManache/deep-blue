@@ -65,8 +65,11 @@ export function AdminFeedbackPage({ onBack }: AdminFeedbackPageProps) {
       .finally(() => setLoading(false));
   }, []);
 
+  // Cycles new -> reviewed -> completed -> new. 'completed' is the explicit
+  // "fixed, tell the reporter" signal — it's what moves the report into
+  // their collapsed "Fixed issues" section (see MyFeedbackPage.tsx).
   async function toggleStatus(item: FeedbackItem) {
-    const next = item.status === "new" ? "reviewed" : "new";
+    const next = item.status === "new" ? "reviewed" : item.status === "reviewed" ? "completed" : "new";
     setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, status: next } : i)));
     try {
       await setFeedbackStatus(item.id, next);
@@ -234,11 +237,13 @@ function FeedbackCard({ item, onToggleStatus, onDelete, onTranscribed, onNoteSav
               "rounded-full px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide transition-colors",
               item.status === "new"
                 ? "bg-coral/10 text-coral hover:bg-coral/20"
-                : "bg-ink3 text-ink/40 hover:bg-ink/10",
+                : item.status === "completed"
+                  ? "bg-leaf/15 text-leaf hover:bg-leaf/25"
+                  : "bg-ink3 text-ink/40 hover:bg-ink/10",
             )}
             onClick={onToggleStatus}
           >
-            {item.status === "new" ? "New" : "Reviewed"}
+            {item.status === "new" ? "New" : item.status === "completed" ? "Completed" : "Reviewed"}
           </button>
           <button
             className="grid size-8 place-items-center rounded-full text-ink/40 transition-colors hover:bg-coral/10 hover:text-coral"

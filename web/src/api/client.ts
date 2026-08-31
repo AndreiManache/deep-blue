@@ -373,7 +373,7 @@ export async function fetchAdminFeedback(): Promise<FeedbackItem[]> {
   return res.json();
 }
 
-export async function setFeedbackStatus(id: string, status: "new" | "reviewed"): Promise<void> {
+export async function setFeedbackStatus(id: string, status: "new" | "reviewed" | "completed"): Promise<void> {
   const res = await apiFetch(`/admin/feedback/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -400,6 +400,7 @@ export interface MyFeedbackItem {
   status: string;
   resolution_note: string | null;
   title: string | null;
+  summary: string | null;
   image_base64: string | null;
   image_mime: string | null;
 }

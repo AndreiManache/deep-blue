@@ -75,6 +75,13 @@ export function MyFeedbackPage({ onBack }: MyFeedbackPageProps) {
               </span>
             </div>
             <p className="mt-2 text-sm font-medium leading-relaxed text-ink/80">{summaryFor(item)}</p>
+            {item.image_base64 && (
+              <img
+                src={`data:${item.image_mime ?? "image/jpeg"};base64,${item.image_base64}`}
+                alt="Attached to this report"
+                className="mt-3 max-h-48 w-full rounded-xl bg-ink3 object-contain"
+              />
+            )}
             {item.resolution_note && (
               <div className="mt-3 rounded-xl bg-sky/10 px-3 py-2.5">
                 <div className="text-[11px] font-bold uppercase tracking-wide text-sky">From Andrei</div>

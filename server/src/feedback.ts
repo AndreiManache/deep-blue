@@ -6,11 +6,13 @@ export interface CreateFeedbackInput {
   audio_base64: string | null;
   audio_mime: string | null;
   log_snapshot: string | null;
+  image_base64: string | null;
+  image_mime: string | null;
 }
 
 const insertStmt = db.prepare(`
-  INSERT INTO feedback (id, user_id, message, audio_base64, audio_mime, log_snapshot, created_at, status)
-  VALUES (:id, :user_id, :message, :audio_base64, :audio_mime, :log_snapshot, :created_at, 'new')
+  INSERT INTO feedback (id, user_id, message, audio_base64, audio_mime, log_snapshot, image_base64, image_mime, created_at, status)
+  VALUES (:id, :user_id, :message, :audio_base64, :audio_mime, :log_snapshot, :image_base64, :image_mime, :created_at, 'new')
 `);
 
 export function createFeedback(userId: string, input: CreateFeedbackInput): string {
@@ -22,6 +24,8 @@ export function createFeedback(userId: string, input: CreateFeedbackInput): stri
     audio_base64: input.audio_base64,
     audio_mime: input.audio_mime,
     log_snapshot: input.log_snapshot,
+    image_base64: input.image_base64,
+    image_mime: input.image_mime,
     created_at: new Date().toISOString(),
   });
   return id;
@@ -40,12 +44,14 @@ export interface FeedbackRow {
   resolution_note: string | null;
   title: string | null;
   summary: string | null;
+  image_base64: string | null;
+  image_mime: string | null;
 }
 
 // Newest first — that's what an admin triaging a small trickle of reports
 // wants to see.
 const listStmt = db.prepare(`
-  SELECT f.id, u.username, f.message, f.audio_base64, f.audio_mime, f.log_snapshot, f.transcript, f.created_at, f.status, f.resolution_note, f.title, f.summary
+  SELECT f.id, u.username, f.message, f.audio_base64, f.audio_mime, f.log_snapshot, f.transcript, f.created_at, f.status, f.resolution_note, f.title, f.summary, f.image_base64, f.image_mime
     FROM feedback f
     JOIN users u ON u.id = f.user_id
    ORDER BY f.created_at DESC
@@ -64,6 +70,8 @@ export interface MyFeedbackRow {
   status: string;
   resolution_note: string | null;
   title: string | null;
+  image_base64: string | null;
+  image_mime: string | null;
 }
 
 // The reporter's own view (2026-08-29's "My Feedback" screen) — no
@@ -71,9 +79,11 @@ export interface MyFeedbackRow {
 // summary is for admin triage, the title alone is enough to tell reports
 // apart here) since this is read-only and scoped to their own submissions;
 // has_audio is enough to show "voice note attached" without shipping the
-// blob back down.
+// blob back down. The photo IS included, unlike audio — already small
+// after client-side resize, and unlike a raw recording it's cheap to just
+// show back to the reporter so they can confirm what they attached.
 const listForUserStmt = db.prepare(`
-  SELECT id, message, transcript, (audio_base64 IS NOT NULL) AS has_audio, created_at, status, resolution_note, title
+  SELECT id, message, transcript, (audio_base64 IS NOT NULL) AS has_audio, created_at, status, resolution_note, title, image_base64, image_mime
     FROM feedback
    WHERE user_id = :user_id
    ORDER BY created_at DESC

@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
-import { Mic, Square, Trash2 } from "lucide-react";
-import { ApiError, submitFeedback } from "../api/client";
+import { Image as ImageIcon, Mic, Square, Trash2, X } from "lucide-react";
+import { ApiError, submitFeedback, type ImageAttachment } from "../api/client";
 import type { DiagEvent } from "../conversation/useConversation";
+import { resizeToJpeg } from "../lib/resizeImage";
 import { BackHeader } from "./BackHeader";
 import { cn } from "../lib/utils";
 
@@ -39,6 +40,8 @@ export function FeedbackPage({ diagnostics, onBack }: FeedbackPageProps) {
   const [recording, setRecording] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [image, setImage] = useState<ImageAttachment | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
   const [includeLog, setIncludeLog] = useState(diagnostics.length > 0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +50,22 @@ export function FeedbackPage({ diagnostics, onBack }: FeedbackPageProps) {
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  // Deliberately no `capture` attribute (unlike PhotoAttach.tsx) — this is
+  // for an already-taken photo from the library/files, not a live camera
+  // shot (2026-08-30, requested explicitly as a distinct flow).
+  async function handleImageFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setImageError(null);
+    try {
+      setImage(await resizeToJpeg(file));
+    } catch {
+      setImageError("Couldn't read that photo — try again.");
+    }
+  }
 
   async function startRecording() {
     setError(null);
@@ -86,8 +105,8 @@ export function FeedbackPage({ diagnostics, onBack }: FeedbackPageProps) {
 
   async function handleSubmit() {
     if (busy) return;
-    if (!message.trim() && !audioBlob) {
-      setError("Add a message or a voice note first.");
+    if (!message.trim() && !audioBlob && !image) {
+      setError("Add a message, a voice note, or a photo first.");
       return;
     }
     setBusy(true);
@@ -99,6 +118,8 @@ export function FeedbackPage({ diagnostics, onBack }: FeedbackPageProps) {
         audio_base64,
         audio_mime: audioBlob?.type ?? null,
         log_snapshot: includeLog && diagnostics.length > 0 ? JSON.stringify(diagnostics) : null,
+        image_base64: image?.base64 ?? null,
+        image_mime: image?.mime ?? null,
       });
       setSent(true);
     } catch (err) {
@@ -113,6 +134,8 @@ export function FeedbackPage({ diagnostics, onBack }: FeedbackPageProps) {
     setMessage("");
     setAudioBlob(null);
     setAudioUrl(null);
+    setImage(null);
+    setImageError(null);
     setError(null);
     setSent(false);
   }
@@ -188,6 +211,41 @@ export function FeedbackPage({ diagnostics, onBack }: FeedbackPageProps) {
               )}
             </button>
           )}
+        </div>
+
+        <div>
+          {image ? (
+            <div className="flex items-center gap-3 rounded-xl bg-ink3 px-4 py-3">
+              <img
+                src={`data:${image.mime};base64,${image.base64}`}
+                alt="Attached photo"
+                className="size-12 shrink-0 rounded-lg object-cover"
+              />
+              <span className="flex-1 text-sm font-semibold text-ink/60">Photo attached</span>
+              <button
+                className="grid size-9 shrink-0 place-items-center rounded-lg text-coral/70 transition-colors hover:bg-coral/10 hover:text-coral"
+                onClick={() => setImage(null)}
+                aria-label="Remove photo"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+          ) : (
+            <button
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-ink3 py-3 text-sm font-bold text-ink/70 transition-colors hover:bg-ink/10"
+              onClick={() => imageInputRef.current?.click()}
+            >
+              <ImageIcon className="size-4" /> Attach a photo
+            </button>
+          )}
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleImageFile}
+          />
+          {imageError && <p className="mt-1.5 text-xs font-semibold text-coral">{imageError}</p>}
         </div>
 
         {diagnostics.length > 0 && (

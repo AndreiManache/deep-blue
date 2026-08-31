@@ -334,6 +334,8 @@ export interface SubmitFeedbackInput {
   audio_base64: string | null;
   audio_mime: string | null;
   log_snapshot: string | null;
+  image_base64?: string | null;
+  image_mime?: string | null;
 }
 
 export async function submitFeedback(input: SubmitFeedbackInput): Promise<void> {
@@ -361,6 +363,8 @@ export interface FeedbackItem {
   resolution_note: string | null;
   title: string | null;
   summary: string | null;
+  image_base64: string | null;
+  image_mime: string | null;
 }
 
 export async function fetchAdminFeedback(): Promise<FeedbackItem[]> {
@@ -396,6 +400,8 @@ export interface MyFeedbackItem {
   status: string;
   resolution_note: string | null;
   title: string | null;
+  image_base64: string | null;
+  image_mime: string | null;
 }
 
 export async function fetchMyFeedback(): Promise<MyFeedbackItem[]> {

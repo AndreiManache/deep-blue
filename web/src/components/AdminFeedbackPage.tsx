@@ -48,6 +48,7 @@ function buildClaudeBlob(item: FeedbackItem): string {
       ? "\nVoice note: attached, not yet transcribed — transcribe it first."
       : null,
     item.log_snapshot ? `\nDiagnostics log:\n${formatLog(item.log_snapshot)}` : null,
+    item.image_base64 ? "\nPhoto: attached — see the report in the admin inbox to view it." : null,
   ].filter((l): l is string => l != null);
   return lines.join("\n");
 }
@@ -268,6 +269,14 @@ function FeedbackCard({ item, onToggleStatus, onDelete, onTranscribed, onNoteSav
 
       {item.message && (
         <p className="mt-3 text-sm font-medium leading-relaxed text-ink/80">{item.message}</p>
+      )}
+
+      {item.image_base64 && (
+        <img
+          src={`data:${item.image_mime ?? "image/jpeg"};base64,${item.image_base64}`}
+          alt="Attached to this report"
+          className="mt-3 max-h-64 w-full rounded-xl object-contain bg-ink3"
+        />
       )}
 
       {!item.title && (item.message || item.transcript) && (

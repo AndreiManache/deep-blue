@@ -174,6 +174,15 @@ if (!feedbackColumns.some((col) => col.name === "title")) {
 if (!feedbackColumns.some((col) => col.name === "summary")) {
   db.exec(`ALTER TABLE feedback ADD COLUMN summary TEXT;`);
 }
+// An already-taken photo attached to a report (2026-08-30, requested
+// explicitly) — stored inline like audio_base64, same reasoning (small
+// after client-side resize, no separate object storage needed yet).
+if (!feedbackColumns.some((col) => col.name === "image_base64")) {
+  db.exec(`ALTER TABLE feedback ADD COLUMN image_base64 TEXT;`);
+}
+if (!feedbackColumns.some((col) => col.name === "image_mime")) {
+  db.exec(`ALTER TABLE feedback ADD COLUMN image_mime TEXT;`);
+}
 
 // One nutrition observation per (food_key, user): that user's best value for a
 // food, normalized to a basis (per 100g, or per one item when grams are

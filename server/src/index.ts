@@ -261,28 +261,53 @@ app.get("/auth/me", (_req, res) => {
   res.json({ username: res.locals.username as string });
 });
 
+const IMAGE_MEDIA_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
+type ImageMediaType = (typeof IMAGE_MEDIA_TYPES)[number];
+// Decoded-size cap on an attached photo — the client resizes before sending
+// (see PhotoAttach.tsx / FeedbackPage.tsx, both go through the same
+// resizeToJpeg helper), so this is just a defensive ceiling, generous
+// enough for that resize target with real headroom.
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+
 // Feedback/bug reports sent from Diagnostics → Send feedback. Everything is
-// optional except needing at least a message or a voice note — the log
-// snapshot is opt-in and just passed through as a string the frontend already
-// formatted (see DiagnosticsPage's diag log).
+// optional except needing at least a message, a voice note, or a photo —
+// the log snapshot is opt-in and just passed through as a string the
+// frontend already formatted (see DiagnosticsPage's diag log). The photo is
+// an already-taken image picked from the file system (2026-08-30, requested
+// explicitly) — a plain file input, not a live camera capture.
 app.post("/feedback", (req, res) => {
-  const { message, audio_base64, audio_mime, log_snapshot } = (req.body ?? {}) as {
+  const { message, audio_base64, audio_mime, log_snapshot, image_base64, image_mime } = (req.body ?? {}) as {
     message?: unknown;
     audio_base64?: unknown;
     audio_mime?: unknown;
     log_snapshot?: unknown;
+    image_base64?: unknown;
+    image_mime?: unknown;
   };
   const text = typeof message === "string" ? message.trim() : "";
   const hasAudio = typeof audio_base64 === "string" && audio_base64.length > 0;
-  if (!text && !hasAudio) {
-    res.status(400).json({ error: "Add a message or a voice note before sending." });
+  const hasImage = typeof image_base64 === "string" && image_base64.length > 0;
+  if (!text && !hasAudio && !hasImage) {
+    res.status(400).json({ error: "Add a message, a voice note, or a photo before sending." });
     return;
+  }
+  if (hasImage) {
+    if (typeof image_mime !== "string" || !(IMAGE_MEDIA_TYPES as readonly string[]).includes(image_mime)) {
+      res.status(400).json({ error: "image_mime must be one of image/jpeg, image/png, image/gif, image/webp." });
+      return;
+    }
+    if (Buffer.byteLength(image_base64 as string, "base64") > MAX_IMAGE_BYTES) {
+      res.status(400).json({ error: "Image is too large." });
+      return;
+    }
   }
   const id = createFeedback(res.locals.userId as string, {
     message: text || null,
     audio_base64: hasAudio ? (audio_base64 as string) : null,
     audio_mime: typeof audio_mime === "string" ? audio_mime : null,
     log_snapshot: typeof log_snapshot === "string" ? log_snapshot : null,
+    image_base64: hasImage ? (image_base64 as string) : null,
+    image_mime: hasImage ? (image_mime as string) : null,
   });
   res.json({ id });
 });
@@ -433,13 +458,6 @@ app.post("/admin/feedback/:id/summarize", async (req, res) => {
   setFeedbackTitleSummary(req.params.id, result.title, result.summary);
   res.json(result);
 });
-
-const IMAGE_MEDIA_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
-type ImageMediaType = (typeof IMAGE_MEDIA_TYPES)[number];
-// Decoded-size cap on an attached photo — the client resizes before sending
-// (see PhotoAttach.tsx), so this is just a defensive ceiling, generous enough
-// for that resize target with real headroom.
-const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
 app.post("/chat", async (req, res) => {
   const { session_id, user_text, image_base64, image_mime } = req.body as {

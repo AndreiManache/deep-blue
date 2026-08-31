@@ -76,7 +76,3 @@ Went through every feedback report in the inbox (17 total, from Andrei/Maria/Dan
 ## Deployment
 
 - [ ] **Postgres.** Still on SQLite. Fine for the current scale; revisit only if multi-device write contention ever becomes a real issue.
-
-## Security
-
-- [ ] **Rotate every API key that's been pasted into chat.** Anthropic and ElevenLabs from initial setup, plus Gemini, Murf, and Smallest AI from the 2026-08-28 provider work — all five should be treated as exposed. Regenerate at each provider's console (console.anthropic.com, elevenlabs.io, aistudio.google.com, murf.ai, smallest.ai), then update `.env` and the Railway env vars. The ElevenLabs key is already scoped to Text-to-Speech only, which limits the blast radius if it leaks further, but rotation is still the right move for all of them.

@@ -4,6 +4,7 @@ import { ApiError, submitFeedback, type ImageAttachment } from "../api/client";
 import type { DiagEvent } from "../conversation/useConversation";
 import { resizeToJpeg } from "../lib/resizeImage";
 import { BackHeader } from "./BackHeader";
+import { MyFeedbackList } from "./MyFeedbackList";
 import { cn } from "../lib/utils";
 
 interface FeedbackPageProps {
@@ -36,6 +37,10 @@ function blobToBase64(blob: Blob): Promise<string> {
 }
 
 export function FeedbackPage({ diagnostics, onBack }: FeedbackPageProps) {
+  // Two tabs instead of two separate menu items/pages (2026-08-31, "we
+  // don't want two separate items in the main menu about feedback") — the
+  // submit form and the reporter's own report history now live on one page.
+  const [tab, setTab] = useState<"send" | "history">("send");
   const [message, setMessage] = useState("");
   const [recording, setRecording] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
@@ -172,6 +177,30 @@ export function FeedbackPage({ diagnostics, onBack }: FeedbackPageProps) {
     <div className="flex min-h-dvh flex-col gap-6 px-6 pb-16 pt-5">
       <BackHeader title="Feedback" subtitle="Bugs and ideas, straight to Andrei" onBack={onBack} />
 
+      <div className="flex gap-2 rounded-2xl bg-ink3 p-1">
+        <button
+          className={cn(
+            "flex-1 rounded-xl py-2.5 text-sm font-bold transition-colors",
+            tab === "send" ? "bg-white text-ink shadow-sm" : "text-ink/50",
+          )}
+          onClick={() => setTab("send")}
+        >
+          Send feedback
+        </button>
+        <button
+          className={cn(
+            "flex-1 rounded-xl py-2.5 text-sm font-bold transition-colors",
+            tab === "history" ? "bg-white text-ink shadow-sm" : "text-ink/50",
+          )}
+          onClick={() => setTab("history")}
+        >
+          My reports
+        </button>
+      </div>
+
+      {tab === "history" && <MyFeedbackList />}
+
+      {tab === "send" && (
       <div className="space-y-4 rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-ink/5">
         <textarea
           className="min-h-32 w-full resize-y rounded-xl bg-ink3 px-4 py-3 text-sm font-medium text-ink outline-none placeholder:text-ink/35 focus:ring-2 focus:ring-coral/50"
@@ -272,6 +301,7 @@ export function FeedbackPage({ diagnostics, onBack }: FeedbackPageProps) {
           {busy ? "Sending…" : "Send feedback"}
         </button>
       </div>
+      )}
     </div>
   );
 }

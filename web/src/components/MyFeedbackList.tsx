@@ -1,12 +1,7 @@
 import { useEffect, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { ApiError, fetchMyFeedback, type MyFeedbackItem } from "../api/client";
-import { BackHeader } from "./BackHeader";
 import { cn } from "../lib/utils";
-
-interface MyFeedbackPageProps {
-  onBack: () => void;
-}
 
 function fmtTime(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
@@ -81,13 +76,17 @@ function FeedbackCard({ item, isFixed }: FeedbackCardProps) {
   );
 }
 
-export function MyFeedbackPage({ onBack }: MyFeedbackPageProps) {
+// The reporter's own list of what they've sent and what happened to it —
+// formerly its own page ("My feedback"), now the second tab of the merged
+// Feedback page (2026-08-31, "we don't want two separate items in the main
+// menu about feedback"). No BackHeader/outer page wrapper of its own since
+// it's always embedded inside another page's layout.
+export function MyFeedbackList() {
   const [items, setItems] = useState<MyFeedbackItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // Collapsed by default (2026-08-31 card redesign) — the active reports
-  // above are what a reporter opens this screen to check on; closed-out
-  // ones are here to look back at, not to see every time.
+  // Collapsed by default — the active reports above are what a reporter
+  // checks on; closed-out ones are here to look back at, not to see every time.
   const [showFixed, setShowFixed] = useState(false);
 
   useEffect(() => {
@@ -103,9 +102,7 @@ export function MyFeedbackPage({ onBack }: MyFeedbackPageProps) {
   const fixed = items.filter((item) => item.status === "completed");
 
   return (
-    <div className="flex min-h-dvh flex-col gap-6 px-6 pb-16 pt-5">
-      <BackHeader title="My feedback" subtitle="What you've sent, and what happened" onBack={onBack} />
-
+    <div className="space-y-6">
       {loading && <p className="py-10 text-center text-sm font-medium text-ink/40">Loading…</p>}
       {error && (
         <p className="rounded-2xl bg-coral/10 px-4 py-3 text-sm font-semibold text-coral ring-1 ring-coral/20">

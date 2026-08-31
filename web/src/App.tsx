@@ -6,9 +6,7 @@ import { AdminPanelPage } from "./components/AdminPanelPage";
 import { AuthGate } from "./components/AuthGate";
 import { BarcodeScanner } from "./components/BarcodeScanner";
 import { Dashboard } from "./components/Dashboard";
-import { DiagnosticsPage } from "./components/DiagnosticsPage";
 import { FeedbackPage } from "./components/FeedbackPage";
-import { MyFeedbackPage } from "./components/MyFeedbackPage";
 import { MyFoodsPage } from "./components/MyFoodsPage";
 import { HomeScreen } from "./components/HomeScreen";
 import { ProfilePage } from "./components/ProfilePage";
@@ -20,9 +18,7 @@ type View =
   | "dashboard"
   | "profile"
   | "my-foods"
-  | "diagnostics"
   | "feedback"
-  | "my-feedback"
   | "admin"
   | "admin-panel"
   | "corrections"
@@ -149,30 +145,25 @@ export function App() {
           refreshSignal={conversation.mutationSignal + scanSignal}
         />
       )}
-      {view === "profile" && <ProfilePage onBack={() => setView("home")} />}
-      {view === "my-foods" && (
-        <MyFoodsPage onBack={() => setView("home")} onLogged={() => setScanSignal((s) => s + 1)} />
+      {view === "profile" && (
+        <ProfilePage onBack={() => setView("home")} onOpenMyFoods={() => setView("my-foods")} />
       )}
-      {view === "diagnostics" && (
-        <DiagnosticsPage
-          events={conversation.diagnostics}
-          onClear={conversation.clearDiagnostics}
-          onBack={() => setView("home")}
-        />
+      {view === "my-foods" && (
+        <MyFoodsPage onBack={() => setView("profile")} onLogged={() => setScanSignal((s) => s + 1)} />
       )}
       {view === "feedback" && (
         <FeedbackPage diagnostics={conversation.diagnostics} onBack={() => setView("home")} />
       )}
-      {view === "my-feedback" && <MyFeedbackPage onBack={() => setView("home")} />}
       {view === "admin-panel" && (
         <AdminPanelPage
           onBack={() => setView("home")}
           onOpenFeedbackInbox={() => setView("admin")}
           onOpenModelsInUse={() => setView("providers")}
+          onOpenCorrections={() => setView("corrections")}
         />
       )}
       {view === "admin" && <AdminFeedbackPage onBack={() => setView("admin-panel")} />}
-      {view === "corrections" && <AdminCorrectionsPage onBack={() => setView("home")} />}
+      {view === "corrections" && <AdminCorrectionsPage onBack={() => setView("admin-panel")} />}
       {view === "providers" && <ProvidersPage onBack={() => setView("admin-panel")} />}
 
       {pillLabel && (

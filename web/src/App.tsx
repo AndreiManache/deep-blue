@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchMe, fetchProfile, getStoredToken, logout as logoutRequest, SESSION_INVALIDATED_EVENT } from "./api/client";
+import { fetchMe, getStoredToken, logout as logoutRequest, SESSION_INVALIDATED_EVENT } from "./api/client";
 import { AdminCorrectionsPage } from "./components/AdminCorrectionsPage";
 import { AdminFeedbackPage } from "./components/AdminFeedbackPage";
 import { AdminPanelPage } from "./components/AdminPanelPage";
@@ -10,8 +10,11 @@ import { FeedbackPage } from "./components/FeedbackPage";
 import { MyFoodsPage } from "./components/MyFoodsPage";
 import { HomeScreen } from "./components/HomeScreen";
 import { ProfilePage } from "./components/ProfilePage";
+import { PullToRefresh } from "./components/PullToRefresh";
 import { ProvidersPage } from "./components/ProvidersPage";
-import { useConversation, type Phase } from "./conversation/useConversation";
+import { useConversation, type ConversationApi, type Phase } from "./conversation/useConversation";
+import { LanguageProvider } from "./i18n/LanguageContext";
+import { useT, type StringKey } from "./i18n/useT";
 
 type View =
   | "home"
@@ -34,11 +37,11 @@ const ADMIN_USERNAMES = new Set(
     .filter(Boolean),
 );
 
-const PILL_LABELS: Partial<Record<Phase, string>> = {
-  "awaiting-mic": "Allow mic…",
-  listening: "Listening…",
-  thinking: "Thinking…",
-  speaking: "Speaking…",
+const PILL_LABEL_KEYS: Partial<Record<Phase, StringKey>> = {
+  "awaiting-mic": "app.pillAwaitingMic",
+  listening: "app.pillListening",
+  thinking: "app.pillThinking",
+  speaking: "app.pillSpeaking",
 };
 
 export function App() {
@@ -48,10 +51,6 @@ export function App() {
   // below), which clears it and flips this back to the login screen.
   const [authed, setAuthed] = useState<boolean>(() => Boolean(getStoredToken()));
   const [username, setUsername] = useState<string | null>(null);
-  // Just for the Dashboard menu-label wording (see HamburgerMenu) — not
-  // threaded anywhere else in App.tsx. Harmless to stay null on failure;
-  // the label just falls back to English.
-  const [language, setLanguage] = useState<"en" | "ro" | null>(null);
   // Barcode logging happens outside useConversation (no Claude turn, so
   // conversation.mutationSignal never bumps) — this stands in for it so the
   // Dashboard still refetches after a scan.
@@ -79,9 +78,6 @@ export function App() {
     fetchMe()
       .then((res) => setUsername(res.username))
       .catch(() => {});
-    fetchProfile()
-      .then((res) => setLanguage(res.profile?.language ?? null))
-      .catch(() => {});
   }, [authed]);
 
   // Warm the greeting as soon as we know we're actually logged in, so the
@@ -106,11 +102,50 @@ export function App() {
   }
 
   if (!authed) {
-    return <AuthGate onAuthed={() => setAuthed(true)} />;
+    return (
+      <PullToRefresh>
+        <AuthGate onAuthed={() => setAuthed(true)} />
+      </PullToRefresh>
+    );
   }
 
-  const pillLabel = PILL_LABELS[conversation.phase];
   const isAdmin = username != null && ADMIN_USERNAMES.has(username.toLowerCase());
+
+  return (
+    <LanguageProvider>
+      <PullToRefresh>
+        <AppShell
+          view={view}
+          setView={setView}
+          conversation={conversation}
+          endSession={endSession}
+          scanSignal={scanSignal}
+          setScanSignal={setScanSignal}
+          onLogout={handleLogout}
+          isAdmin={isAdmin}
+        />
+      </PullToRefresh>
+    </LanguageProvider>
+  );
+}
+
+interface AppShellProps {
+  view: View;
+  setView: (view: View) => void;
+  conversation: ConversationApi;
+  endSession: () => void;
+  scanSignal: number;
+  setScanSignal: (updater: (s: number) => number) => void;
+  onLogout: () => void;
+  isAdmin: boolean;
+}
+
+// Split out from App() purely so this can call useT() — it needs to render
+// inside <LanguageProvider>, which App() itself renders, so it can't consume
+// that same context.
+function AppShell({ view, setView, conversation, endSession, scanSignal, setScanSignal, onLogout, isAdmin }: AppShellProps) {
+  const t = useT();
+  const pillLabelKey = PILL_LABEL_KEYS[conversation.phase];
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col">
@@ -125,9 +160,8 @@ export function App() {
             endSession();
             setView("scan");
           }}
-          onLogout={handleLogout}
+          onLogout={onLogout}
           isAdmin={isAdmin}
-          language={language}
         />
       )}
       {view === "scan" && (
@@ -166,19 +200,19 @@ export function App() {
       {view === "corrections" && <AdminCorrectionsPage onBack={() => setView("admin-panel")} />}
       {view === "providers" && <ProvidersPage onBack={() => setView("admin-panel")} />}
 
-      {pillLabel && (
+      {pillLabelKey && (
         <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full bg-ink py-2 pl-5 pr-2 shadow-xl">
           <button
             className="flex items-center gap-2 text-sm font-bold text-cream"
             onClick={() => setView("home")}
           >
             <span className="size-2 animate-pulse rounded-full bg-coral" />
-            {pillLabel}
+            {t(pillLabelKey)}
           </button>
           <button
             className="grid size-8 place-items-center rounded-full bg-white/10 text-cream transition-colors hover:bg-white/20"
             onClick={conversation.endSession}
-            aria-label="End conversation"
+            aria-label={t("app.endConversation")}
           >
             ✕
           </button>

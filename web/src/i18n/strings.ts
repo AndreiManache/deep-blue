@@ -1,0 +1,343 @@
+// Flat dictionary keyed by dotted namespace, e.g. "home.hintListening". Kept
+// as a single flat Record (not nested objects) so lookups in useT() stay a
+// plain property access — simplicity over type-safe autocomplete, given how
+// many call sites this needs to cover.
+export const strings: Record<string, { en: string; ro: string }> = {
+  // HomeScreen
+  "home.hintAwaitingMic": {
+    en: 'Tap "Allow" when your browser asks for the microphone.',
+    ro: 'Apasă "Permite" când browserul cere accesul la microfon.',
+  },
+  "home.hintListening": {
+    en: "I'm listening. Tell me what you ate.",
+    ro: "Te ascult. Spune-mi ce ai mâncat.",
+  },
+  "home.hintThinking": { en: "One moment…", ro: "O clipă…" },
+  "home.hintSpeaking": { en: "Talking. Tap anytime to cut in.", ro: "Vorbesc. Apasă oricând ca să intervii." },
+  "home.unsupportedTitle": { en: "Voice isn't supported here", ro: "Vocea nu este acceptată aici" },
+  "home.unsupportedBody": {
+    en: "Deep Blue needs a browser with microphone recording and audio playback. Try the latest Safari (iOS) or Chrome (Android/desktop).",
+    ro: "Deep Blue are nevoie de un browser cu înregistrare audio și redare audio. Încearcă cea mai nouă versiune de Safari (iOS) sau Chrome (Android/desktop).",
+  },
+  "home.hintPhotoAttached": {
+    en: "Tap the orb and describe what's in the photo.",
+    ro: "Apasă pe orb și descrie ce se vede în fotografie.",
+  },
+  "home.adminPanel": { en: "Admin panel", ro: "Panou de administrare" },
+  "home.hintDefault": {
+    en: 'Tap the orb and just talk. "I had two eggs and a coffee for breakfast."',
+    ro: 'Apasă pe orb și vorbește. "Am mâncat două ouă și o cafea la micul dejun."',
+  },
+  "home.scanBarcode": { en: "Scan a barcode", ro: "Scanează un cod de bare" },
+
+  // HamburgerMenu
+  "menu.open": { en: "Open menu", ro: "Deschide meniul" },
+  "menu.close": { en: "Close menu", ro: "Închide meniul" },
+  "menu.profile": { en: "Profile", ro: "Profil" },
+  "menu.sendFeedback": { en: "Send feedback", ro: "Trimite feedback" },
+  "menu.logOut": { en: "Log out", ro: "Deconectare" },
+
+  // BackHeader
+  "backHeader.back": { en: "Back", ro: "Înapoi" },
+
+  // TalkButton
+  "talkButton.tapToTalk": { en: "Tap to talk", ro: "Apasă pentru a vorbi" },
+  "talkButton.allowingMic": { en: "Allow mic…", ro: "Se cere microfonul…" },
+
+  // MicPermissionHelp
+  "mic.blockedTitle": { en: "Microphone access is blocked", ro: "Accesul la microfon este blocat" },
+  "mic.blockedBody": {
+    en: "Deep Blue needs your microphone to have a conversation.",
+    ro: "Deep Blue are nevoie de microfonul tău pentru a purta o conversație.",
+  },
+  "mic.dismissedHint": {
+    en: 'If you dismissed the browser\'s permission prompt, tap "Try again" and choose Allow while visiting the site, not "Only this time", which makes the browser ask again on every visit.',
+    ro: 'Dacă ai închis fereastra de permisiune a browserului, apasă "Încearcă din nou" și alege Permite cât timp vizitezi site-ul, nu "Doar această dată", care face browserul să întrebe din nou la fiecare vizită.',
+  },
+  "mic.tryAgain": { en: "Try again", ro: "Încearcă din nou" },
+  "mic.alreadyBlockedHint": {
+    en: 'Already blocked it? Open the site settings — the lock or "aA" icon next to the address — set Microphone to Allow, then reload.',
+    ro: 'Ai blocat-o deja? Deschide setările site-ului (iconița de lacăt sau "aA" de lângă adresă), setează Microfon pe Permite, apoi reîncarcă pagina.',
+  },
+  "mic.installHint": {
+    en: "Tip: install Deep Blue from the browser menu (Add to Home Screen). The installed app keeps the microphone permission across launches, so you grant it once and never again.",
+    ro: "Sfat: instalează Deep Blue din meniul browserului (Adaugă pe ecranul principal). Aplicația instalată reține permisiunea de microfon, așa că o acorzi o singură dată.",
+  },
+
+  // ProfilePage
+  "profile.title": { en: "Profile", ro: "Profil" },
+  "profile.subtitle": { en: "What powers your targets", ro: "Ce stă la baza obiectivelor tale" },
+  "profile.myFoods": { en: "My Foods", ro: "Alimentele mele" },
+  "profile.loading": { en: "Loading…", ro: "Se încarcă…" },
+  "profile.loadError": { en: "Could not load profile.", ro: "Profilul nu a putut fi încărcat." },
+  "profile.saveError": { en: "Could not save profile.", ro: "Profilul nu a putut fi salvat." },
+  "profile.sectionYou": { en: "You", ro: "Tu" },
+  "profile.name": { en: "Name", ro: "Nume" },
+  "profile.namePlaceholder": { en: "What should Deep Blue call you?", ro: "Cum să îți spună Deep Blue?" },
+  "profile.height": { en: "Height (cm)", ro: "Înălțime (cm)" },
+  "profile.weight": { en: "Weight (kg)", ro: "Greutate (kg)" },
+  "profile.age": { en: "Age", ro: "Vârstă" },
+  "profile.sex": { en: "Sex", ro: "Sex" },
+  "profile.sexMale": { en: "Male", ro: "Masculin" },
+  "profile.sexFemale": { en: "Female", ro: "Feminin" },
+  "profile.language": { en: "Language", ro: "Limbă" },
+  "profile.languageEnglish": { en: "English", ro: "Engleză" },
+  "profile.languageRomanian": { en: "Română", ro: "Română" },
+  "profile.sectionActivityGoal": { en: "Activity & goal", ro: "Activitate și obiectiv" },
+  "profile.activityLevel": { en: "Activity level", ro: "Nivel de activitate" },
+  "profile.activitySedentary": { en: "Sedentary", ro: "Sedentar" },
+  "profile.activityLight": { en: "Light", ro: "Ușor" },
+  "profile.activityModerate": { en: "Moderate", ro: "Moderat" },
+  "profile.activityActive": { en: "Active", ro: "Activ" },
+  "profile.activityVeryActive": { en: "Very active", ro: "Foarte activ" },
+  "profile.goal": { en: "Goal", ro: "Obiectiv" },
+  "profile.goalLose": { en: "Lose", ro: "Pierdere" },
+  "profile.goalMaintain": { en: "Maintain", ro: "Menținere" },
+  "profile.goalGain": { en: "Gain", ro: "Creștere" },
+  "profile.pace": { en: "Pace", ro: "Ritm" },
+  "profile.paceGentle": { en: "Gentle", ro: "Ușor" },
+  "profile.paceModerate": { en: "Moderate", ro: "Moderat" },
+  "profile.paceAggressive": { en: "Aggressive", ro: "Accelerat" },
+  "profile.notes": { en: "Notes for your coach", ro: "Note pentru coach" },
+  "profile.notesPlaceholder": {
+    en: "e.g. vegetarian, training for a marathon, hate counting…",
+    ro: "de ex. vegetarian, mă pregătesc pentru un maraton, nu-mi place să numeri calorii…",
+  },
+  "profile.dailyTargets": { en: "Your daily targets", ro: "Obiectivele tale zilnice" },
+  "profile.calories": { en: "Calories", ro: "Calorii" },
+  "profile.protein": { en: "Protein", ro: "Proteine" },
+  "profile.carbs": { en: "Carbs", ro: "Carbohidrați" },
+  "profile.fat": { en: "Fat", ro: "Grăsimi" },
+  "profile.targetsFooter": {
+    en: "BMR {bmr} · TDEE {tdee}. Mifflin-St Jeor formula, recomputed when you save.",
+    ro: "BMR {bmr} · TDEE {tdee}. Formula Mifflin-St Jeor, recalculată la salvare.",
+  },
+  "profile.saving": { en: "Saving…", ro: "Se salvează…" },
+  "profile.saved": { en: "Saved ✓", ro: "Salvat ✓" },
+  "profile.save": { en: "Save profile", ro: "Salvează profilul" },
+
+  // Dashboard
+  "dashboard.today": { en: "Today", ro: "Astăzi" },
+  "dashboard.selectedDay": { en: "Selected day", ro: "Ziua selectată" },
+  "dashboard.loadError": { en: "Could not load your data.", ro: "Datele tale nu au putut fi încărcate." },
+  "dashboard.nothingToday": { en: "Nothing logged yet today.", ro: "Nimic înregistrat astăzi încă." },
+  "dashboard.nothingThisDay": { en: "Nothing logged on this day.", ro: "Nimic înregistrat în această zi." },
+  "dashboard.mealBreakfast": { en: "Breakfast", ro: "Mic dejun" },
+  "dashboard.mealLunch": { en: "Lunch", ro: "Prânz" },
+  "dashboard.mealDinner": { en: "Dinner", ro: "Cină" },
+  "dashboard.itemsLogged": { en: "items logged", ro: "alimente înregistrate" },
+  "dashboard.itemLogged": { en: "item logged", ro: "aliment înregistrat" },
+  "dashboard.foodsVerified": {
+    en: "{verified} food(s) verified · {yours} {isAre} yours",
+    ro: "{verified} aliment(e) verificat(e) · {yours} sunt ale tale",
+  },
+  "dashboard.leftOf": { en: "{left} left of {target}", ro: "{left} rămase din {target}" },
+  "dashboard.noTargetSet": { en: "No target set yet", ro: "Niciun obiectiv setat încă" },
+
+  // DaySummary
+  "daySummary.noTarget": { en: "no target", ro: "fără obiectiv" },
+
+  // WeekStrip
+  "weekStrip.previousWeek": { en: "Previous week", ro: "Săptămâna trecută" },
+  "weekStrip.nextWeek": { en: "Next week", ro: "Săptămâna următoare" },
+
+  // EntryRow
+  "entry.untitled": { en: "(untitled)", ro: "(fără titlu)" },
+  "entry.edited": { en: "edited", ro: "editat" },
+  "entry.verified": { en: "verified", ro: "verificat" },
+  "entry.yourValue": { en: "your value", ro: "valoarea ta" },
+  "entry.barcode": { en: "barcode", ro: "cod de bare" },
+  "entry.descriptionPlaceholder": { en: "Description", ro: "Descriere" },
+  "entry.evidenceLinkPlaceholder": {
+    en: "Link to a label or menu (optional)",
+    ro: "Link către etichetă sau meniu (opțional)",
+  },
+  "entry.reasonWrongPortion": { en: "Wrong portion size", ro: "Porție greșită" },
+  "entry.reasonWrongFood": { en: "Wrong food or recipe", ro: "Aliment sau rețetă greșită" },
+  "entry.reasonHasLabel": { en: "I have the real label", ro: "Am eticheta reală" },
+  "entry.reasonSkip": { en: "Just a typo, skip this", ro: "A fost o greșeală de tastare, ignoră" },
+  "entry.save": { en: "Save", ro: "Salvează" },
+  "entry.cancel": { en: "Cancel", ro: "Anulează" },
+  "entry.sure": { en: "Sure?", ro: "Sigur?" },
+  "entry.editLabel": { en: "Edit entry", ro: "Editează înregistrarea" },
+  "entry.deleteLabel": { en: "Delete entry", ro: "Șterge înregistrarea" },
+  "entry.confirmDeleteLabel": { en: "Confirm delete", ro: "Confirmă ștergerea" },
+  "entry.saveError": { en: "Couldn't save changes.", ro: "Modificările nu au putut fi salvate." },
+  "entry.deleteError": { en: "Couldn't delete this entry.", ro: "Această înregistrare nu a putut fi ștearsă." },
+
+  // MyFeedbackList
+  "myFeedback.nothingSent": {
+    en: "Nothing sent yet. Reports you submit will show up here.",
+    ro: "Nimic trimis încă. Rapoartele trimise vor apărea aici.",
+  },
+  "myFeedback.loading": { en: "Loading…", ro: "Se încarcă…" },
+  "myFeedback.loadError": { en: "Could not load your feedback.", ro: "Feedbackul tău nu a putut fi încărcat." },
+  "myFeedback.fixedIssues": { en: "Fixed issues ({count})", ro: "Probleme rezolvate ({count})" },
+  "myFeedback.statusDone": { en: "Done", ro: "Rezolvat" },
+  "myFeedback.statusSent": { en: "Sent", ro: "Trimis" },
+  "myFeedback.statusReviewed": { en: "Reviewed", ro: "Analizat" },
+  "myFeedback.fromAndrei": { en: "From Andrei", ro: "De la Andrei" },
+  "myFeedback.allCaughtUpTitle": { en: "All caught up!", ro: "Totul este la zi!" },
+  "myFeedback.voiceNote": { en: "Voice note", ro: "Notă vocală" },
+  "myFeedback.emptyReport": { en: "(empty report)", ro: "(raport gol)" },
+  "myFeedback.attachedAlt": { en: "Attached to this report", ro: "Atașat acestui raport" },
+  "myFeedback.allCaughtUpBody": {
+    en: "Everything you've sent has been addressed. Thank you for helping make Deep Blue better.",
+    ro: "Tot ce ai trimis a fost analizat și rezolvat. Îți mulțumim că ne ajuți să facem Deep Blue mai bun.",
+  },
+
+  // PhotoAttach
+  "photo.add": { en: "Add a photo", ro: "Adaugă o fotografie" },
+  "photo.remove": { en: "Remove photo", ro: "Elimină fotografia" },
+  "photo.readError": { en: "Couldn't read that photo. Try again.", ro: "Fotografia nu a putut fi citită. Încearcă din nou." },
+  "photo.attachedAlt": { en: "Attached food photo", ro: "Fotografie alimentară atașată" },
+
+  // MyFoodsPage
+  "myFoods.subtitleOne": {
+    en: "{count} food you've taught Deep Blue",
+    ro: "{count} aliment pe care l-ai învățat pe Deep Blue",
+  },
+  "myFoods.subtitleMany": {
+    en: "{count} foods you've taught Deep Blue",
+    ro: "{count} alimente pe care le-ai învățat pe Deep Blue",
+  },
+  "myFoods.addFood": { en: "Add a food", ro: "Adaugă un aliment" },
+  "myFoods.loading": { en: "Loading…", ro: "Se încarcă…" },
+  "myFoods.loadError": { en: "Could not load your foods.", ro: "Alimentele tale nu au putut fi încărcate." },
+  "myFoods.empty": {
+    en: "Nothing yet. Foods you log or correct will show up here, or add one directly.",
+    ro: "Nimic încă. Alimentele pe care le înregistrezi sau le corectezi vor apărea aici, sau adaugă unul direct.",
+  },
+  "myFoods.per100g": { en: "per 100g", ro: "la 100g" },
+  "myFoods.perItem": { en: "per item", ro: "la bucată" },
+  "myFoods.updatedOn": { en: "Updated {date} · {basis}", ro: "Actualizat {date} · {basis}" },
+  "myFoods.logAgainLabel": { en: "Log this again", ro: "Înregistrează din nou" },
+  "myFoods.editFoodLabel": { en: "Edit food", ro: "Editează alimentul" },
+  "myFoods.deleteFoodLabel": { en: "Delete food", ro: "Șterge alimentul" },
+  "myFoods.confirmDeleteLabel": { en: "Confirm delete", ro: "Confirmă ștergerea" },
+  "myFoods.sure": { en: "Sure?", ro: "Sigur?" },
+  "myFoods.gramsPlaceholder": { en: "grams", ro: "grame" },
+  "myFoods.howManyPlaceholder": { en: "how many", ro: "câte" },
+  "myFoods.gramsToLogLabel": { en: "Grams to log", ro: "Grame de înregistrat" },
+  "myFoods.quantityToLogLabel": { en: "Quantity to log", ro: "Cantitate de înregistrat" },
+  "myFoods.log": { en: "Log", ro: "Înregistrează" },
+  "myFoods.logged": { en: "Logged", ro: "Înregistrat" },
+  "myFoods.invalidQuantity": { en: "Enter a valid quantity.", ro: "Introdu o cantitate validă." },
+  "myFoods.logFailed": { en: "Couldn't log this food.", ro: "Acest aliment nu a putut fi înregistrat." },
+  "myFoods.deleteFailed": { en: "Couldn't delete this food.", ro: "Acest aliment nu a putut fi șters." },
+  "myFoods.foodNamePlaceholder": { en: "Food name (e.g. greek yogurt)", ro: "Numele alimentului (de ex. iaurt grecesc)" },
+  "myFoods.foodNameLabel": { en: "Food name", ro: "Numele alimentului" },
+  "myFoods.caloriesLabel": { en: "Calories", ro: "Calorii" },
+  "myFoods.kcalBasis": { en: "kcal {basis}", ro: "kcal {basis}" },
+  "myFoods.proteinPlaceholder": { en: "Protein g", ro: "Proteine g" },
+  "myFoods.proteinLabel": { en: "Protein grams", ro: "Grame de proteine" },
+  "myFoods.carbsPlaceholder": { en: "Carbs g", ro: "Carbohidrați g" },
+  "myFoods.carbsLabel": { en: "Carbs grams", ro: "Grame de carbohidrați" },
+  "myFoods.fatPlaceholder": { en: "Fat g", ro: "Grăsimi g" },
+  "myFoods.fatLabel": { en: "Fat grams", ro: "Grame de grăsimi" },
+  "myFoods.nameRequired": { en: "Name this food first.", ro: "Dă mai întâi un nume acestui aliment." },
+  "myFoods.caloriesRequired": { en: "Calories must be a number.", ro: "Caloriile trebuie să fie un număr." },
+  "myFoods.saveFailed": { en: "Couldn't save this food.", ro: "Acest aliment nu a putut fi salvat." },
+  "myFoods.save": { en: "Save", ro: "Salvează" },
+  "myFoods.cancel": { en: "Cancel", ro: "Anulează" },
+
+  // FeedbackPage
+  "feedback.title": { en: "Feedback", ro: "Feedback" },
+  "feedback.subtitle": { en: "Bugs and ideas, straight to Andrei", ro: "Buguri și idei, direct către Andrei" },
+  "feedback.tabSend": { en: "Send feedback", ro: "Trimite feedback" },
+  "feedback.tabHistory": { en: "My reports", ro: "Rapoartele mele" },
+  "feedback.messagePlaceholder": {
+    en: "What did you notice? A bug, something confusing, or an idea, as much or as little detail as you like.",
+    ro: "Ce ai observat? Un bug, ceva neclar sau o idee, oricât de multe sau de puține detalii vrei.",
+  },
+  "feedback.discardRecordingLabel": { en: "Discard recording", ro: "Renunță la înregistrare" },
+  "feedback.stopRecording": { en: "Stop recording", ro: "Oprește înregistrarea" },
+  "feedback.recordVoiceNote": { en: "Record a voice note", ro: "Înregistrează o notă vocală" },
+  "feedback.photoAttachedAlt": { en: "Attached photo", ro: "Fotografie atașată" },
+  "feedback.photoAttached": { en: "Photo attached", ro: "Fotografie atașată" },
+  "feedback.removePhotoLabel": { en: "Remove photo", ro: "Elimină fotografia" },
+  "feedback.attachPhoto": { en: "Attach a photo", ro: "Atașează o fotografie" },
+  "feedback.includeLog": {
+    en: "Include this session's diagnostics log ({count} events)",
+    ro: "Include jurnalul de diagnosticare al acestei sesiuni ({count} evenimente)",
+  },
+  "feedback.addSomethingFirst": {
+    en: "Add a message, a voice note, or a photo first.",
+    ro: "Adaugă mai întâi un mesaj, o notă vocală sau o fotografie.",
+  },
+  "feedback.photoReadError": {
+    en: "Couldn't read that photo, try again.",
+    ro: "Fotografia nu a putut fi citită, încearcă din nou.",
+  },
+  "feedback.micError": {
+    en: "Couldn't access the microphone. You can still type your feedback.",
+    ro: "Microfonul nu a putut fi accesat. Poți totuși să scrii feedbackul.",
+  },
+  "feedback.submitError": { en: "Could not send feedback. Try again.", ro: "Feedbackul nu a putut fi trimis. Încearcă din nou." },
+  "feedback.sending": { en: "Sending…", ro: "Se trimite…" },
+  "feedback.thanksTitle": { en: "Thanks, got it!", ro: "Mulțumim, am primit!" },
+  "feedback.thanksBody": {
+    en: "Your report was sent. Feel free to send another whenever something comes up.",
+    ro: "Raportul tău a fost trimis. Trimite oricând altul dacă mai observi ceva.",
+  },
+  "feedback.sendAnother": { en: "Send another", ro: "Trimite altul" },
+  "feedback.backToApp": { en: "Back to Deep Blue", ro: "Înapoi la Deep Blue" },
+
+  // BarcodeScanner
+  "barcode.startingCamera": { en: "Starting camera…", ro: "Se pornește camera…" },
+  "barcode.stillLooking": {
+    en: "Still looking, try moving closer, holding steady, or better light.",
+    ro: "Încă mai caut, încearcă să te apropii, să ții telefonul nemișcat sau la o lumină mai bună.",
+  },
+  "barcode.pointAtBarcode": { en: "Point at a barcode", ro: "Îndreaptă camera spre codul de bare" },
+  "barcode.typeInstead": { en: "Type it in instead", ro: "Scrie-l în loc de asta" },
+  "barcode.enterBarcodeTitle": { en: "Enter the barcode", ro: "Introdu codul de bare" },
+  "barcode.enterBarcodeSubtitle": {
+    en: "The digits printed under the barcode's lines, 8 to 14 of them.",
+    ro: "Cifrele tipărite sub liniile codului de bare, între 8 și 14 cifre.",
+  },
+  "barcode.lookUp": { en: "Look it up", ro: "Caută-l" },
+  "barcode.lookingUp": { en: "Looking up…", ro: "Se caută…" },
+  "barcode.backToCamera": { en: "Back to camera", ro: "Înapoi la cameră" },
+  "barcode.cameraBlockedTitle": { en: "Camera access is blocked", ro: "Accesul la cameră este blocat" },
+  "barcode.cameraBlockedBody": {
+    en: "Deep Blue needs the camera to scan a barcode. Allow it in your browser's site settings, then try again, or type the barcode's digits in by hand.",
+    ro: "Deep Blue are nevoie de cameră pentru a scana un cod de bare. Permite accesul din setările site-ului în browser și încearcă din nou, sau introdu cifrele codului manual.",
+  },
+  "barcode.typeBarcodeIn": { en: "Type the barcode in", ro: "Introdu codul de bare manual" },
+  "barcode.backToApp": { en: "Back to Deep Blue", ro: "Înapoi la Deep Blue" },
+  "barcode.cameraUnavailableTitle": { en: "Camera isn't available", ro: "Camera nu este disponibilă" },
+  "barcode.cameraUnavailableBody": {
+    en: "Try the latest Safari (iOS) or Chrome, or type the barcode's digits in by hand.",
+    ro: "Încearcă cea mai nouă versiune de Safari (iOS) sau Chrome, sau introdu cifrele codului manual.",
+  },
+  "barcode.notFoundTitle": { en: "Didn't find that product", ro: "Nu am găsit acel produs" },
+  "barcode.notFoundBody": {
+    en: "Tap the orb and describe it instead, that works for anything not in the barcode database.",
+    ro: "Apasă pe orb și descrie-l în loc de asta, funcționează pentru orice nu se află în baza de date de coduri.",
+  },
+  "barcode.errorTitle": { en: "Something went wrong", ro: "Ceva nu a mers bine" },
+  "barcode.genericError": { en: "Something went wrong.", ro: "Ceva nu a mers bine." },
+  "barcode.cameraStartError": {
+    en: "The camera didn't start properly. Try again, or type the barcode in instead.",
+    ro: "Camera nu a pornit corect. Încearcă din nou, sau introdu codul de bare manual.",
+  },
+  "barcode.scanStuckError": {
+    en: "Scanning got stuck. Try again, or type the barcode in instead.",
+    ro: "Scanarea s-a blocat. Încearcă din nou, sau introdu codul de bare manual.",
+  },
+  "barcode.logFailedError": { en: "Could not log this item.", ro: "Acest produs nu a putut fi înregistrat." },
+  "barcode.logging": { en: "Logging…", ro: "Se înregistrează…" },
+  "barcode.gramsEaten": { en: "Grams eaten", ro: "Grame consumate" },
+  "barcode.caloriesPer100g": { en: "{cal} kcal / 100g", ro: "{cal} kcal / 100g" },
+  "barcode.approxCalories": { en: "≈ {cal} kcal", ro: "≈ {cal} kcal" },
+  "barcode.logIt": { en: "Log it", ro: "Înregistrează" },
+  "barcode.closeScannerLabel": { en: "Close scanner", ro: "Închide scannerul" },
+
+  // App shell (floating status pill during a live conversation)
+  "app.pillAwaitingMic": { en: "Allow mic…", ro: "Se cere microfonul…" },
+  "app.pillListening": { en: "Listening…", ro: "Ascult…" },
+  "app.pillThinking": { en: "Thinking…", ro: "Se gândește…" },
+  "app.pillSpeaking": { en: "Speaking…", ro: "Vorbește…" },
+  "app.endConversation": { en: "End conversation", ro: "Încheie conversația" },
+};

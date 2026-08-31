@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { dayKey, todayKey, type DailyStat } from "../api/client";
+import { useLanguage } from "../i18n/LanguageContext";
+import { useT } from "../i18n/useT";
 import { cn } from "../lib/utils";
 
 interface WeekStripProps {
@@ -12,6 +14,9 @@ interface WeekStripProps {
 // The 7-day strip (Mon..Sun) that contains the selected day. A coral dot marks
 // days that have logged food; a sky dot marks today.
 export function WeekStrip({ selected, stats, onSelect }: WeekStripProps) {
+  const t = useT();
+  const { language } = useLanguage();
+  const locale = language === "ro" ? "ro-RO" : "en-US";
   const today = todayKey();
   const daysWithData = useMemo(
     () => new Set(stats.filter((s) => s.logged).map((s) => s.date)),
@@ -44,12 +49,12 @@ export function WeekStrip({ selected, stats, onSelect }: WeekStripProps) {
     <div>
       <div className="mb-3 flex items-center justify-between">
         <span className="text-xs font-bold uppercase tracking-wider text-ink/40">
-          {new Date(first + "T00:00:00").toLocaleDateString(undefined, {
+          {new Date(first + "T00:00:00").toLocaleDateString(locale, {
             month: "short",
             day: "numeric",
           })}{" "}
           –{" "}
-          {new Date(last + "T00:00:00").toLocaleDateString(undefined, {
+          {new Date(last + "T00:00:00").toLocaleDateString(locale, {
             month: "short",
             day: "numeric",
           })}
@@ -58,7 +63,7 @@ export function WeekStrip({ selected, stats, onSelect }: WeekStripProps) {
           <button
             className="grid size-9 place-items-center rounded-xl bg-white shadow-sm ring-1 ring-ink/5 transition-colors hover:bg-ink3"
             onClick={() => shift(-7)}
-            aria-label="Previous week"
+            aria-label={t("weekStrip.previousWeek")}
           >
             <ChevronLeft className="size-4 text-ink/70" />
           </button>
@@ -69,7 +74,7 @@ export function WeekStrip({ selected, stats, onSelect }: WeekStripProps) {
             )}
             onClick={() => shift(7)}
             disabled={isCurrentWeek}
-            aria-label="Next week"
+            aria-label={t("weekStrip.nextWeek")}
           >
             <ChevronRight className="size-4 text-ink/70" />
           </button>
@@ -97,7 +102,7 @@ export function WeekStrip({ selected, stats, onSelect }: WeekStripProps) {
                   isSelected ? "text-white/60" : "text-ink/40",
                 )}
               >
-                {new Date(day + "T00:00:00").toLocaleDateString(undefined, {
+                {new Date(day + "T00:00:00").toLocaleDateString(locale, {
                   weekday: "short",
                 })}
               </span>

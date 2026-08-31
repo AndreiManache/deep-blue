@@ -1,5 +1,6 @@
 import { ScanBarcode, Shield } from "lucide-react";
 import type { ConversationApi, Phase } from "../conversation/useConversation";
+import { useT, type StringKey } from "../i18n/useT";
 import { ErrorBanner } from "./ErrorBanner";
 import { Greeting } from "./Greeting";
 import { HamburgerMenu, type MenuView } from "./HamburgerMenu";
@@ -14,17 +15,17 @@ interface HomeScreenProps {
   onScan: () => void;
   onLogout: () => void;
   isAdmin?: boolean;
-  language?: "en" | "ro" | null;
 }
 
-const HINTS: Partial<Record<Phase, string>> = {
-  "awaiting-mic": "Tap “Allow” when your browser asks for the microphone.",
-  listening: "I'm listening — tell me what you ate.",
-  thinking: "One moment…",
-  speaking: "Talking — tap anytime to cut in.",
+const HINT_KEYS: Partial<Record<Phase, StringKey>> = {
+  "awaiting-mic": "home.hintAwaitingMic",
+  listening: "home.hintListening",
+  thinking: "home.hintThinking",
+  speaking: "home.hintSpeaking",
 };
 
-export function HomeScreen({ conversation, onNavigate, onScan, onLogout, isAdmin, language }: HomeScreenProps) {
+export function HomeScreen({ conversation, onNavigate, onScan, onLogout, isAdmin }: HomeScreenProps) {
+  const t = useT();
   const {
     phase,
     errorMessage,
@@ -53,7 +54,7 @@ export function HomeScreen({ conversation, onNavigate, onScan, onLogout, isAdmin
   return (
     <div className="flex min-h-dvh flex-col px-6 pb-10 pt-5">
       <header className="flex items-center justify-between">
-        <HamburgerMenu onNavigate={onNavigate} onLogout={onLogout} language={language} />
+        <HamburgerMenu onNavigate={onNavigate} onLogout={onLogout} />
         <div className="flex items-center gap-2.5">
           <div className="font-display text-lg font-bold lowercase tracking-tight text-ink">
             deep blue
@@ -66,12 +67,9 @@ export function HomeScreen({ conversation, onNavigate, onScan, onLogout, isAdmin
         {phase === "unsupported" ? (
           <div className="w-full max-w-sm rounded-[2rem] bg-white p-7 shadow-sm ring-1 ring-ink/5">
             <h1 className="font-display text-2xl font-extrabold tracking-tight text-ink">
-              Voice isn't supported here
+              {t("home.unsupportedTitle")}
             </h1>
-            <p className="mt-2 text-sm font-medium text-ink/60">
-              Deep Blue needs a browser with microphone recording and audio playback. Try the
-              latest Safari (iOS) or Chrome (Android/desktop).
-            </p>
+            <p className="mt-2 text-sm font-medium text-ink/60">{t("home.unsupportedBody")}</p>
           </div>
         ) : micPermissionDenied ? (
           <div className="w-full max-w-sm">
@@ -87,18 +85,18 @@ export function HomeScreen({ conversation, onNavigate, onScan, onLogout, isAdmin
                 <button
                   className="grid size-14 place-items-center rounded-full bg-white text-ink/70 shadow-sm ring-1 ring-ink/5 transition-colors hover:bg-ink3"
                   onClick={onScan}
-                  aria-label="Scan a barcode"
-                  title="Scan a barcode"
+                  aria-label={t("home.scanBarcode")}
+                  title={t("home.scanBarcode")}
                 >
                   <ScanBarcode className="size-5" />
                 </button>
               )}
             </div>
-            {HINTS[phase] ? (
-              <p className="min-h-6 text-center text-sm font-semibold text-ink/50">{HINTS[phase]}</p>
+            {HINT_KEYS[phase] ? (
+              <p className="min-h-6 text-center text-sm font-semibold text-ink/50">{t(HINT_KEYS[phase]!)}</p>
             ) : pendingImage ? (
               <p className="min-h-6 text-center text-sm font-semibold text-ink/50">
-                Tap the orb and describe what's in the photo.
+                {t("home.hintPhotoAttached")}
               </p>
             ) : isAdmin ? (
               <button
@@ -106,11 +104,11 @@ export function HomeScreen({ conversation, onNavigate, onScan, onLogout, isAdmin
                 onClick={() => onNavigate("admin-panel")}
               >
                 <Shield className="size-4 text-coral" />
-                Admin panel
+                {t("home.adminPanel")}
               </button>
             ) : (
               <p className="min-h-6 text-center text-sm font-semibold text-ink/50">
-                Tap the orb and just talk — “I had two eggs and a coffee for breakfast.”
+                {t("home.hintDefault")}
               </p>
             )}
           </>

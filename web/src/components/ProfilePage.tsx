@@ -12,6 +12,8 @@ import {
   type Targets,
   type UserProfile,
 } from "../api/client";
+import { useLanguage } from "../i18n/LanguageContext";
+import { useT } from "../i18n/useT";
 import { BackHeader } from "./BackHeader";
 import { cn } from "../lib/utils";
 
@@ -65,6 +67,8 @@ function Chips<T extends string>({
 }
 
 export function ProfilePage({ onBack, onOpenMyFoods }: ProfilePageProps) {
+  const t = useT();
+  const { language, setLanguage } = useLanguage();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [targets, setTargets] = useState<Targets | null>(null);
   const [loading, setLoading] = useState(true);
@@ -92,8 +96,9 @@ export function ProfilePage({ onBack, onOpenMyFoods }: ProfilePageProps) {
         );
         setTargets(res.targets);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : "Could not load profile."))
+      .catch((err) => setError(err instanceof Error ? err.message : t("profile.loadError")))
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function patch<K extends keyof UserProfile>(key: K, value: UserProfile[K]) {
@@ -116,7 +121,7 @@ export function ProfilePage({ onBack, onOpenMyFoods }: ProfilePageProps) {
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2000);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not save profile.");
+      setError(err instanceof ApiError ? err.message : t("profile.saveError"));
     } finally {
       setSaving(false);
     }
@@ -124,7 +129,7 @@ export function ProfilePage({ onBack, onOpenMyFoods }: ProfilePageProps) {
 
   return (
     <div className="flex min-h-dvh flex-col gap-6 px-6 pb-16 pt-5">
-      <BackHeader title="Profile" subtitle="What powers your targets" onBack={onBack} />
+      <BackHeader title={t("profile.title")} subtitle={t("profile.subtitle")} onBack={onBack} />
 
       <button
         className="flex items-center justify-between rounded-2xl bg-white px-4 py-3.5 text-sm font-bold text-ink shadow-sm ring-1 ring-ink/5 transition-colors hover:bg-ink3"
@@ -132,31 +137,47 @@ export function ProfilePage({ onBack, onOpenMyFoods }: ProfilePageProps) {
       >
         <span className="flex items-center gap-2">
           <UtensilsCrossed className="size-4 text-coral" />
-          My Foods
+          {t("profile.myFoods")}
         </span>
         <ChevronRight className="size-4 text-ink/30" />
       </button>
 
+      <div className="rounded-2xl bg-white px-4 py-3.5 shadow-sm ring-1 ring-ink/5">
+        <Field label={t("profile.language")}>
+          <Chips<Language>
+            options={[
+              { value: "en", label: t("profile.languageEnglish") },
+              { value: "ro", label: t("profile.languageRomanian") },
+            ]}
+            value={language}
+            onChange={(v) => {
+              setLanguage(v);
+              patch("language", v);
+            }}
+          />
+        </Field>
+      </div>
+
       {loading ? (
-        <p className="py-10 text-center text-sm font-medium text-ink/40">Loading…</p>
+        <p className="py-10 text-center text-sm font-medium text-ink/40">{t("profile.loading")}</p>
       ) : !profile ? (
         <p className="py-10 text-center text-sm font-semibold text-coral">
-          {error ?? "Could not load profile."}
+          {error ?? t("profile.loadError")}
         </p>
       ) : (
         <>
           <section className="space-y-4 rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-ink/5">
-            <h2 className="font-display text-lg font-extrabold tracking-tight text-ink">You</h2>
-            <Field label="Name">
+            <h2 className="font-display text-lg font-extrabold tracking-tight text-ink">{t("profile.sectionYou")}</h2>
+            <Field label={t("profile.name")}>
               <input
                 className={inputClass}
                 value={profile.name ?? ""}
                 onChange={(e) => patch("name", e.target.value || null)}
-                placeholder="What should Deep Blue call you?"
+                placeholder={t("profile.namePlaceholder")}
               />
             </Field>
             <div className="grid grid-cols-3 gap-3">
-              <Field label="Height (cm)">
+              <Field label={t("profile.height")}>
                 <input
                   className={inputClass}
                   inputMode="decimal"
@@ -165,7 +186,7 @@ export function ProfilePage({ onBack, onOpenMyFoods }: ProfilePageProps) {
                   placeholder="175"
                 />
               </Field>
-              <Field label="Weight (kg)">
+              <Field label={t("profile.weight")}>
                 <input
                   className={inputClass}
                   inputMode="decimal"
@@ -174,7 +195,7 @@ export function ProfilePage({ onBack, onOpenMyFoods }: ProfilePageProps) {
                   placeholder="70"
                 />
               </Field>
-              <Field label="Age">
+              <Field label={t("profile.age")}>
                 <input
                   className={inputClass}
                   inputMode="numeric"
@@ -184,73 +205,63 @@ export function ProfilePage({ onBack, onOpenMyFoods }: ProfilePageProps) {
                 />
               </Field>
             </div>
-            <Field label="Sex">
+            <Field label={t("profile.sex")}>
               <Chips<Sex>
                 options={[
-                  { value: "male", label: "Male" },
-                  { value: "female", label: "Female" },
+                  { value: "male", label: t("profile.sexMale") },
+                  { value: "female", label: t("profile.sexFemale") },
                 ]}
                 value={profile.sex}
                 onChange={(v) => patch("sex", v)}
-              />
-            </Field>
-            <Field label="Language">
-              <Chips<Language>
-                options={[
-                  { value: "en", label: "English" },
-                  { value: "ro", label: "Română" },
-                ]}
-                value={profile.language}
-                onChange={(v) => patch("language", v)}
               />
             </Field>
           </section>
 
           <section className="space-y-4 rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-ink/5">
             <h2 className="font-display text-lg font-extrabold tracking-tight text-ink">
-              Activity &amp; goal
+              {t("profile.sectionActivityGoal")}
             </h2>
-            <Field label="Activity level">
+            <Field label={t("profile.activityLevel")}>
               <Chips<ActivityLevel>
                 options={[
-                  { value: "sedentary", label: "Sedentary" },
-                  { value: "light", label: "Light" },
-                  { value: "moderate", label: "Moderate" },
-                  { value: "active", label: "Active" },
-                  { value: "very_active", label: "Very active" },
+                  { value: "sedentary", label: t("profile.activitySedentary") },
+                  { value: "light", label: t("profile.activityLight") },
+                  { value: "moderate", label: t("profile.activityModerate") },
+                  { value: "active", label: t("profile.activityActive") },
+                  { value: "very_active", label: t("profile.activityVeryActive") },
                 ]}
                 value={profile.activity_level}
                 onChange={(v) => patch("activity_level", v)}
               />
             </Field>
-            <Field label="Goal">
+            <Field label={t("profile.goal")}>
               <Chips<GoalType>
                 options={[
-                  { value: "lose", label: "Lose" },
-                  { value: "maintain", label: "Maintain" },
-                  { value: "gain", label: "Gain" },
+                  { value: "lose", label: t("profile.goalLose") },
+                  { value: "maintain", label: t("profile.goalMaintain") },
+                  { value: "gain", label: t("profile.goalGain") },
                 ]}
                 value={profile.goal_type}
                 onChange={(v) => patch("goal_type", v)}
               />
             </Field>
-            <Field label="Pace">
+            <Field label={t("profile.pace")}>
               <Chips<GoalRate>
                 options={[
-                  { value: "gentle", label: "Gentle" },
-                  { value: "moderate", label: "Moderate" },
-                  { value: "aggressive", label: "Aggressive" },
+                  { value: "gentle", label: t("profile.paceGentle") },
+                  { value: "moderate", label: t("profile.paceModerate") },
+                  { value: "aggressive", label: t("profile.paceAggressive") },
                 ]}
                 value={profile.goal_rate}
                 onChange={(v) => patch("goal_rate", v)}
               />
             </Field>
-            <Field label="Notes for your coach">
+            <Field label={t("profile.notes")}>
               <textarea
                 className={cn(inputClass, "min-h-24 resize-y")}
                 value={profile.goal_notes ?? ""}
                 onChange={(e) => patch("goal_notes", e.target.value || null)}
-                placeholder="e.g. vegetarian, training for a marathon, hate counting…"
+                placeholder={t("profile.notesPlaceholder")}
               />
             </Field>
           </section>
@@ -258,17 +269,16 @@ export function ProfilePage({ onBack, onOpenMyFoods }: ProfilePageProps) {
           {targets && (
             <section className="rounded-[2rem] bg-ink p-5 text-cream shadow-sm">
               <h2 className="font-display text-lg font-extrabold tracking-tight">
-                Your daily targets
+                {t("profile.dailyTargets")}
               </h2>
               <div className="mt-4 grid grid-cols-2 gap-3">
-                <TargetStat label="Calories" value={`${Math.round(targets.calorie_target)} kcal`} accent="text-sky" />
-                <TargetStat label="Protein" value={`${Math.round(targets.protein_target_g)} g`} accent="text-sky" />
-                <TargetStat label="Carbs" value={`${Math.round(targets.carbs_target_g)} g`} accent="text-sun" />
-                <TargetStat label="Fat" value={`${Math.round(targets.fat_target_g)} g`} accent="text-coral" />
+                <TargetStat label={t("profile.calories")} value={`${Math.round(targets.calorie_target)} kcal`} accent="text-sky" />
+                <TargetStat label={t("profile.protein")} value={`${Math.round(targets.protein_target_g)} g`} accent="text-sky" />
+                <TargetStat label={t("profile.carbs")} value={`${Math.round(targets.carbs_target_g)} g`} accent="text-sun" />
+                <TargetStat label={t("profile.fat")} value={`${Math.round(targets.fat_target_g)} g`} accent="text-coral" />
               </div>
               <p className="mt-4 text-xs font-medium text-white/40">
-                BMR {Math.round(targets.bmr)} · TDEE {Math.round(targets.tdee)} — Mifflin-St Jeor formula,
-                recomputed when you save.
+                {t("profile.targetsFooter", { bmr: Math.round(targets.bmr), tdee: Math.round(targets.tdee) })}
               </p>
             </section>
           )}
@@ -284,7 +294,7 @@ export function ProfilePage({ onBack, onOpenMyFoods }: ProfilePageProps) {
             onClick={handleSave}
             disabled={saving}
           >
-            {saving ? "Saving…" : savedFlash ? "Saved ✓" : "Save profile"}
+            {saving ? t("profile.saving") : savedFlash ? t("profile.saved") : t("profile.save")}
           </button>
         </>
       )}

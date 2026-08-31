@@ -6,6 +6,7 @@ import { resizeToJpeg } from "../lib/resizeImage";
 import { BackHeader } from "./BackHeader";
 import { MyFeedbackList } from "./MyFeedbackList";
 import { cn } from "../lib/utils";
+import { useT } from "../i18n/useT";
 
 interface FeedbackPageProps {
   diagnostics: DiagEvent[];
@@ -37,6 +38,7 @@ function blobToBase64(blob: Blob): Promise<string> {
 }
 
 export function FeedbackPage({ diagnostics, onBack }: FeedbackPageProps) {
+  const t = useT();
   // Two tabs instead of two separate menu items/pages (2026-08-31, "we
   // don't want two separate items in the main menu about feedback") — the
   // submit form and the reporter's own report history now live on one page.
@@ -68,7 +70,7 @@ export function FeedbackPage({ diagnostics, onBack }: FeedbackPageProps) {
     try {
       setImage(await resizeToJpeg(file));
     } catch {
-      setImageError("Couldn't read that photo — try again.");
+      setImageError(t("feedback.photoReadError"));
     }
   }
 
@@ -93,7 +95,7 @@ export function FeedbackPage({ diagnostics, onBack }: FeedbackPageProps) {
       recorderRef.current = recorder;
       setRecording(true);
     } catch {
-      setError("Couldn't access the microphone. You can still type your feedback.");
+      setError(t("feedback.micError"));
     }
   }
 
@@ -111,7 +113,7 @@ export function FeedbackPage({ diagnostics, onBack }: FeedbackPageProps) {
   async function handleSubmit() {
     if (busy) return;
     if (!message.trim() && !audioBlob && !image) {
-      setError("Add a message, a voice note, or a photo first.");
+      setError(t("feedback.addSomethingFirst"));
       return;
     }
     setBusy(true);
@@ -128,7 +130,7 @@ export function FeedbackPage({ diagnostics, onBack }: FeedbackPageProps) {
       });
       setSent(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not send feedback. Try again.");
+      setError(err instanceof ApiError ? err.message : t("feedback.submitError"));
     } finally {
       setBusy(false);
     }
@@ -148,25 +150,25 @@ export function FeedbackPage({ diagnostics, onBack }: FeedbackPageProps) {
   if (sent) {
     return (
       <div className="flex min-h-dvh flex-col gap-6 px-6 pb-16 pt-5">
-        <BackHeader title="Feedback" subtitle="Bugs and ideas, straight to Andrei" onBack={onBack} />
+        <BackHeader title={t("feedback.title")} subtitle={t("feedback.subtitle")} onBack={onBack} />
         <div className="rounded-[2rem] bg-white p-7 text-center shadow-sm ring-1 ring-ink/5">
           <div className="font-display text-2xl font-extrabold tracking-tight text-ink">
-            Thanks — got it!
+            {t("feedback.thanksTitle")}
           </div>
           <p className="mt-2 text-sm font-medium text-ink/60">
-            Your report was sent. Feel free to send another whenever something comes up.
+            {t("feedback.thanksBody")}
           </p>
           <button
             className="mt-6 w-full rounded-2xl bg-coral py-4 text-sm font-bold text-white shadow-lg shadow-coral/40 transition-transform active:scale-[0.98]"
             onClick={resetForm}
           >
-            Send another
+            {t("feedback.sendAnother")}
           </button>
           <button
             className="mt-3 w-full rounded-2xl bg-ink3 py-4 text-sm font-bold text-ink/70 transition-colors hover:bg-ink/10"
             onClick={onBack}
           >
-            Back to Deep Blue
+            {t("feedback.backToApp")}
           </button>
         </div>
       </div>
@@ -175,7 +177,7 @@ export function FeedbackPage({ diagnostics, onBack }: FeedbackPageProps) {
 
   return (
     <div className="flex min-h-dvh flex-col gap-6 px-6 pb-16 pt-5">
-      <BackHeader title="Feedback" subtitle="Bugs and ideas, straight to Andrei" onBack={onBack} />
+      <BackHeader title={t("feedback.title")} subtitle={t("feedback.subtitle")} onBack={onBack} />
 
       <div className="flex gap-2 rounded-2xl bg-ink3 p-1">
         <button
@@ -185,7 +187,7 @@ export function FeedbackPage({ diagnostics, onBack }: FeedbackPageProps) {
           )}
           onClick={() => setTab("send")}
         >
-          Send feedback
+          {t("feedback.tabSend")}
         </button>
         <button
           className={cn(
@@ -194,7 +196,7 @@ export function FeedbackPage({ diagnostics, onBack }: FeedbackPageProps) {
           )}
           onClick={() => setTab("history")}
         >
-          My reports
+          {t("feedback.tabHistory")}
         </button>
       </div>
 
@@ -204,7 +206,7 @@ export function FeedbackPage({ diagnostics, onBack }: FeedbackPageProps) {
       <div className="space-y-4 rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-ink/5">
         <textarea
           className="min-h-32 w-full resize-y rounded-xl bg-ink3 px-4 py-3 text-sm font-medium text-ink outline-none placeholder:text-ink/35 focus:ring-2 focus:ring-coral/50"
-          placeholder="What did you notice? A bug, something confusing, or an idea — as much or as little detail as you like."
+          placeholder={t("feedback.messagePlaceholder")}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
         />
@@ -216,7 +218,7 @@ export function FeedbackPage({ diagnostics, onBack }: FeedbackPageProps) {
               <button
                 className="grid size-9 shrink-0 place-items-center rounded-lg text-coral/70 transition-colors hover:bg-coral/10 hover:text-coral"
                 onClick={discardRecording}
-                aria-label="Discard recording"
+                aria-label={t("feedback.discardRecordingLabel")}
               >
                 <Trash2 className="size-4" />
               </button>
@@ -231,11 +233,11 @@ export function FeedbackPage({ diagnostics, onBack }: FeedbackPageProps) {
             >
               {recording ? (
                 <>
-                  <Square className="size-4" /> Stop recording
+                  <Square className="size-4" /> {t("feedback.stopRecording")}
                 </>
               ) : (
                 <>
-                  <Mic className="size-4" /> Record a voice note
+                  <Mic className="size-4" /> {t("feedback.recordVoiceNote")}
                 </>
               )}
             </button>
@@ -247,14 +249,14 @@ export function FeedbackPage({ diagnostics, onBack }: FeedbackPageProps) {
             <div className="flex items-center gap-3 rounded-xl bg-ink3 px-4 py-3">
               <img
                 src={`data:${image.mime};base64,${image.base64}`}
-                alt="Attached photo"
+                alt={t("feedback.photoAttachedAlt")}
                 className="size-12 shrink-0 rounded-lg object-cover"
               />
-              <span className="flex-1 text-sm font-semibold text-ink/60">Photo attached</span>
+              <span className="flex-1 text-sm font-semibold text-ink/60">{t("feedback.photoAttached")}</span>
               <button
                 className="grid size-9 shrink-0 place-items-center rounded-lg text-coral/70 transition-colors hover:bg-coral/10 hover:text-coral"
                 onClick={() => setImage(null)}
-                aria-label="Remove photo"
+                aria-label={t("feedback.removePhotoLabel")}
               >
                 <X className="size-4" />
               </button>
@@ -264,7 +266,7 @@ export function FeedbackPage({ diagnostics, onBack }: FeedbackPageProps) {
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-ink3 py-3 text-sm font-bold text-ink/70 transition-colors hover:bg-ink/10"
               onClick={() => imageInputRef.current?.click()}
             >
-              <ImageIcon className="size-4" /> Attach a photo
+              <ImageIcon className="size-4" /> {t("feedback.attachPhoto")}
             </button>
           )}
           <input
@@ -285,7 +287,7 @@ export function FeedbackPage({ diagnostics, onBack }: FeedbackPageProps) {
               checked={includeLog}
               onChange={(e) => setIncludeLog(e.target.checked)}
             />
-            Include this session's diagnostics log ({diagnostics.length} events)
+            {t("feedback.includeLog", { count: diagnostics.length })}
           </label>
         )}
 
@@ -298,7 +300,7 @@ export function FeedbackPage({ diagnostics, onBack }: FeedbackPageProps) {
           onClick={handleSubmit}
           disabled={busy}
         >
-          {busy ? "Sending…" : "Send feedback"}
+          {busy ? t("feedback.sending") : t("feedback.tabSend")}
         </button>
       </div>
       )}

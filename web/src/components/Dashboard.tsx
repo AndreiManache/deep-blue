@@ -12,6 +12,8 @@ import {
   type FoodEntry,
   type StatsResponse,
 } from "../api/client";
+import { useLanguage } from "../i18n/LanguageContext";
+import { useT, type StringKey } from "../i18n/useT";
 import { BackHeader } from "./BackHeader";
 import { DaySummary } from "./DaySummary";
 import { EntryRow } from "./EntryRow";
@@ -32,14 +34,14 @@ function parseLocalDate(ymd: string): Date {
 // dinner. Entries already arrive sorted oldest-first (see entries.ts), so
 // each bucket stays chronological; only non-empty buckets are shown, in
 // meal order rather than whichever happened to be logged first.
-type MealLabel = "Breakfast" | "Lunch" | "Dinner";
-const MEAL_ORDER: MealLabel[] = ["Breakfast", "Lunch", "Dinner"];
+type MealLabel = "dashboard.mealBreakfast" | "dashboard.mealLunch" | "dashboard.mealDinner";
+const MEAL_ORDER: MealLabel[] = ["dashboard.mealBreakfast", "dashboard.mealLunch", "dashboard.mealDinner"];
 
 function mealFor(createdAt: string): MealLabel {
   const hour = new Date(createdAt).getHours();
-  if (hour < 12) return "Breakfast";
-  if (hour < 18) return "Lunch";
-  return "Dinner";
+  if (hour < 12) return "dashboard.mealBreakfast";
+  if (hour < 18) return "dashboard.mealLunch";
+  return "dashboard.mealDinner";
 }
 
 function groupByMeal(entries: FoodEntry[]): { label: MealLabel; entries: FoodEntry[] }[] {
@@ -55,6 +57,9 @@ function groupByMeal(entries: FoodEntry[]): { label: MealLabel; entries: FoodEnt
 }
 
 export function Dashboard({ onBack, refreshSignal }: DashboardProps) {
+  const t = useT();
+  const { language } = useLanguage();
+  const locale = language === "ro" ? "ro-RO" : "en-US";
   const [selectedDay, setSelectedDay] = useState(todayKey());
   const [entries, setEntries] = useState<FoodEntry[]>([]);
   const [stats, setStats] = useState<StatsResponse | null>(null);
@@ -75,10 +80,11 @@ export function Dashboard({ onBack, refreshSignal }: DashboardProps) {
       setEntries(e);
       setStats(s);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load your data.");
+      setError(err instanceof Error ? err.message : t("dashboard.loadError"));
     } finally {
       setLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -122,8 +128,8 @@ export function Dashboard({ onBack, refreshSignal }: DashboardProps) {
 
   const isToday = selectedDay === todayKey();
   const selDate = parseLocalDate(selectedDay);
-  const title = isToday ? "Today" : selDate.toLocaleDateString(undefined, { weekday: "long" });
-  const subtitle = selDate.toLocaleDateString(undefined, { month: "long", day: "numeric" });
+  const title = isToday ? t("dashboard.today") : selDate.toLocaleDateString(locale, { weekday: "long" });
+  const subtitle = selDate.toLocaleDateString(locale, { month: "long", day: "numeric" });
 
   return (
     <div className="flex min-h-dvh flex-col gap-6 px-6 pb-16 pt-5">
@@ -148,13 +154,15 @@ export function Dashboard({ onBack, refreshSignal }: DashboardProps) {
 
       {!loading && !error && entries.length === 0 && (
         <p className="py-6 text-center text-sm font-medium text-ink/40">
-          {isToday ? "Nothing logged yet today." : "Nothing logged on this day."}
+          {isToday ? t("dashboard.nothingToday") : t("dashboard.nothingThisDay")}
         </p>
       )}
 
       {groupByMeal(entries).map((group) => (
         <div key={group.label}>
-          <h3 className="mb-2 px-1 text-xs font-bold uppercase tracking-wide text-ink/40">{group.label}</h3>
+          <h3 className="mb-2 px-1 text-xs font-bold uppercase tracking-wide text-ink/40">
+            {t(group.label as StringKey)}
+          </h3>
           <div className="rounded-[2rem] bg-white px-5 shadow-sm ring-1 ring-ink/5">
             {group.entries.map((entry, i) => (
               <div key={entry.id} className={i > 0 ? "border-t border-ink/5" : ""}>
@@ -167,8 +175,11 @@ export function Dashboard({ onBack, refreshSignal }: DashboardProps) {
 
       {foodStats && (foodStats.yours > 0 || foodStats.verified > 0) && (
         <p className="text-center text-xs font-medium text-ink/35">
-          {foodStats.verified} food{foodStats.verified === 1 ? "" : "s"} verified · {foodStats.yours}{" "}
-          {foodStats.yours === 1 ? "is" : "are"} yours
+          {t("dashboard.foodsVerified", {
+            verified: foodStats.verified,
+            yours: foodStats.yours,
+            isAre: foodStats.yours === 1 ? "is" : "are",
+          })}
         </p>
       )}
     </div>

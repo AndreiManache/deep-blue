@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import type { Phase } from "../conversation/useConversation";
+import { useT, type StringKey } from "../i18n/useT";
 import { cn } from "../lib/utils";
 
 interface TalkButtonProps {
@@ -7,23 +8,25 @@ interface TalkButtonProps {
   onTap: () => void;
 }
 
-const LABELS: Partial<Record<Phase, string>> = {
-  idle: "Tap to talk",
-  "awaiting-mic": "Allow mic…",
+const LABEL_KEYS: Partial<Record<Phase, StringKey>> = {
+  idle: "talkButton.tapToTalk",
+  "awaiting-mic": "talkButton.allowingMic",
 };
 
 const BAR_HEIGHTS = ["h-5", "h-9", "h-12", "h-6", "h-8"];
 
 export function TalkButton({ phase, onTap }: TalkButtonProps) {
+  const t = useT();
   const listening = phase === "listening";
   const speaking = phase === "speaking";
   const thinking = phase === "thinking";
   const live = listening || speaking;
+  const label = LABEL_KEYS[phase] ? t(LABEL_KEYS[phase]!) : phase;
 
   return (
     <button
       onClick={onTap}
-      aria-label={LABELS[phase] ?? phase}
+      aria-label={label}
       style={speaking ? ({ "--orb": "var(--color-sky)" } as CSSProperties) : undefined}
       className={cn(
         "relative grid size-56 place-items-center rounded-full transition-all duration-300",
@@ -54,7 +57,7 @@ export function TalkButton({ phase, onTap }: TalkButtonProps) {
             phase === "awaiting-mic" ? "text-ink" : "text-white",
           )}
         >
-          {LABELS[phase]}
+          {label}
         </span>
       )}
     </button>

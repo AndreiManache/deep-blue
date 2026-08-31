@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, Clipboard, ClipboardCheck, Mic, Sparkles, Trash2 } from "lucide-react";
+import { Check, ChevronDown, Clipboard, ClipboardCheck, Mic, Sparkles, Trash2 } from "lucide-react";
 import {
   ApiError,
   deleteFeedbackItem,
@@ -57,6 +57,9 @@ export function AdminFeedbackPage({ onBack }: AdminFeedbackPageProps) {
   const [items, setItems] = useState<FeedbackItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Collapsed by default — a completed report is done, not something that
+  // needs to keep taking up room in the inbox you triage every day.
+  const [showArchived, setShowArchived] = useState(false);
 
   useEffect(() => {
     fetchAdminFeedback()
@@ -99,9 +102,12 @@ export function AdminFeedbackPage({ onBack }: AdminFeedbackPageProps) {
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, title, summary } : i)));
   }
 
+  const active = items.filter((item) => item.status !== "completed");
+  const archived = items.filter((item) => item.status === "completed");
+
   return (
     <div className="flex min-h-dvh flex-col gap-6 px-6 pb-16 pt-5">
-      <BackHeader title="Feedback inbox" subtitle={`${items.length} report${items.length === 1 ? "" : "s"}`} onBack={onBack} />
+      <BackHeader title="Feedback inbox" subtitle={`${active.length} report${active.length === 1 ? "" : "s"}`} onBack={onBack} />
 
       {loading && <p className="py-10 text-center text-sm font-medium text-ink/40">Loading…</p>}
       {error && (
@@ -113,19 +119,55 @@ export function AdminFeedbackPage({ onBack }: AdminFeedbackPageProps) {
         <p className="py-10 text-center text-sm font-medium text-ink/40">No feedback yet.</p>
       )}
 
-      <div className="space-y-3">
-        {items.map((item) => (
-          <FeedbackCard
-            key={item.id}
-            item={item}
-            onToggleStatus={() => toggleStatus(item)}
-            onDelete={() => handleDelete(item.id)}
-            onTranscribed={(text) => handleTranscribed(item.id, text)}
-            onNoteSaved={(note) => handleNoteSaved(item.id, note)}
-            onSummarized={(title, summary) => handleSummarized(item.id, title, summary)}
-          />
-        ))}
-      </div>
+      {active.length > 0 && (
+        <div className="space-y-3">
+          {active.map((item) => (
+            <FeedbackCard
+              key={item.id}
+              item={item}
+              onToggleStatus={() => toggleStatus(item)}
+              onDelete={() => handleDelete(item.id)}
+              onTranscribed={(text) => handleTranscribed(item.id, text)}
+              onNoteSaved={(note) => handleNoteSaved(item.id, note)}
+              onSummarized={(title, summary) => handleSummarized(item.id, title, summary)}
+            />
+          ))}
+        </div>
+      )}
+
+      {!loading && !error && active.length === 0 && archived.length > 0 && (
+        <p className="py-10 text-center text-sm font-medium text-ink/40">
+          Nothing to triage — everything's archived below.
+        </p>
+      )}
+
+      {archived.length > 0 && (
+        <div className="border-t border-ink/10 pt-4">
+          <button
+            className="flex w-full items-center justify-between text-left"
+            onClick={() => setShowArchived((s) => !s)}
+            aria-expanded={showArchived}
+          >
+            <span className="text-sm font-bold text-ink/50">Archived ({archived.length})</span>
+            <ChevronDown className={cn("size-4 text-ink/40 transition-transform", showArchived && "rotate-180")} />
+          </button>
+          {showArchived && (
+            <div className="mt-3 space-y-3">
+              {archived.map((item) => (
+                <FeedbackCard
+                  key={item.id}
+                  item={item}
+                  onToggleStatus={() => toggleStatus(item)}
+                  onDelete={() => handleDelete(item.id)}
+                  onTranscribed={(text) => handleTranscribed(item.id, text)}
+                  onNoteSaved={(note) => handleNoteSaved(item.id, note)}
+                  onSummarized={(title, summary) => handleSummarized(item.id, title, summary)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

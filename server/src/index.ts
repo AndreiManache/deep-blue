@@ -383,8 +383,8 @@ app.patch("/admin/feedback/:id", (req, res) => {
     res.status(400).json({ error: "Provide status and/or resolution_note." });
     return;
   }
-  if (hasStatus && status !== "new" && status !== "reviewed") {
-    res.status(400).json({ error: "status must be 'new' or 'reviewed'." });
+  if (hasStatus && status !== "new" && status !== "reviewed" && status !== "completed") {
+    res.status(400).json({ error: "status must be 'new', 'reviewed', or 'completed'." });
     return;
   }
   if (hasNote && typeof resolution_note !== "string" && resolution_note !== null) {
@@ -392,7 +392,7 @@ app.patch("/admin/feedback/:id", (req, res) => {
     return;
   }
   let ok = true;
-  if (hasStatus) ok = setFeedbackStatus(req.params.id, status as "new" | "reviewed") && ok;
+  if (hasStatus) ok = setFeedbackStatus(req.params.id, status as "new" | "reviewed" | "completed") && ok;
   if (hasNote) ok = setFeedbackResolutionNote(req.params.id, resolution_note as string | null) && ok;
   if (!ok) {
     res.status(404).json({ error: "Feedback not found." });

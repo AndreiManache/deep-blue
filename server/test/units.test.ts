@@ -10,6 +10,7 @@ import { computeTargets, type UserProfile } from "../src/profile.js";
 import { repairDanglingToolUse, truncatePairSafe } from "../src/sessions.js";
 import { MAX_HISTORY_TURNS } from "../src/config.js";
 import { anthropicTools, geminiTools, toolDefs } from "../src/tools.js";
+import { unitPrice } from "../src/usageCost.js";
 import { validateEntryPatch, validateFoodObservation, validateProfileInput } from "../src/validation.js";
 
 // Every field computeTargets doesn't care about for a given case still has to
@@ -288,6 +289,41 @@ describe("scaleByQuantity", () => {
       carbs_g: null,
       fat_g: null,
     });
+  });
+});
+
+describe("unitPrice (usage cost estimate)", () => {
+  it("matches the researched reference rates for LLM tokens", () => {
+    // Claude Haiku 4.5: $1/$5 per MTok input/output (platform.claude.com/docs, checked 2026-08-31)
+    assert.equal(unitPrice("anthropic", "llm_input_tokens") * 1_000_000, 1);
+    assert.equal(unitPrice("anthropic", "llm_output_tokens") * 1_000_000, 5);
+    // Gemini 3.5 Flash-Lite: $0.30/$2.50 per MTok input/output (ai.google.dev/gemini-api/docs/pricing)
+    assert.equal(unitPrice("gemini", "llm_input_tokens") * 1_000_000, 0.3);
+    assert.equal(unitPrice("gemini", "llm_output_tokens") * 1_000_000, 2.5);
+  });
+
+  it("matches the researched reference rates for TTS characters", () => {
+    // Murf Falcon 2: $10/M chars (murf.ai/falcon)
+    assert.equal(unitPrice("murf", "tts_chars") * 1_000_000, 10);
+    // ElevenLabs Flash/Turbo v2.5: $50/M chars ($0.05/1000 chars)
+    assert.equal(unitPrice("elevenlabs", "tts_chars") * 1_000_000, 50);
+  });
+
+  it("returns 0 for a provider/kind combination that doesn't apply", () => {
+    // Murf never does STT, Smallest AI never does LLM or TTS — no rate configured.
+    assert.equal(unitPrice("murf", "stt_bytes"), 0);
+    assert.equal(unitPrice("smallestai", "llm_input_tokens"), 0);
+  });
+
+  it("every configured rate is positive and finite", () => {
+    const providers = ["anthropic", "gemini", "murf", "elevenlabs", "smallestai"] as const;
+    const kinds = ["llm_input_tokens", "llm_output_tokens", "tts_chars", "stt_bytes"] as const;
+    for (const provider of providers) {
+      for (const kind of kinds) {
+        const price = unitPrice(provider, kind);
+        assert.ok(Number.isFinite(price) && price >= 0, `${provider}/${kind} should be a finite, non-negative rate`);
+      }
+    }
   });
 });
 

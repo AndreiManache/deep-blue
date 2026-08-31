@@ -14,6 +14,7 @@ import {
 import { buildSystemPrompt } from "./systemPrompt.js";
 import { executeTool, geminiTools } from "./tools.js";
 import { synthesizeSpeech } from "./ttsProvider.js";
+import { logUsage } from "./usageLog.js";
 
 // Gemini counterpart to chat.ts's runTurn. Deliberately a separate,
 // self-contained implementation rather than one "shared tool loop" forced
@@ -150,6 +151,8 @@ async function runTurnUnguarded(
   let lastStepsOut: Step[] = [];
   let exhausted = false;
   let timedOut = false;
+  let inputTokens = 0;
+  let outputTokens = 0;
 
   const deadline = Date.now() + TURN_BUDGET_MS;
 
@@ -181,6 +184,8 @@ async function runTurnUnguarded(
         ),
       deadline,
     );
+    inputTokens += interaction.usage?.total_input_tokens ?? 0;
+    outputTokens += interaction.usage?.total_output_tokens ?? 0;
 
     lastStepsOut = interaction.steps ?? [];
     const functionCalls = lastStepsOut.filter(
@@ -231,7 +236,9 @@ async function runTurnUnguarded(
   }
 
   setSteps(sessionId, steps);
-  const { audio_base64, audio_mime } = await synthesizeSpeech(reply_text, profile);
+  logUsage(userId, "gemini", "llm_input_tokens", inputTokens);
+  logUsage(userId, "gemini", "llm_output_tokens", outputTokens);
+  const { audio_base64, audio_mime } = await synthesizeSpeech(reply_text, profile, userId);
 
   return { reply_text, ended, mutated, audio_base64, audio_mime, lang: resolveSpeechLang(profile) };
 }

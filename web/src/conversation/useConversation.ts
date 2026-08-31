@@ -31,6 +31,20 @@ export interface DiagEvent {
   detail?: string;
 }
 
+// One turn of the on-screen conversation transcript (2026-08-30 backlog
+// item) — what the app heard and what it replied, so a mishear or a wrong
+// estimate is visible instead of reading as "the AI is confused" for no
+// visible reason. Client-side only, no backend change: this is exactly the
+// text already flowing through handleFinalTranscript/startSession below.
+export interface TranscriptTurn {
+  role: "user" | "assistant";
+  text: string;
+}
+// "Last few" per the backlog item, not the whole session — old turns just
+// scroll off. 3 exchanges (6 turns) is enough to orient without turning
+// into a full chat log.
+const MAX_TRANSCRIPT_TURNS = 6;
+
 export interface ConversationApi {
   phase: Phase;
   interimTranscript: string;
@@ -50,6 +64,8 @@ export interface ConversationApi {
   pendingImage: ImageAttachment | null;
   attachImage: (image: ImageAttachment) => void;
   clearImage: () => void;
+  /** Last few user/assistant turns, oldest first — see TranscriptTurn. */
+  transcriptTurns: TranscriptTurn[];
   startSession: () => void;
   endTurn: () => void;
   endSession: () => void;
@@ -72,6 +88,7 @@ export function useConversation(): ConversationApi {
   const [micPermissionDenied, setMicPermissionDenied] = useState(false);
   const [mutationSignal, setMutationSignal] = useState(0);
   const [diagnostics, setDiagnostics] = useState<DiagEvent[]>([]);
+  const [transcriptTurns, setTranscriptTurns] = useState<TranscriptTurn[]>([]);
   const [pendingImage, setPendingImage] = useState<ImageAttachment | null>(null);
   // Read synchronously inside handleFinalTranscript, which closes over stale
   // state otherwise — same pattern as phaseRef/epochRef below.
@@ -104,6 +121,14 @@ export function useConversation(): ConversationApi {
     setDiagnostics((prev) => {
       const next = [...prev, { t: Date.now(), label, detail }];
       return next.length > 300 ? next.slice(next.length - 300) : next;
+    });
+  }
+
+  function pushTranscriptTurn(role: TranscriptTurn["role"], text: string) {
+    if (!text.trim()) return;
+    setTranscriptTurns((prev) => {
+      const next = [...prev, { role, text }];
+      return next.length > MAX_TRANSCRIPT_TURNS ? next.slice(next.length - MAX_TRANSCRIPT_TURNS) : next;
     });
   }
 
@@ -224,6 +249,7 @@ export function useConversation(): ConversationApi {
 
     const myEpoch = ++epochRef.current;
     setPhaseBoth("thinking");
+    pushTranscriptTurn("user", text);
 
     // A photo describes only the very next turn — consumed here regardless
     // of outcome, so it never silently attaches to a later, unrelated turn.
@@ -242,6 +268,8 @@ export function useConversation(): ConversationApi {
       if (epochRef.current !== myEpoch) return; // endSession() fired while we were waiting — don't reopen the mic or speak into a session that's over
       setErrorMessage(null);
       languageRef.current = result.lang;
+
+      pushTranscriptTurn("assistant", result.reply_text);
 
       if (result.ended) {
         captureRef.current!.abort();
@@ -273,6 +301,7 @@ export function useConversation(): ConversationApi {
     }
     setMicPermissionDenied(false);
     setErrorMessage(null);
+    setTranscriptTurns([]);
     sessionIdRef.current = uuidv4();
     const myEpoch = ++epochRef.current;
     logDiag("── tap → start session ──");
@@ -317,6 +346,7 @@ export function useConversation(): ConversationApi {
     }
 
     if (epochRef.current !== myEpoch) return; // endSession() fired while we were fetching
+    pushTranscriptTurn("assistant", text);
     speakThenListen(text, audioBase64, audioMime);
   }
 
@@ -358,6 +388,7 @@ export function useConversation(): ConversationApi {
     pendingImage,
     attachImage,
     clearImage,
+    transcriptTurns,
     startSession,
     endTurn,
     endSession,

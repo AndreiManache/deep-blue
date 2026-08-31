@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { fetchMe, fetchProfile, getStoredToken, logout as logoutRequest, SESSION_INVALIDATED_EVENT } from "./api/client";
+import { AdminCorrectionsPage } from "./components/AdminCorrectionsPage";
 import { AdminFeedbackPage } from "./components/AdminFeedbackPage";
 import { AuthGate } from "./components/AuthGate";
 import { BarcodeScanner } from "./components/BarcodeScanner";
@@ -22,6 +23,7 @@ type View =
   | "feedback"
   | "my-feedback"
   | "admin"
+  | "corrections"
   | "providers"
   | "scan";
 
@@ -161,6 +163,7 @@ export function App() {
       )}
       {view === "my-feedback" && <MyFeedbackPage onBack={() => setView("home")} />}
       {view === "admin" && <AdminFeedbackPage onBack={() => setView("home")} />}
+      {view === "corrections" && <AdminCorrectionsPage onBack={() => setView("home")} />}
       {view === "providers" && <ProvidersPage onBack={() => setView("home")} />}
 
       {pillLabel && (

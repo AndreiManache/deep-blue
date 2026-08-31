@@ -177,7 +177,14 @@ export async function fetchEntries(date?: string): Promise<FoodEntry[]> {
   return res.json();
 }
 
-export async function editEntry(id: string, fields: Partial<Pick<FoodEntry, "description" | "calories">>): Promise<FoodEntry> {
+export type CorrectionReason = "wrong_portion" | "wrong_food" | "has_label" | "skip";
+
+export interface EditEntryFields extends Partial<Pick<FoodEntry, "description" | "calories">> {
+  correction_reason?: CorrectionReason | null;
+  correction_evidence_url?: string | null;
+}
+
+export async function editEntry(id: string, fields: EditEntryFields): Promise<FoodEntry> {
   const res = await apiFetch(`/entries/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -352,6 +359,8 @@ export interface FeedbackItem {
   created_at: string;
   status: string;
   resolution_note: string | null;
+  title: string | null;
+  summary: string | null;
 }
 
 export async function fetchAdminFeedback(): Promise<FeedbackItem[]> {
@@ -386,6 +395,7 @@ export interface MyFeedbackItem {
   created_at: string;
   status: string;
   resolution_note: string | null;
+  title: string | null;
 }
 
 export async function fetchMyFeedback(): Promise<MyFeedbackItem[]> {
@@ -407,6 +417,20 @@ export async function transcribeFeedback(id: string): Promise<string> {
   }
   const data = (await res.json()) as { transcript: string };
   return data.transcript;
+}
+
+export interface FeedbackSummaryResult {
+  title: string;
+  summary: string;
+}
+
+export async function summarizeFeedback(id: string): Promise<FeedbackSummaryResult> {
+  const res = await apiFetch(`/admin/feedback/${id}/summarize`, { method: "POST" });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new ApiError(data.error ?? "Could not generate a title.");
+  }
+  return res.json();
 }
 
 export interface ProvidersSnapshot {
@@ -490,6 +514,23 @@ export async function logFoodAgain(foodKey: string, quantity: number): Promise<F
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     throw new ApiError(data.error ?? "Could not log this food.");
   }
+  return res.json();
+}
+
+export interface CorrectionItem {
+  id: string;
+  username: string;
+  food_key: string | null;
+  old_calories: number;
+  new_calories: number;
+  reason: CorrectionReason | null;
+  evidence_url: string | null;
+  created_at: string;
+}
+
+export async function fetchCorrections(): Promise<CorrectionItem[]> {
+  const res = await apiFetch("/admin/corrections");
+  if (!res.ok) throw new ApiError("Could not load corrections.");
   return res.json();
 }
 

@@ -4,6 +4,8 @@
 // the input is acceptable. Fields that are absent/null always pass: partial
 // updates are the norm here.
 
+import { CORRECTION_REASONS } from "./corrections.js";
+
 const SEXES = ["male", "female"];
 const ACTIVITY_LEVELS = ["sedentary", "light", "moderate", "active", "very_active"];
 const GOAL_TYPES = ["lose", "maintain", "gain"];
@@ -61,6 +63,10 @@ export function validateEntryPatch(body: Record<string, unknown>): string | null
   if (badNumber(body.protein_g, 0, 5000)) return "protein_g must be a number between 0 and 5000";
   if (badNumber(body.carbs_g, 0, 5000)) return "carbs_g must be a number between 0 and 5000";
   if (badNumber(body.fat_g, 0, 5000)) return "fat_g must be a number between 0 and 5000";
+  if (badEnum(body.correction_reason, [...CORRECTION_REASONS]))
+    return `correction_reason must be one of: ${CORRECTION_REASONS.join(", ")}`;
+  if (badString(body.correction_evidence_url, 500))
+    return "correction_evidence_url must be a string of at most 500 characters";
   return null;
 }
 

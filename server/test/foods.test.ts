@@ -93,6 +93,25 @@ describe("resolveNutrition priority", () => {
     assert.equal(own.nutrition.calories, 500);
   });
 
+  it("backfills a missing macro on the remembered value from this turn's fresh estimate, without touching calories", () => {
+    const key = "protein bar";
+    // First-ever log: the model only estimated calories, no macros.
+    foods.recordObservation("maria", key, "per_item", { calories: 320, protein_g: 20, carbs_g: null, fat_g: null }, "estimate");
+
+    // A later log where the model DOES estimate carbs/fat this time.
+    const r = foods.resolveNutrition(
+      "maria",
+      key,
+      "per_item",
+      { calories: 340, protein_g: 22, carbs_g: 35, fat_g: 12 },
+    );
+    assert.equal(r.source, "yours");
+    assert.equal(r.nutrition.calories, 320, "calories stays the remembered value, not the fresh guess");
+    assert.equal(r.nutrition.protein_g, 20, "protein was already present, stays the remembered value");
+    assert.equal(r.nutrition.carbs_g, 35, "carbs was null, backfilled from the fresh estimate");
+    assert.equal(r.nutrition.fat_g, 12, "fat was null, backfilled from the fresh estimate");
+  });
+
   it("a correction outranks and is not overwritten by a later estimate", () => {
     const key = "correction food";
     foods.recordObservation("z", key, "per_100g", per100(450), "estimate");

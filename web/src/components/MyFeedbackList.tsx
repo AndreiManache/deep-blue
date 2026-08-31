@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, PartyPopper } from "lucide-react";
 import { ApiError, fetchMyFeedback, type MyFeedbackItem } from "../api/client";
 import { cn } from "../lib/utils";
 
@@ -120,6 +120,16 @@ export function MyFeedbackList() {
           {active.map((item) => (
             <FeedbackCard key={item.id} item={item} isFixed={false} />
           ))}
+        </div>
+      )}
+
+      {!loading && !error && items.length > 0 && active.length === 0 && (
+        <div className="flex flex-col items-center gap-2 rounded-[2rem] bg-leaf/10 px-6 py-10 text-center">
+          <PartyPopper className="size-7 text-leaf" />
+          <p className="font-display text-base font-extrabold text-ink">All caught up!</p>
+          <p className="text-sm font-medium leading-relaxed text-ink/60">
+            Everything you've sent has been addressed — thank you for helping make Deep Blue better.
+          </p>
         </div>
       )}
 

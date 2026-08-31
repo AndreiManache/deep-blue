@@ -67,7 +67,7 @@ import {
   type ProfileUpdateInput,
 } from "./profile.js";
 import { getDailyStats } from "./stats.js";
-import { SttNotConfiguredError, transcribeAudio } from "./sttProvider.js";
+import { SttNotConfiguredError, transcribeAudio, transcribeFeedbackAudio } from "./sttProvider.js";
 import { SMALLESTAI_STT_MODEL } from "./sttSmallest.js";
 import { STT_MODEL_ID } from "./stt.js";
 import { synthesizeSpeech } from "./ttsProvider.js";
@@ -427,11 +427,14 @@ app.delete("/admin/feedback/:id", (req, res) => {
   res.status(204).end();
 });
 
-// Transcribes a feedback report's voice note on demand (via the same
-// ElevenLabs Scribe pipeline as live conversation STT) and caches the result,
-// so it's readable text instead of audio only Andrei (not Claude) can hear.
-// No language hint — Scribe auto-detects, so a Romanian note works the same
-// as an English one.
+// Transcribes a feedback report's voice note on demand and caches the
+// result, so it's readable text instead of audio only Andrei (not Claude)
+// can hear. Always goes through ElevenLabs Scribe directly (see
+// transcribeFeedbackAudio in sttProvider.ts) rather than the live-conversation
+// STT split, which defaults to an English-only provider — a Romanian note
+// used to come back as garbled nonsense (exactly what happened to Maria's
+// reports before this fix), and her profile's language isn't even set to
+// "ro", so a language hint from it wouldn't have helped either.
 app.post("/admin/feedback/:id/transcribe", async (req, res) => {
   const audio = getFeedbackAudio(req.params.id);
   if (!audio) {
@@ -442,7 +445,7 @@ app.post("/admin/feedback/:id/transcribe", async (req, res) => {
     const buffer = Buffer.from(audio.audio_base64, "base64");
     // Logged against the admin doing the transcribing, not the reporter —
     // they're the one whose action actually spends the API call.
-    const result = await transcribeAudio(buffer, audio.audio_mime ?? "audio/mp4", res.locals.userId as string);
+    const result = await transcribeFeedbackAudio(buffer, audio.audio_mime ?? "audio/mp4", res.locals.userId as string);
     setFeedbackTranscript(req.params.id, result.text);
     res.json({ transcript: result.text });
   } catch (err) {

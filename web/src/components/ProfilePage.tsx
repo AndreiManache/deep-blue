@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronRight, UtensilsCrossed } from "lucide-react";
 import {
   ApiError,
@@ -110,22 +110,38 @@ export function ProfilePage({ onBack, onOpenMyFoods }: ProfilePageProps) {
     return v.trim() === "" || Number.isNaN(n) ? null : n;
   }
 
-  async function handleSave() {
-    if (!profile || saving) return;
+  async function saveNow(toSave: UserProfile) {
     setSaving(true);
     setError(null);
     try {
-      const res = await saveProfile(profile);
-      setProfile(res.profile);
+      const res = await saveProfile(toSave);
       setTargets(res.targets);
       setSavedFlash(true);
-      setTimeout(() => setSavedFlash(false), 2000);
+      setTimeout(() => setSavedFlash(false), 1500);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("profile.saveError"));
     } finally {
       setSaving(false);
     }
   }
+
+  // Auto-saves on every field change instead of requiring a "Save profile"
+  // button press (2026-08-31, requested explicitly) — debounced so typing a
+  // name or a height value doesn't fire a request per keystroke. The first
+  // time `profile` becomes non-null is the initial fetch landing, not a
+  // user edit, so that one is skipped rather than immediately re-saving
+  // unchanged data on every page open.
+  const initializedRef = useRef(false);
+  useEffect(() => {
+    if (!profile) return;
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      return;
+    }
+    const timeout = window.setTimeout(() => void saveNow(profile), 700);
+    return () => window.clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile]);
 
   return (
     <div className="flex min-h-dvh flex-col gap-6 px-6 pb-16 pt-5">
@@ -289,13 +305,11 @@ export function ProfilePage({ onBack, onOpenMyFoods }: ProfilePageProps) {
             </p>
           )}
 
-          <button
-            className="w-full rounded-2xl bg-coral py-4 text-sm font-bold text-white shadow-lg shadow-coral/40 transition-transform active:scale-[0.98] disabled:opacity-60"
-            onClick={handleSave}
-            disabled={saving}
-          >
-            {saving ? t("profile.saving") : savedFlash ? t("profile.saved") : t("profile.save")}
-          </button>
+          {(saving || savedFlash) && (
+            <p className="text-center text-xs font-semibold text-ink/40">
+              {saving ? t("profile.saving") : t("profile.saved")}
+            </p>
+          )}
         </>
       )}
     </div>

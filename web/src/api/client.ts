@@ -359,6 +359,7 @@ export async function submitFeedback(input: SubmitFeedbackInput): Promise<void> 
 
 export interface FeedbackItem {
   id: string;
+  ticket_number: number;
   username: string;
   message: string | null;
   audio_base64: string | null;
@@ -400,6 +401,7 @@ export async function setFeedbackResolutionNote(id: string, resolution_note: str
 
 export interface MyFeedbackItem {
   id: string;
+  ticket_number: number;
   message: string | null;
   transcript: string | null;
   has_audio: number;

@@ -43,11 +43,10 @@ function FeedbackCard({ item, isFixed }: FeedbackCardProps) {
     <div className="rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-ink/5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          {item.title && (
-            <div className="truncate font-display text-sm font-extrabold tracking-tight text-ink">
-              {item.title}
-            </div>
-          )}
+          <div className="truncate font-display text-sm font-extrabold tracking-tight text-ink">
+            <span className="text-ink/35">#{item.ticket_number}</span>
+            {item.title ? ` ${item.title}` : ""}
+          </div>
           <div className="text-xs font-semibold text-ink/40">{fmtTime(item.created_at, locale)}</div>
         </div>
         <span

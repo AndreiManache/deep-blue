@@ -53,7 +53,7 @@ export function HomeScreen({ conversation, onNavigate, onScan, onLogout, isAdmin
   return (
     <div className="flex min-h-dvh flex-col px-6 pb-10 pt-5">
       <header className="flex items-center justify-between">
-        <HamburgerMenu onNavigate={onNavigate} onLogout={onLogout} isAdmin={isAdmin} language={language} />
+        <HamburgerMenu onNavigate={onNavigate} onLogout={onLogout} language={language} />
         <div className="flex items-center gap-2.5">
           <div className="font-display text-lg font-bold lowercase tracking-tight text-ink">
             deep blue

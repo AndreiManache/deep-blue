@@ -272,6 +272,13 @@ export async function fetchStats(days: number): Promise<StatsResponse> {
   return res.json();
 }
 
+export async function fetchDayInsight(date: string): Promise<string | null> {
+  const res = await apiFetch(`/stats/insight?date=${encodeURIComponent(date)}`);
+  if (!res.ok) return null; // optional AI feature — fail silently, same as foodStats
+  const data = (await res.json()) as { insight: string | null };
+  return data.insight;
+}
+
 export interface FoodDbStats {
   yours: number;
   verified: number;
@@ -460,26 +467,6 @@ export interface ProvidersSnapshot {
 export async function fetchProviders(): Promise<ProvidersSnapshot> {
   const res = await apiFetch("/admin/providers");
   if (!res.ok) throw new ApiError("Could not load provider info.");
-  return res.json();
-}
-
-export interface UsageBreakdownRow {
-  provider: string;
-  kind: string;
-  amount: number;
-  estimated_cost_usd: number;
-}
-
-export interface UsageSummary {
-  today: UsageBreakdownRow[];
-  today_total_usd: number;
-  this_month: UsageBreakdownRow[];
-  this_month_total_usd: number;
-}
-
-export async function fetchUsageSummary(): Promise<UsageSummary> {
-  const res = await apiFetch("/stats/usage");
-  if (!res.ok) throw new ApiError("Could not load usage.");
   return res.json();
 }
 

@@ -42,7 +42,7 @@ import {
   scaleByQuantity,
   totalFromBasis,
 } from "./foods.js";
-import { getUsageSummary } from "./usageCost.js";
+import { getAllUsersUsage, getUsageSummary } from "./usageCost.js";
 import { lookupBarcode } from "./openfoodfacts.js";
 import {
   createFeedback,
@@ -375,6 +375,12 @@ app.get("/admin/providers", (_req, res) => {
 
 app.get("/admin/feedback", (_req, res) => {
   res.json(listFeedback());
+});
+
+// The admin panel's home view: every registered account with its all-time
+// estimated spend, most expensive first (2026-08-31).
+app.get("/admin/users", (_req, res) => {
+  res.json(getAllUsersUsage());
 });
 
 // Audit trail of calorie edits with a reason/evidence — see corrections.ts.

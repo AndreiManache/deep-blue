@@ -116,3 +116,50 @@ export function getUsageSummary(userId: string): UsageSummary {
     this_month_total_usd: thisMonth.total,
   };
 }
+
+export interface UserUsageRow {
+  user_id: string;
+  username: string;
+  created_at: string;
+  total_usage_usd: number;
+}
+
+// Every registered account's all-time estimated spend — the admin panel's
+// user list (2026-08-31). All-time rather than today/this-month like
+// getUsageSummary above: this is a standing account registry, not a billing
+// statement, so "what has this account cost since it signed up" is the more
+// useful single number. LEFT JOIN so a brand-new account with no usage_log
+// rows yet still shows up, at $0.
+const allUsersUsageStmt = db.prepare(`
+  SELECT u.id AS user_id, u.username, u.created_at, ul.provider, ul.kind, SUM(ul.amount) AS amount
+    FROM users u
+    LEFT JOIN usage_log ul ON ul.user_id = u.id
+   GROUP BY u.id, ul.provider, ul.kind
+`);
+
+export function getAllUsersUsage(): UserUsageRow[] {
+  const raw = allUsersUsageStmt.all() as unknown as {
+    user_id: string;
+    username: string;
+    created_at: string;
+    provider: UsageProvider | null;
+    kind: UsageKind | null;
+    amount: number | null;
+  }[];
+
+  const byUser = new Map<string, UserUsageRow>();
+  for (const row of raw) {
+    let entry = byUser.get(row.user_id);
+    if (!entry) {
+      entry = { user_id: row.user_id, username: row.username, created_at: row.created_at, total_usage_usd: 0 };
+      byUser.set(row.user_id, entry);
+    }
+    if (row.provider && row.kind && row.amount) {
+      entry.total_usage_usd += row.amount * unitPrice(row.provider, row.kind);
+    }
+  }
+
+  return [...byUser.values()]
+    .map((u) => ({ ...u, total_usage_usd: Math.round(u.total_usage_usd * 10000) / 10000 }))
+    .sort((a, b) => b.total_usage_usd - a.total_usage_usd);
+}

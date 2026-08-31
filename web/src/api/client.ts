@@ -483,6 +483,19 @@ export async function fetchUsageSummary(): Promise<UsageSummary> {
   return res.json();
 }
 
+export interface AdminUserRow {
+  user_id: string;
+  username: string;
+  created_at: string;
+  total_usage_usd: number;
+}
+
+export async function fetchAdminUsers(): Promise<AdminUserRow[]> {
+  const res = await apiFetch("/admin/users");
+  if (!res.ok) throw new ApiError("Could not load users.");
+  return res.json();
+}
+
 export type FoodBasis = "per_100g" | "per_item";
 
 export interface MyFoodItem {

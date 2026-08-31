@@ -8,6 +8,7 @@ export type MenuView =
   | "feedback"
   | "my-feedback"
   | "admin"
+  | "admin-panel"
   | "corrections"
   | "providers";
 
@@ -80,9 +81,9 @@ export function HamburgerMenu({ onNavigate, onLogout, isAdmin, language }: Hambu
             {isAdmin && (
               <button
                 className="block w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-ink transition-colors hover:bg-ink3"
-                onClick={() => go("admin")}
+                onClick={() => go("admin-panel")}
               >
-                Feedback inbox
+                Admin panel
               </button>
             )}
             {isAdmin && (
@@ -91,14 +92,6 @@ export function HamburgerMenu({ onNavigate, onLogout, isAdmin, language }: Hambu
                 onClick={() => go("corrections")}
               >
                 Corrections
-              </button>
-            )}
-            {isAdmin && (
-              <button
-                className="block w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-ink transition-colors hover:bg-ink3"
-                onClick={() => go("providers")}
-              >
-                Models in use
               </button>
             )}
             <button

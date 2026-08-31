@@ -1,4 +1,4 @@
-import { ScanBarcode } from "lucide-react";
+import { ScanBarcode, Shield } from "lucide-react";
 import type { ConversationApi, Phase } from "../conversation/useConversation";
 import { ErrorBanner } from "./ErrorBanner";
 import { Greeting } from "./Greeting";
@@ -94,12 +94,25 @@ export function HomeScreen({ conversation, onNavigate, onScan, onLogout, isAdmin
                 </button>
               )}
             </div>
-            <p className="min-h-6 text-center text-sm font-semibold text-ink/50">
-              {HINTS[phase] ??
-                (pendingImage
-                  ? "Tap the orb and describe what's in the photo."
-                  : "Tap the orb and just talk — “I had two eggs and a coffee for breakfast.”")}
-            </p>
+            {HINTS[phase] ? (
+              <p className="min-h-6 text-center text-sm font-semibold text-ink/50">{HINTS[phase]}</p>
+            ) : pendingImage ? (
+              <p className="min-h-6 text-center text-sm font-semibold text-ink/50">
+                Tap the orb and describe what's in the photo.
+              </p>
+            ) : isAdmin ? (
+              <button
+                className="flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-sm font-bold text-ink shadow-sm ring-1 ring-ink/5 transition-colors hover:bg-ink3"
+                onClick={() => onNavigate("admin-panel")}
+              >
+                <Shield className="size-4 text-coral" />
+                Admin panel
+              </button>
+            ) : (
+              <p className="min-h-6 text-center text-sm font-semibold text-ink/50">
+                Tap the orb and just talk — “I had two eggs and a coffee for breakfast.”
+              </p>
+            )}
           </>
         )}
       </main>

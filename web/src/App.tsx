@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { fetchMe, fetchProfile, getStoredToken, logout as logoutRequest, SESSION_INVALIDATED_EVENT } from "./api/client";
 import { AdminCorrectionsPage } from "./components/AdminCorrectionsPage";
 import { AdminFeedbackPage } from "./components/AdminFeedbackPage";
+import { AdminPanelPage } from "./components/AdminPanelPage";
 import { AuthGate } from "./components/AuthGate";
 import { BarcodeScanner } from "./components/BarcodeScanner";
 import { Dashboard } from "./components/Dashboard";
@@ -23,6 +24,7 @@ type View =
   | "feedback"
   | "my-feedback"
   | "admin"
+  | "admin-panel"
   | "corrections"
   | "providers"
   | "scan";
@@ -162,9 +164,16 @@ export function App() {
         <FeedbackPage diagnostics={conversation.diagnostics} onBack={() => setView("home")} />
       )}
       {view === "my-feedback" && <MyFeedbackPage onBack={() => setView("home")} />}
-      {view === "admin" && <AdminFeedbackPage onBack={() => setView("home")} />}
+      {view === "admin-panel" && (
+        <AdminPanelPage
+          onBack={() => setView("home")}
+          onOpenFeedbackInbox={() => setView("admin")}
+          onOpenModelsInUse={() => setView("providers")}
+        />
+      )}
+      {view === "admin" && <AdminFeedbackPage onBack={() => setView("admin-panel")} />}
       {view === "corrections" && <AdminCorrectionsPage onBack={() => setView("home")} />}
-      {view === "providers" && <ProvidersPage onBack={() => setView("home")} />}
+      {view === "providers" && <ProvidersPage onBack={() => setView("admin-panel")} />}
 
       {pillLabel && (
         <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full bg-ink py-2 pl-5 pr-2 shadow-xl">

@@ -32,10 +32,13 @@ function descriptionFor(item: MyFeedbackItem): string {
 
 interface FeedbackCardProps {
   item: MyFeedbackItem;
-  showStatus: boolean;
+  // A card in the "Fixed issues" section always shows the green "Done" tag
+  // regardless of the underlying new/reviewed status — that status was only
+  // ever about admin-side triage, and stops being relevant once it's fixed.
+  isFixed: boolean;
 }
 
-function FeedbackCard({ item, showStatus }: FeedbackCardProps) {
+function FeedbackCard({ item, isFixed }: FeedbackCardProps) {
   return (
     <div className="rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-ink/5">
       <div className="flex items-start justify-between gap-3">
@@ -47,16 +50,18 @@ function FeedbackCard({ item, showStatus }: FeedbackCardProps) {
           )}
           <div className="text-xs font-semibold text-ink/40">{fmtTime(item.created_at)}</div>
         </div>
-        {showStatus && (
-          <span
-            className={cn(
-              "shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide",
-              item.status === "new" ? "bg-coral/10 text-coral" : "bg-sky/10 text-sky",
-            )}
-          >
-            {item.status === "new" ? "Sent" : "Reviewed"}
-          </span>
-        )}
+        <span
+          className={cn(
+            "shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide",
+            isFixed
+              ? "bg-leaf/15 text-leaf"
+              : item.status === "new"
+                ? "bg-coral/10 text-coral"
+                : "bg-sky/10 text-sky",
+          )}
+        >
+          {isFixed ? "Done" : item.status === "new" ? "Sent" : "Reviewed"}
+        </span>
       </div>
       <p className="mt-2 text-sm font-medium leading-relaxed text-ink/80">{descriptionFor(item)}</p>
       {item.image_base64 && (
@@ -116,7 +121,7 @@ export function MyFeedbackPage({ onBack }: MyFeedbackPageProps) {
       {active.length > 0 && (
         <div className="space-y-3">
           {active.map((item) => (
-            <FeedbackCard key={item.id} item={item} showStatus />
+            <FeedbackCard key={item.id} item={item} isFixed={false} />
           ))}
         </div>
       )}
@@ -134,7 +139,7 @@ export function MyFeedbackPage({ onBack }: MyFeedbackPageProps) {
           {showFixed && (
             <div className="mt-3 space-y-3">
               {fixed.map((item) => (
-                <FeedbackCard key={item.id} item={item} showStatus={false} />
+                <FeedbackCard key={item.id} item={item} isFixed />
               ))}
             </div>
           )}

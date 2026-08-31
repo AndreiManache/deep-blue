@@ -35,6 +35,7 @@ export default defineConfig({
       "/feedback": "http://localhost:3001",
       "/admin": "http://localhost:3001",
       "/barcode": "http://localhost:3001",
+      "/foods": "http://localhost:3001",
     },
   },
 });

@@ -4,11 +4,14 @@
 // the input is acceptable. Fields that are absent/null always pass: partial
 // updates are the norm here.
 
+import { CORRECTION_REASONS } from "./corrections.js";
+
 const SEXES = ["male", "female"];
 const ACTIVITY_LEVELS = ["sedentary", "light", "moderate", "active", "very_active"];
 const GOAL_TYPES = ["lose", "maintain", "gain"];
 const GOAL_RATES = ["gentle", "moderate", "aggressive"];
 const LANGUAGES = ["en", "ro"];
+const BASES = ["per_100g", "per_item"];
 
 function badNumber(value: unknown, min: number, max: number): boolean {
   if (value === undefined || value === null) return false;
@@ -60,5 +63,25 @@ export function validateEntryPatch(body: Record<string, unknown>): string | null
   if (badNumber(body.protein_g, 0, 5000)) return "protein_g must be a number between 0 and 5000";
   if (badNumber(body.carbs_g, 0, 5000)) return "carbs_g must be a number between 0 and 5000";
   if (badNumber(body.fat_g, 0, 5000)) return "fat_g must be a number between 0 and 5000";
+  if (badEnum(body.correction_reason, [...CORRECTION_REASONS]))
+    return `correction_reason must be one of: ${CORRECTION_REASONS.join(", ")}`;
+  if (badString(body.correction_evidence_url, 500))
+    return "correction_evidence_url must be a string of at most 500 characters";
+  return null;
+}
+
+// "My Foods" screen — a user directly seeding/editing their own remembered
+// value for a food (see foods.ts's food_observations table).
+export function validateFoodObservation(body: Record<string, unknown>): string | null {
+  if (typeof body !== "object" || body === null) return "Body must be an object";
+  if (typeof body.food_key !== "string" || !body.food_key.trim() || body.food_key.length > 80)
+    return "food_key must be a non-empty string of at most 80 characters";
+  if (typeof body.basis !== "string" || !BASES.includes(body.basis))
+    return `basis must be one of: ${BASES.join(", ")}`;
+  if (typeof body.calories !== "number" || !Number.isFinite(body.calories) || body.calories < 0 || body.calories > 2000)
+    return "calories must be a number between 0 and 2000";
+  if (badNumber(body.protein_g, 0, 500)) return "protein_g must be a number between 0 and 500";
+  if (badNumber(body.carbs_g, 0, 500)) return "carbs_g must be a number between 0 and 500";
+  if (badNumber(body.fat_g, 0, 500)) return "fat_g must be a number between 0 and 500";
   return null;
 }

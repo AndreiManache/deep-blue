@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Inbox, Sparkles } from "lucide-react";
+import { Inbox, ListChecks, Sparkles } from "lucide-react";
 import { ApiError, fetchAdminUsers, type AdminUserRow } from "../api/client";
 import { BackHeader } from "./BackHeader";
 
@@ -7,6 +7,7 @@ interface AdminPanelPageProps {
   onBack: () => void;
   onOpenFeedbackInbox: () => void;
   onOpenModelsInUse: () => void;
+  onOpenCorrections: () => void;
 }
 
 function fmtUsd(n: number): string {
@@ -23,7 +24,12 @@ function fmtDate(iso: string): string {
 // a users table plus links out to the pages that used to sit directly in
 // the hamburger menu — with more admin views expected to move in here over
 // time rather than staying scattered across top-level menu items.
-export function AdminPanelPage({ onBack, onOpenFeedbackInbox, onOpenModelsInUse }: AdminPanelPageProps) {
+export function AdminPanelPage({
+  onBack,
+  onOpenFeedbackInbox,
+  onOpenModelsInUse,
+  onOpenCorrections,
+}: AdminPanelPageProps) {
   const [users, setUsers] = useState<AdminUserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -39,20 +45,27 @@ export function AdminPanelPage({ onBack, onOpenFeedbackInbox, onOpenModelsInUse 
     <div className="flex min-h-dvh flex-col gap-6 px-6 pb-16 pt-5">
       <BackHeader title="Admin panel" subtitle="Deep Blue, from the inside" onBack={onBack} />
 
-      <div className="flex gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <button
-          className="flex flex-1 items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-bold text-ink shadow-sm ring-1 ring-ink/5 transition-colors hover:bg-ink3"
+          className="flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-bold text-ink shadow-sm ring-1 ring-ink/5 transition-colors hover:bg-ink3"
           onClick={onOpenFeedbackInbox}
         >
           <Inbox className="size-4 text-coral" />
           Feedback inbox
         </button>
         <button
-          className="flex flex-1 items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-bold text-ink shadow-sm ring-1 ring-ink/5 transition-colors hover:bg-ink3"
+          className="flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-bold text-ink shadow-sm ring-1 ring-ink/5 transition-colors hover:bg-ink3"
           onClick={onOpenModelsInUse}
         >
           <Sparkles className="size-4 text-sky" />
           Models in use
+        </button>
+        <button
+          className="flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-bold text-ink shadow-sm ring-1 ring-ink/5 transition-colors hover:bg-ink3"
+          onClick={onOpenCorrections}
+        >
+          <ListChecks className="size-4 text-leaf" />
+          Corrections
         </button>
       </div>
 

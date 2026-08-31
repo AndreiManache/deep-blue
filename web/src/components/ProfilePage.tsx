@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { ChevronRight, UtensilsCrossed } from "lucide-react";
 import {
   ApiError,
   fetchProfile,
@@ -16,6 +17,7 @@ import { cn } from "../lib/utils";
 
 interface ProfilePageProps {
   onBack: () => void;
+  onOpenMyFoods: () => void;
 }
 
 const inputClass =
@@ -62,7 +64,7 @@ function Chips<T extends string>({
   );
 }
 
-export function ProfilePage({ onBack }: ProfilePageProps) {
+export function ProfilePage({ onBack, onOpenMyFoods }: ProfilePageProps) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [targets, setTargets] = useState<Targets | null>(null);
   const [loading, setLoading] = useState(true);
@@ -123,6 +125,17 @@ export function ProfilePage({ onBack }: ProfilePageProps) {
   return (
     <div className="flex min-h-dvh flex-col gap-6 px-6 pb-16 pt-5">
       <BackHeader title="Profile" subtitle="What powers your targets" onBack={onBack} />
+
+      <button
+        className="flex items-center justify-between rounded-2xl bg-white px-4 py-3.5 text-sm font-bold text-ink shadow-sm ring-1 ring-ink/5 transition-colors hover:bg-ink3"
+        onClick={onOpenMyFoods}
+      >
+        <span className="flex items-center gap-2">
+          <UtensilsCrossed className="size-4 text-coral" />
+          My Foods
+        </span>
+        <ChevronRight className="size-4 text-ink/30" />
+      </button>
 
       {loading ? (
         <p className="py-10 text-center text-sm font-medium text-ink/40">Loading…</p>

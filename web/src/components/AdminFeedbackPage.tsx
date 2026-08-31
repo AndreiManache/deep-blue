@@ -70,7 +70,7 @@ export function AdminFeedbackPage({ onBack }: AdminFeedbackPageProps) {
 
   // Cycles new -> reviewed -> completed -> new. 'completed' is the explicit
   // "fixed, tell the reporter" signal — it's what moves the report into
-  // their collapsed "Fixed issues" section (see MyFeedbackPage.tsx).
+  // their collapsed "Fixed issues" section (see MyFeedbackList.tsx).
   async function toggleStatus(item: FeedbackItem) {
     const next = item.status === "new" ? "reviewed" : item.status === "reviewed" ? "completed" : "new";
     setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, status: next } : i)));

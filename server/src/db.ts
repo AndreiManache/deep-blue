@@ -164,6 +164,16 @@ if (!feedbackColumns.some((col) => col.name === "transcript")) {
 if (!feedbackColumns.some((col) => col.name === "resolution_note")) {
   db.exec(`ALTER TABLE feedback ADD COLUMN resolution_note TEXT;`);
 }
+// LLM-generated (2026-08-30, on-demand from the admin inbox) from the
+// report's own message/transcript, purely for faster triage — a report
+// still fully works with these null, same degrade-gracefully pattern as
+// every optional AI feature in this app.
+if (!feedbackColumns.some((col) => col.name === "title")) {
+  db.exec(`ALTER TABLE feedback ADD COLUMN title TEXT;`);
+}
+if (!feedbackColumns.some((col) => col.name === "summary")) {
+  db.exec(`ALTER TABLE feedback ADD COLUMN summary TEXT;`);
+}
 
 // One nutrition observation per (food_key, user): that user's best value for a
 // food, normalized to a basis (per 100g, or per one item when grams are
@@ -207,3 +217,25 @@ db.exec(`
   );
 `);
 db.exec(`CREATE INDEX IF NOT EXISTS idx_usage_log_user_created ON usage_log (user_id, created_at);`);
+
+// Audit trail for calorie edits (2026-08-27 backlog item: "entry-correction
+// capture with reason + evidence"). food_observations already tracks *what*
+// a user's corrected value is (feeds the consensus math); this tracks *why*
+// a given edit happened, so an admin reviewing the food knowledge base can
+// tell a mis-portioned guess from a genuinely ambiguous food from a typo,
+// and "5 people agree" can eventually be weighted by how many of those
+// corrections actually carried a reason/evidence link. Purely additive —
+// doesn't touch food_observations or food_entries.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS entry_corrections (
+    id TEXT PRIMARY KEY,
+    entry_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    food_key TEXT,
+    old_calories INTEGER NOT NULL,
+    new_calories INTEGER NOT NULL,
+    reason TEXT,
+    evidence_url TEXT,
+    created_at TEXT NOT NULL
+  );
+`);

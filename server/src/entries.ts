@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { type CorrectionReason, recordCorrection } from "./corrections.js";
 import { db } from "./db.js";
 import { perBasisFromTotal, recordObservation } from "./foods.js";
 
@@ -106,6 +107,10 @@ export interface UpdateEntryInput {
   protein_g?: number | null;
   carbs_g?: number | null;
   fat_g?: number | null;
+  // Optional context for *why* a calorie edit happened — see corrections.ts.
+  // Ignored (silently) when calories isn't also being changed this call.
+  correction_reason?: CorrectionReason | null;
+  correction_evidence_url?: string | null;
 }
 
 const updateStmt = db.prepare(`
@@ -162,6 +167,19 @@ export function updateEntry(userId: string, id: string, fields: UpdateEntryInput
       merged.grams,
     );
     recordObservation(userId, merged.food_key, basis, nutrition, "correction");
+  }
+
+  // Audit trail: why the edit happened, separate from the value itself.
+  if (caloriesChanged && merged.calories !== existing.calories) {
+    recordCorrection({
+      entryId: merged.id,
+      userId,
+      foodKey: merged.food_key,
+      oldCalories: existing.calories,
+      newCalories: merged.calories,
+      reason: fields.correction_reason ?? null,
+      evidenceUrl: fields.correction_evidence_url?.trim() || null,
+    });
   }
 
   return rowToEntry(merged);

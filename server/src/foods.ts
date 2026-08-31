@@ -60,6 +60,61 @@ const countUserFoodsStmt = db.prepare(
 );
 const distinctFoodKeysStmt = db.prepare(`SELECT DISTINCT food_key FROM food_observations`);
 
+const listUserObsStmt = db.prepare(
+  `SELECT food_key, basis, calories, protein_g, carbs_g, fat_g, source, updated_at
+     FROM food_observations WHERE user_id = :user_id
+    ORDER BY updated_at DESC`,
+);
+
+export interface UserObservation {
+  food_key: string;
+  basis: Basis;
+  calories: number;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  source: ObservationSource;
+  updated_at: string;
+}
+
+// The "My Foods" screen (2026-08-27 backlog item) — every food this user has
+// ever fed into the knowledge base, newest-touched first, so they can see
+// and directly manage what the app remembers about their foods rather than
+// only ever shaping it indirectly through logging/editing entries.
+export function listUserObservations(userId: string): UserObservation[] {
+  return listUserObsStmt.all({ user_id: userId }) as unknown as UserObservation[];
+}
+
+// Single-food lookup for the "log this again" quick action (My Foods
+// screen) — same row recordObservation/resolveNutrition already read via
+// getUserObsStmt, just exposed directly since the caller has one food_key
+// in hand rather than iterating the whole list.
+export function getUserObservation(
+  userId: string,
+  foodKey: string,
+): { basis: Basis; nutrition: Nutrition } | undefined {
+  const row = getUserObsStmt.get(foodKey, userId) as unknown as ObservationRow | undefined;
+  if (!row) return undefined;
+  return {
+    basis: row.basis,
+    nutrition: {
+      calories: row.calories,
+      protein_g: row.protein_g,
+      carbs_g: row.carbs_g,
+      fat_g: row.fat_g,
+    },
+  };
+}
+
+const deleteObsStmt = db.prepare(
+  `DELETE FROM food_observations WHERE food_key = :food_key AND user_id = :user_id`,
+);
+
+export function deleteObservation(userId: string, foodKey: string): boolean {
+  const result = deleteObsStmt.run({ food_key: foodKey, user_id: userId });
+  return Number(result.changes) > 0;
+}
+
 const upsertObsStmt = db.prepare(`
   INSERT INTO food_observations (food_key, user_id, basis, calories, protein_g, carbs_g, fat_g, source, updated_at)
   VALUES (:food_key, :user_id, :basis, :calories, :protein_g, :carbs_g, :fat_g, :source, :updated_at)
@@ -122,6 +177,15 @@ export function perBasisFromTotal(
 export function totalFromBasis(perBasis: Nutrition, basis: Basis, grams: number | null): Nutrition {
   if (basis === "per_100g" && grams && grams > 0) return scale(perBasis, grams / 100);
   return { ...perBasis };
+}
+
+// Same idea as totalFromBasis, but for the "log this again" quick action
+// (My Foods screen) where a per_item food can be re-logged more than
+// once at a time — totalFromBasis's per_item branch deliberately always
+// assumes exactly 1 (that's what every existing caller needs), so this is
+// additive rather than a behavior change to it.
+export function scaleByQuantity(perBasis: Nutrition, basis: Basis, quantity: number): Nutrition {
+  return basis === "per_100g" ? scale(perBasis, quantity / 100) : scale(perBasis, quantity);
 }
 
 function median(values: number[]): number {

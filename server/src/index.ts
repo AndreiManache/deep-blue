@@ -30,20 +30,33 @@ import {
   TTS_PROVIDER,
   USERNAME,
 } from "./config.js";
+import { listCorrections } from "./corrections.js";
 import { createEntry, deleteEntry, getEntriesForDate, updateEntry } from "./entries.js";
-import { getFoodDbStats, normalizeFoodKey, recordObservation, totalFromBasis } from "./foods.js";
+import {
+  deleteObservation,
+  getFoodDbStats,
+  getUserObservation,
+  listUserObservations,
+  normalizeFoodKey,
+  recordObservation,
+  scaleByQuantity,
+  totalFromBasis,
+} from "./foods.js";
 import { getUsageSummary } from "./usageCost.js";
 import { lookupBarcode } from "./openfoodfacts.js";
 import {
   createFeedback,
   deleteFeedback,
   getFeedbackAudio,
+  getFeedbackText,
   listFeedback,
   listFeedbackForUser,
   setFeedbackResolutionNote,
   setFeedbackStatus,
+  setFeedbackTitleSummary,
   setFeedbackTranscript,
 } from "./feedback.js";
+import { summarizeFeedback } from "./feedbackSummary.js";
 import {
   computeTargets,
   getProfile,
@@ -56,7 +69,12 @@ import { SttNotConfiguredError, transcribeAudio } from "./sttProvider.js";
 import { SMALLESTAI_STT_MODEL } from "./sttSmallest.js";
 import { STT_MODEL_ID } from "./stt.js";
 import { synthesizeSpeech } from "./ttsProvider.js";
-import { validateBarcodeEntry, validateEntryPatch, validateProfileInput } from "./validation.js";
+import {
+  validateBarcodeEntry,
+  validateEntryPatch,
+  validateFoodObservation,
+  validateProfileInput,
+} from "./validation.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -193,6 +211,7 @@ app.use(
     "/feedback",
     "/barcode",
     "/synthesize",
+    "/foods",
   ],
   requireAuth,
 );
@@ -323,6 +342,11 @@ app.get("/admin/feedback", (_req, res) => {
   res.json(listFeedback());
 });
 
+// Audit trail of calorie edits with a reason/evidence — see corrections.ts.
+app.get("/admin/corrections", (_req, res) => {
+  res.json(listCorrections());
+});
+
 // Accepts status and/or resolution_note independently — an admin can leave
 // a note without changing status, flip status without a note, or both at
 // once. At least one of the two must be present.
@@ -387,6 +411,27 @@ app.post("/admin/feedback/:id/transcribe", async (req, res) => {
     console.error("[/admin/feedback/:id/transcribe] error:", err);
     res.status(502).json({ error: "Could not transcribe this voice note." });
   }
+});
+
+// Generates a short title + one-sentence summary from whatever text a
+// report already has (message, or a transcript already produced above) —
+// on demand, not automatic on submit, same cost-avoidance reasoning as
+// transcription itself. Works for text-only reports too, not just voice
+// ones (2026-08-30 backlog item was voice-specific, but the underlying
+// "faster triage" value applies equally to a typed report).
+app.post("/admin/feedback/:id/summarize", async (req, res) => {
+  const text = getFeedbackText(req.params.id);
+  if (!text) {
+    res.status(400).json({ error: "Nothing to summarize yet — transcribe the voice note first." });
+    return;
+  }
+  const result = await summarizeFeedback(text);
+  if (!result) {
+    res.status(502).json({ error: "Could not generate a title right now." });
+    return;
+  }
+  setFeedbackTitleSummary(req.params.id, result.title, result.summary);
+  res.json(result);
 });
 
 const IMAGE_MEDIA_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
@@ -623,6 +668,91 @@ app.get("/stats/foods", (_req, res) => {
 // TTS are byte/char-based approximations, not exact provider-billed units).
 app.get("/stats/usage", (_req, res) => {
   res.json(getUsageSummary(res.locals.userId as string));
+});
+
+// "My Foods" — view and directly seed/manage your own remembered value for a
+// food, rather than only ever shaping it indirectly through logging/editing
+// entries (2026-08-27 backlog item).
+app.get("/foods/mine", (_req, res) => {
+  res.json(listUserObservations(res.locals.userId as string));
+});
+
+// Upsert (same food_key -> update, per food_observations' primary key).
+// Always recorded as a "correction" — the user is directly asserting their
+// own value here, not the model producing an "estimate".
+app.put("/foods/mine", (req, res) => {
+  const validationError = validateFoodObservation(req.body ?? {});
+  if (validationError) {
+    res.status(400).json({ error: validationError });
+    return;
+  }
+  const { food_key, basis, calories, protein_g, carbs_g, fat_g } = req.body as {
+    food_key: string;
+    basis: "per_100g" | "per_item";
+    calories: number;
+    protein_g?: number | null;
+    carbs_g?: number | null;
+    fat_g?: number | null;
+  };
+  const foodKey = normalizeFoodKey(food_key);
+  if (!foodKey) {
+    res.status(400).json({ error: "food_key must be a non-empty string." });
+    return;
+  }
+  recordObservation(
+    res.locals.userId as string,
+    foodKey,
+    basis,
+    { calories, protein_g: protein_g ?? null, carbs_g: carbs_g ?? null, fat_g: fat_g ?? null },
+    "correction",
+  );
+  res.json(listUserObservations(res.locals.userId as string).find((o) => o.food_key === foodKey));
+});
+
+app.delete("/foods/mine/:foodKey", (req, res) => {
+  const ok = deleteObservation(res.locals.userId as string, req.params.foodKey);
+  if (!ok) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  res.status(204).end();
+});
+
+// "Log this again" — one tap from the My Foods screen re-logs a remembered
+// food without rescanning/re-describing it (2026-08 backlog item, Andrei:
+// scanned milk two days running and wanted a faster way to pick it again).
+// quantity means grams for a per_100g food, item count for a per_item one —
+// see scaleByQuantity. Always logs as "yours": this *is* the user's own
+// remembered value, the same provenance an edited entry gets.
+app.post("/foods/mine/:foodKey/log", (req, res) => {
+  const userId = res.locals.userId as string;
+  const observation = getUserObservation(userId, req.params.foodKey);
+  if (!observation) {
+    res.status(404).json({ error: "You haven't logged this food before." });
+    return;
+  }
+  const { quantity } = (req.body ?? {}) as { quantity?: unknown };
+  const qty = typeof quantity === "number" && Number.isFinite(quantity) ? quantity : 1;
+  const maxQty = observation.basis === "per_100g" ? 5000 : 50;
+  if (qty <= 0 || qty > maxQty) {
+    res.status(400).json({ error: `quantity must be a number between 0 and ${maxQty}` });
+    return;
+  }
+
+  const total = scaleByQuantity(observation.nutrition, observation.basis, qty);
+  const entry = createEntry(userId, {
+    raw_transcript: "Logged again from My Foods",
+    description: req.params.foodKey,
+    calories: total.calories,
+    protein_g: total.protein_g,
+    carbs_g: total.carbs_g,
+    fat_g: total.fat_g,
+    food_key: req.params.foodKey,
+    grams: observation.basis === "per_100g" ? qty : null,
+    source: "yours",
+    agreement_count: null,
+  });
+  res.json(entry);
 });
 
 app.put("/profile", (req, res) => {

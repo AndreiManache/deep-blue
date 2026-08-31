@@ -59,7 +59,12 @@ export function MyFeedbackPage({ onBack }: MyFeedbackPageProps) {
         {items.map((item) => (
           <div key={item.id} className="rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-ink/5">
             <div className="flex items-start justify-between gap-3">
-              <div className="text-xs font-semibold text-ink/40">{fmtTime(item.created_at)}</div>
+              <div>
+                {item.title && (
+                  <div className="font-display text-sm font-extrabold tracking-tight text-ink">{item.title}</div>
+                )}
+                <div className="text-xs font-semibold text-ink/40">{fmtTime(item.created_at)}</div>
+              </div>
               <span
                 className={cn(
                   "shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide",

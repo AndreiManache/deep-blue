@@ -1,4 +1,5 @@
 import { ArrowLeft } from "lucide-react";
+import { useSwipeBack } from "../lib/useSwipeBack";
 
 interface BackHeaderProps {
   title: string;
@@ -6,7 +7,12 @@ interface BackHeaderProps {
   onBack: () => void;
 }
 
+// Every sub-page renders exactly one of these for its lifetime, with the
+// same onBack it wires to the arrow button — so hooking the edge-swipe
+// gesture in here covers every page (2026-08-30 backlog item, Andrei:
+// "wants to swipe back between pages") without touching each page file.
 export function BackHeader({ title, subtitle, onBack }: BackHeaderProps) {
+  useSwipeBack(onBack);
   return (
     <div className="flex items-center gap-4">
       <button

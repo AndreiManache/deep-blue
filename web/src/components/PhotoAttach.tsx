@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Camera, X } from "lucide-react";
 import type { ImageAttachment } from "../api/client";
+import { useT } from "../i18n/useT";
 import { resizeToJpeg } from "../lib/resizeImage";
 
 interface PhotoAttachProps {
@@ -10,6 +11,7 @@ interface PhotoAttachProps {
 }
 
 export function PhotoAttach({ image, onAttach, onClear }: PhotoAttachProps) {
+  const t = useT();
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,7 +23,7 @@ export function PhotoAttach({ image, onAttach, onClear }: PhotoAttachProps) {
     try {
       onAttach(await resizeToJpeg(file));
     } catch {
-      setError("Couldn't read that photo — try again.");
+      setError(t("photo.readError"));
     }
   }
 
@@ -30,13 +32,13 @@ export function PhotoAttach({ image, onAttach, onClear }: PhotoAttachProps) {
       <div className="relative size-14">
         <img
           src={`data:${image.mime};base64,${image.base64}`}
-          alt="Attached food photo"
+          alt={t("photo.attachedAlt")}
           className="size-full rounded-full object-cover shadow-sm ring-1 ring-ink/5"
         />
         <button
           className="absolute -right-1 -top-1 grid size-6 place-items-center rounded-full bg-coral text-white shadow-sm transition-transform active:scale-95"
           onClick={onClear}
-          aria-label="Remove photo"
+          aria-label={t("photo.remove")}
         >
           <X className="size-3.5" />
         </button>
@@ -49,8 +51,8 @@ export function PhotoAttach({ image, onAttach, onClear }: PhotoAttachProps) {
       <button
         className="grid size-14 place-items-center rounded-full bg-white text-ink/70 shadow-sm ring-1 ring-ink/5 transition-colors hover:bg-ink3"
         onClick={() => inputRef.current?.click()}
-        aria-label="Add a photo"
-        title="Add a photo"
+        aria-label={t("photo.add")}
+        title={t("photo.add")}
       >
         <Camera className="size-5" />
       </button>

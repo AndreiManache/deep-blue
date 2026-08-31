@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Keyboard, X } from "lucide-react";
 import { ApiError, lookupBarcode, logBarcodeEntry, type BarcodeProduct } from "../api/client";
+import { useT } from "../i18n/useT";
 
 interface BarcodeScannerProps {
   onDone: () => void;
@@ -65,6 +66,7 @@ function waitForVideoDimensions(video: HTMLVideoElement, timeoutMs = 4000): Prom
 // device is an iPhone, where BarcodeDetector doesn't exist, so a native-first
 // strategy would mean the fallback is the only path ever actually exercised.
 export function BarcodeScanner({ onDone, log }: BarcodeScannerProps) {
+  const t = useT();
   const [state, setState] = useState<ScanState>({ kind: "requesting" });
   const [grams, setGrams] = useState("");
   const [manualCode, setManualCode] = useState("");
@@ -145,7 +147,7 @@ export function BarcodeScanner({ onDone, log }: BarcodeScannerProps) {
         log?.("barcode: unusable video size", `${video.videoWidth}x${video.videoHeight}`);
         setState({
           kind: "error",
-          message: "The camera didn't start properly. Try again, or type the barcode in instead.",
+          message: t("barcode.cameraStartError"),
         });
         return;
       }
@@ -217,7 +219,7 @@ export function BarcodeScanner({ onDone, log }: BarcodeScannerProps) {
         setState(product ? { kind: "found", barcode, product } : { kind: "notfound" });
       } catch (err) {
         if (cancelled) return;
-        setState({ kind: "error", message: err instanceof ApiError ? err.message : "Something went wrong." });
+        setState({ kind: "error", message: err instanceof ApiError ? err.message : t("barcode.genericError") });
       }
     }
 
@@ -242,7 +244,7 @@ export function BarcodeScanner({ onDone, log }: BarcodeScannerProps) {
         log?.("barcode: scan loop stalled", `${Math.round((Date.now() - last) / 1000)}s since last attempt`);
         setState({
           kind: "error",
-          message: "Scanning got stuck. Try again, or type the barcode in instead.",
+          message: t("barcode.scanStuckError"),
         });
       }
     }, 1000);
@@ -260,7 +262,7 @@ export function BarcodeScanner({ onDone, log }: BarcodeScannerProps) {
       const product = await lookupBarcode(code);
       setState(product ? { kind: "found", barcode: code, product } : { kind: "notfound" });
     } catch (err) {
-      setState({ kind: "error", message: err instanceof ApiError ? err.message : "Something went wrong." });
+      setState({ kind: "error", message: err instanceof ApiError ? err.message : t("barcode.genericError") });
     } finally {
       setManualBusy(false);
     }
@@ -275,7 +277,7 @@ export function BarcodeScanner({ onDone, log }: BarcodeScannerProps) {
       await logBarcodeEntry(state.barcode, g);
       onDone();
     } catch (err) {
-      setState({ kind: "error", message: err instanceof ApiError ? err.message : "Could not log this item." });
+      setState({ kind: "error", message: err instanceof ApiError ? err.message : t("barcode.logFailedError") });
     }
   }
 
@@ -296,10 +298,10 @@ export function BarcodeScanner({ onDone, log }: BarcodeScannerProps) {
           <div className="absolute inset-x-0 top-16 flex flex-col items-center gap-2 px-6 text-center">
             <p className="text-sm font-bold text-cream/80">
               {state.kind === "requesting"
-                ? "Starting camera…"
+                ? t("barcode.startingCamera")
                 : slowHint
-                  ? "Still looking — try moving closer, holding steady, or better light."
-                  : "Point at a barcode"}
+                  ? t("barcode.stillLooking")
+                  : t("barcode.pointAtBarcode")}
             </p>
             {state.kind === "scanning" && (
               <button
@@ -307,7 +309,7 @@ export function BarcodeScanner({ onDone, log }: BarcodeScannerProps) {
                 onClick={() => setState({ kind: "manual" })}
               >
                 <Keyboard className="size-3.5" />
-                Type it in instead
+                {t("barcode.typeInstead")}
               </button>
             )}
           </div>
@@ -318,10 +320,10 @@ export function BarcodeScanner({ onDone, log }: BarcodeScannerProps) {
         <div className="flex flex-1 flex-col justify-end p-6">
           <div className="rounded-[2rem] bg-white p-6 shadow-xl">
             <p className="font-display text-xl font-extrabold tracking-tight text-ink">
-              Enter the barcode
+              {t("barcode.enterBarcodeTitle")}
             </p>
             <p className="mt-1 text-sm font-medium text-ink/50">
-              The digits printed under the barcode's lines, 8 to 14 of them.
+              {t("barcode.enterBarcodeSubtitle")}
             </p>
             <input
               autoFocus
@@ -338,14 +340,14 @@ export function BarcodeScanner({ onDone, log }: BarcodeScannerProps) {
                 onClick={handleManualLookup}
                 disabled={manualBusy || !/^\d{8,14}$/.test(manualCode.trim())}
               >
-                {manualBusy ? "Looking up…" : "Look it up"}
+                {manualBusy ? t("barcode.lookingUp") : t("barcode.lookUp")}
               </button>
               <button
                 className="rounded-2xl bg-white px-5 py-4 text-sm font-bold text-ink ring-1 ring-ink/10 transition-colors hover:bg-ink3"
                 onClick={() => setState({ kind: "scanning" })}
                 disabled={manualBusy}
               >
-                Back to camera
+                {t("barcode.backToCamera")}
               </button>
             </div>
           </div>
@@ -354,77 +356,76 @@ export function BarcodeScanner({ onDone, log }: BarcodeScannerProps) {
 
       {state.kind === "denied" && (
         <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
-          <p className="font-display text-xl font-extrabold text-cream">Camera access is blocked</p>
+          <p className="font-display text-xl font-extrabold text-cream">{t("barcode.cameraBlockedTitle")}</p>
           <p className="text-sm font-medium text-cream/60">
-            Deep Blue needs the camera to scan a barcode. Allow it in your browser's site settings,
-            then try again — or type the barcode's digits in by hand.
+            {t("barcode.cameraBlockedBody")}
           </p>
           <button
             className="mt-2 w-full max-w-xs rounded-2xl bg-coral py-4 text-sm font-bold text-white shadow-lg shadow-coral/40 transition-transform active:scale-[0.98]"
             onClick={() => setState({ kind: "manual" })}
           >
-            Type the barcode in
+            {t("barcode.typeBarcodeIn")}
           </button>
           <button
             className="w-full max-w-xs rounded-2xl bg-white/10 py-4 text-sm font-bold text-cream transition-colors hover:bg-white/20"
             onClick={onDone}
           >
-            Back to Deep Blue
+            {t("barcode.backToApp")}
           </button>
         </div>
       )}
 
       {state.kind === "unavailable" && (
         <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
-          <p className="font-display text-xl font-extrabold text-cream">Camera isn't available</p>
+          <p className="font-display text-xl font-extrabold text-cream">{t("barcode.cameraUnavailableTitle")}</p>
           <p className="text-sm font-medium text-cream/60">
-            Try the latest Safari (iOS) or Chrome — or type the barcode's digits in by hand.
+            {t("barcode.cameraUnavailableBody")}
           </p>
           <button
             className="mt-2 w-full max-w-xs rounded-2xl bg-coral py-4 text-sm font-bold text-white shadow-lg shadow-coral/40 transition-transform active:scale-[0.98]"
             onClick={() => setState({ kind: "manual" })}
           >
-            Type the barcode in
+            {t("barcode.typeBarcodeIn")}
           </button>
           <button
             className="w-full max-w-xs rounded-2xl bg-white/10 py-4 text-sm font-bold text-cream transition-colors hover:bg-white/20"
             onClick={onDone}
           >
-            Back to Deep Blue
+            {t("barcode.backToApp")}
           </button>
         </div>
       )}
 
       {state.kind === "notfound" && (
         <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
-          <p className="font-display text-xl font-extrabold text-cream">Didn't find that product</p>
+          <p className="font-display text-xl font-extrabold text-cream">{t("barcode.notFoundTitle")}</p>
           <p className="text-sm font-medium text-cream/60">
-            Tap the orb and describe it instead — that works for anything not in the barcode database.
+            {t("barcode.notFoundBody")}
           </p>
           <button
             className="mt-2 w-full max-w-xs rounded-2xl bg-coral py-4 text-sm font-bold text-white shadow-lg shadow-coral/40 transition-transform active:scale-[0.98]"
             onClick={onDone}
           >
-            Back to Deep Blue
+            {t("barcode.backToApp")}
           </button>
         </div>
       )}
 
       {state.kind === "error" && (
         <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
-          <p className="font-display text-xl font-extrabold text-cream">Something went wrong</p>
+          <p className="font-display text-xl font-extrabold text-cream">{t("barcode.errorTitle")}</p>
           <p className="text-sm font-medium text-cream/60">{state.message}</p>
           <button
             className="mt-2 w-full max-w-xs rounded-2xl bg-coral py-4 text-sm font-bold text-white shadow-lg shadow-coral/40 transition-transform active:scale-[0.98]"
             onClick={() => setState({ kind: "manual" })}
           >
-            Type the barcode in
+            {t("barcode.typeBarcodeIn")}
           </button>
           <button
             className="w-full max-w-xs rounded-2xl bg-white/10 py-4 text-sm font-bold text-cream transition-colors hover:bg-white/20"
             onClick={onDone}
           >
-            Back to Deep Blue
+            {t("barcode.backToApp")}
           </button>
         </div>
       )}
@@ -433,17 +434,17 @@ export function BarcodeScanner({ onDone, log }: BarcodeScannerProps) {
         <div className="flex flex-1 flex-col justify-end p-6">
           <div className="rounded-[2rem] bg-white p-6 shadow-xl">
             <p className="font-display text-xl font-extrabold tracking-tight text-ink">
-              {state.kind === "found" ? state.product.name : "Logging…"}
+              {state.kind === "found" ? state.product.name : t("barcode.logging")}
             </p>
             {state.kind === "found" && state.product.brand && (
               <p className="text-sm font-medium text-ink/50">{state.product.brand}</p>
             )}
             <p className="mt-1 text-xs font-semibold text-ink/40">
-              {(state.kind === "found" ? state.product : null)?.nutrition.calories} kcal / 100g
+              {t("barcode.caloriesPer100g", { cal: (state.kind === "found" ? state.product : null)?.nutrition.calories ?? "" })}
             </p>
 
             <label className="mt-4 block text-xs font-bold uppercase tracking-wide text-ink/40">
-              Grams eaten
+              {t("barcode.gramsEaten")}
             </label>
             <input
               autoFocus
@@ -455,7 +456,7 @@ export function BarcodeScanner({ onDone, log }: BarcodeScannerProps) {
               className="mt-1 w-full rounded-xl bg-ink3 px-4 py-3 text-lg font-bold text-ink outline-none placeholder:font-medium placeholder:text-ink/30 focus:ring-2 focus:ring-coral/50"
             />
             {previewCalories != null && (
-              <p className="mt-2 text-sm font-semibold text-ink/60">≈ {previewCalories} kcal</p>
+              <p className="mt-2 text-sm font-semibold text-ink/60">{t("barcode.approxCalories", { cal: previewCalories })}</p>
             )}
 
             <button
@@ -463,7 +464,7 @@ export function BarcodeScanner({ onDone, log }: BarcodeScannerProps) {
               onClick={handleLog}
               disabled={state.kind === "saving" || !(Number.isFinite(g) && g > 0)}
             >
-              {state.kind === "saving" ? "Logging…" : "Log it"}
+              {state.kind === "saving" ? t("barcode.logging") : t("barcode.logIt")}
             </button>
           </div>
         </div>
@@ -472,7 +473,7 @@ export function BarcodeScanner({ onDone, log }: BarcodeScannerProps) {
       <button
         className="fixed right-5 top-5 z-50 grid size-11 place-items-center rounded-full bg-ink/60 text-cream backdrop-blur transition-colors hover:bg-ink/80"
         onClick={onDone}
-        aria-label="Close scanner"
+        aria-label={t("barcode.closeScannerLabel")}
       >
         <X className="size-5" />
       </button>

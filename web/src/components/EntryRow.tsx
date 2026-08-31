@@ -8,6 +8,7 @@ import {
   type CorrectionReason,
   type FoodEntry,
 } from "../api/client";
+import { useT, type StringKey } from "../i18n/useT";
 import { cn } from "../lib/utils";
 
 interface EntryRowProps {
@@ -21,16 +22,17 @@ const inputClass =
 
 // Quick-select reasons for a calorie edit — see server/src/corrections.ts
 // (CORRECTION_REASONS), same string values on both sides.
-const REASON_CHIPS: { value: CorrectionReason; label: string }[] = [
-  { value: "wrong_portion", label: "Wrong portion size" },
-  { value: "wrong_food", label: "Wrong food or recipe" },
-  { value: "has_label", label: "I have the real label" },
-  { value: "skip", label: "Just a typo, skip this" },
+const REASON_CHIPS: { value: CorrectionReason; labelKey: StringKey }[] = [
+  { value: "wrong_portion", labelKey: "entry.reasonWrongPortion" },
+  { value: "wrong_food", labelKey: "entry.reasonWrongFood" },
+  { value: "has_label", labelKey: "entry.reasonHasLabel" },
+  { value: "skip", labelKey: "entry.reasonSkip" },
 ];
 
 // One logged item with inline edit + delete. Mutations call the API directly
 // and then trigger a refresh via onChanged.
 export function EntryRow({ entry, onChanged, onMutated }: EntryRowProps) {
+  const t = useT();
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -72,7 +74,7 @@ export function EntryRow({ entry, onChanged, onMutated }: EntryRowProps) {
       onChanged();
       onMutated?.();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't save changes.");
+      setError(err instanceof ApiError ? err.message : t("entry.saveError"));
     } finally {
       setBusy(false);
     }
@@ -92,7 +94,7 @@ export function EntryRow({ entry, onChanged, onMutated }: EntryRowProps) {
       onChanged();
       onMutated?.();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't delete this entry.");
+      setError(err instanceof ApiError ? err.message : t("entry.deleteError"));
       setConfirmingDelete(false);
     } finally {
       setBusy(false);
@@ -108,9 +110,9 @@ export function EntryRow({ entry, onChanged, onMutated }: EntryRowProps) {
             <input
               value={form.description}
               onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              placeholder="Description"
+              placeholder={t("entry.descriptionPlaceholder")}
               className={inputClass}
-              aria-label="Entry description"
+              aria-label={t("entry.descriptionPlaceholder")}
             />
             <input
               value={form.calories}
@@ -135,16 +137,16 @@ export function EntryRow({ entry, onChanged, onMutated }: EntryRowProps) {
                       )}
                       onClick={() => setCorrectionReason((r) => (r === chip.value ? null : chip.value))}
                     >
-                      {chip.label}
+                      {t(chip.labelKey)}
                     </button>
                   ))}
                 </div>
                 <input
                   value={evidenceUrl}
                   onChange={(e) => setEvidenceUrl(e.target.value)}
-                  placeholder="Link to a label or menu (optional)"
+                  placeholder={t("entry.evidenceLinkPlaceholder")}
                   className={inputClass}
-                  aria-label="Evidence link"
+                  aria-label={t("entry.evidenceLinkPlaceholder")}
                 />
               </div>
             )}
@@ -159,24 +161,24 @@ export function EntryRow({ entry, onChanged, onMutated }: EntryRowProps) {
                 onClick={handleSave}
                 disabled={busy}
               >
-                <Check className="size-3.5" /> Save
+                <Check className="size-3.5" /> {t("entry.save")}
               </button>
               <button
                 className="inline-flex items-center gap-1.5 rounded-xl bg-white px-4 py-2 text-xs font-bold text-ink ring-1 ring-ink/10 disabled:opacity-60"
                 onClick={() => setEditing(false)}
                 disabled={busy}
               >
-                <X className="size-3.5" /> Cancel
+                <X className="size-3.5" /> {t("entry.cancel")}
               </button>
             </div>
           </div>
         ) : (
           <>
             <div className="truncate text-sm font-bold text-ink">
-              {entry.description || "(untitled)"}
+              {entry.description || t("entry.untitled")}
               {entry.edited && (
                 <span className="ml-1.5 text-[10px] font-semibold uppercase text-ink/35">
-                  edited
+                  {t("entry.edited")}
                 </span>
               )}
             </div>
@@ -189,17 +191,17 @@ export function EntryRow({ entry, onChanged, onMutated }: EntryRowProps) {
               </span>
               {entry.source === "verified" && (
                 <span className="inline-flex items-center gap-0.5 rounded-full bg-leaf/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-leaf">
-                  ✓ verified{entry.agreement_count ? ` ${entry.agreement_count}` : ""}
+                  ✓ {t("entry.verified")}{entry.agreement_count ? ` ${entry.agreement_count}` : ""}
                 </span>
               )}
               {entry.source === "yours" && (
                 <span className="inline-flex items-center rounded-full bg-ink/8 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-ink/45">
-                  your value
+                  {t("entry.yourValue")}
                 </span>
               )}
               {entry.source === "barcode" && (
                 <span className="inline-flex items-center gap-0.5 rounded-full bg-sky/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky">
-                  barcode
+                  {t("entry.barcode")}
                 </span>
               )}
             </div>
@@ -219,7 +221,7 @@ export function EntryRow({ entry, onChanged, onMutated }: EntryRowProps) {
                 setConfirmingDelete(false);
                 setError(null);
               }}
-              aria-label="Edit entry"
+              aria-label={t("entry.editLabel")}
             >
               <Pencil className="size-3.5" />
             </button>
@@ -232,10 +234,10 @@ export function EntryRow({ entry, onChanged, onMutated }: EntryRowProps) {
               )}
               onClick={handleDelete}
               disabled={busy}
-              aria-label={confirmingDelete ? "Confirm delete" : "Delete entry"}
+              aria-label={confirmingDelete ? t("entry.confirmDeleteLabel") : t("entry.deleteLabel")}
             >
               {confirmingDelete ? (
-                <span className="text-[11px] font-bold">Sure?</span>
+                <span className="text-[11px] font-bold">{t("entry.sure")}</span>
               ) : (
                 <Trash2 className="size-3.5" />
               )}

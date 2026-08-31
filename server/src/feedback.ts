@@ -132,6 +132,30 @@ export function getFeedbackText(id: string): string | null {
   return text && text.trim() ? text : null;
 }
 
+const getMetaStmt = db.prepare(`SELECT user_id, title FROM feedback WHERE id = :id`);
+
+// user_id (for attributing any auto-transcription cost back to the reporter)
+// and title (to skip a report that's already been titled). Used by the
+// auto-title pipeline — see feedbackAutoTitle.ts.
+export function getFeedbackMeta(id: string): { user_id: string; title: string | null } | undefined {
+  return getMetaStmt.get({ id }) as unknown as { user_id: string; title: string | null } | undefined;
+}
+
+// Every report that still needs an AI title/summary generated: no title yet,
+// but has something to summarize (a typed message, or an audio note we can
+// transcribe first). Oldest first so a backfill processes them in the order
+// they came in. Drives both the on-submit auto-title and the startup
+// backfill that catches every pre-existing report.
+const idsNeedingTitleStmt = db.prepare(`
+  SELECT id FROM feedback
+   WHERE title IS NULL AND (message IS NOT NULL OR audio_base64 IS NOT NULL)
+   ORDER BY created_at ASC
+`);
+
+export function listFeedbackIdsNeedingTitle(): string[] {
+  return (idsNeedingTitleStmt.all() as unknown as { id: string }[]).map((r) => r.id);
+}
+
 const getAudioStmt = db.prepare(`SELECT audio_base64, audio_mime FROM feedback WHERE id = :id`);
 
 export function getFeedbackAudio(id: string): { audio_base64: string; audio_mime: string | null } | null {

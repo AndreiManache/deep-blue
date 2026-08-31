@@ -57,6 +57,7 @@ import {
   setFeedbackTranscript,
 } from "./feedback.js";
 import { summarizeFeedback } from "./feedbackSummary.js";
+import { autoTitleInBackground, backfillMissingTitles } from "./feedbackAutoTitle.js";
 import {
   computeTargets,
   getProfile,
@@ -309,6 +310,10 @@ app.post("/feedback", (req, res) => {
     image_base64: hasImage ? (image_base64 as string) : null,
     image_mime: hasImage ? (image_mime as string) : null,
   });
+  // Generate the AI title + short description in the background so the
+  // reporter's card is filled in shortly after submit, without making them
+  // wait on STT + the LLM here. See feedbackAutoTitle.ts.
+  autoTitleInBackground(id);
   res.json({ id });
 });
 
@@ -796,4 +801,10 @@ if (fs.existsSync(WEB_DIST)) {
 
 app.listen(PORT, () => {
   console.log(`Deep Blue server listening on http://localhost:${PORT}`);
+  // Backfill AI titles for every pre-existing report that predates
+  // auto-titling — runs in the background so it never delays readiness, and
+  // is idempotent, so a deploy mid-backfill just resumes on the next boot.
+  void backfillMissingTitles().catch((err) =>
+    console.error("[feedbackAutoTitle] startup backfill failed:", err),
+  );
 });

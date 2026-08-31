@@ -7,7 +7,6 @@ import { Logo } from "./Logo";
 import { MicPermissionHelp } from "./MicPermissionHelp";
 import { PhotoAttach } from "./PhotoAttach";
 import { TalkButton } from "./TalkButton";
-import { cn } from "../lib/utils";
 
 interface HomeScreenProps {
   conversation: ConversationApi;
@@ -37,7 +36,6 @@ export function HomeScreen({ conversation, onNavigate, onScan, onLogout, isAdmin
     pendingImage,
     attachImage,
     clearImage,
-    transcriptTurns,
   } = conversation;
 
   function handleTap() {
@@ -102,22 +100,6 @@ export function HomeScreen({ conversation, onNavigate, onScan, onLogout, isAdmin
                   ? "Tap the orb and describe what's in the photo."
                   : "Tap the orb and just talk — “I had two eggs and a coffee for breakfast.”")}
             </p>
-            {transcriptTurns.length > 0 && (
-              <div className="w-full max-w-sm space-y-1.5">
-                {transcriptTurns.map((turn, i) => (
-                  <p
-                    key={i}
-                    className={cn(
-                      "line-clamp-2 text-xs font-medium leading-snug",
-                      turn.role === "user" ? "text-ink/45" : "text-ink/70",
-                    )}
-                  >
-                    <span className="font-bold">{turn.role === "user" ? "You: " : "Deep Blue: "}</span>
-                    {turn.text}
-                  </p>
-                ))}
-              </div>
-            )}
           </>
         )}
       </main>

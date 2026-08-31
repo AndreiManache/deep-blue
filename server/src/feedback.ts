@@ -11,12 +11,15 @@ export interface CreateFeedbackInput {
 }
 
 const insertStmt = db.prepare(`
-  INSERT INTO feedback (id, user_id, message, audio_base64, audio_mime, log_snapshot, image_base64, image_mime, created_at, status)
-  VALUES (:id, :user_id, :message, :audio_base64, :audio_mime, :log_snapshot, :image_base64, :image_mime, :created_at, 'new')
+  INSERT INTO feedback (id, user_id, message, audio_base64, audio_mime, log_snapshot, image_base64, image_mime, created_at, status, ticket_number)
+  VALUES (:id, :user_id, :message, :audio_base64, :audio_mime, :log_snapshot, :image_base64, :image_mime, :created_at, 'new', :ticket_number)
 `);
+
+const nextTicketNumberStmt = db.prepare(`SELECT COALESCE(MAX(ticket_number), 0) + 1 AS next FROM feedback`);
 
 export function createFeedback(userId: string, input: CreateFeedbackInput): string {
   const id = randomUUID();
+  const ticketNumber = (nextTicketNumberStmt.get() as { next: number }).next;
   insertStmt.run({
     id,
     user_id: userId,
@@ -27,12 +30,14 @@ export function createFeedback(userId: string, input: CreateFeedbackInput): stri
     image_base64: input.image_base64,
     image_mime: input.image_mime,
     created_at: new Date().toISOString(),
+    ticket_number: ticketNumber,
   });
   return id;
 }
 
 export interface FeedbackRow {
   id: string;
+  ticket_number: number;
   username: string;
   message: string | null;
   audio_base64: string | null;
@@ -51,7 +56,7 @@ export interface FeedbackRow {
 // Newest first — that's what an admin triaging a small trickle of reports
 // wants to see.
 const listStmt = db.prepare(`
-  SELECT f.id, u.username, f.message, f.audio_base64, f.audio_mime, f.log_snapshot, f.transcript, f.created_at, f.status, f.resolution_note, f.title, f.summary, f.image_base64, f.image_mime
+  SELECT f.id, f.ticket_number, u.username, f.message, f.audio_base64, f.audio_mime, f.log_snapshot, f.transcript, f.created_at, f.status, f.resolution_note, f.title, f.summary, f.image_base64, f.image_mime
     FROM feedback f
     JOIN users u ON u.id = f.user_id
    ORDER BY f.created_at DESC
@@ -63,6 +68,7 @@ export function listFeedback(): FeedbackRow[] {
 
 export interface MyFeedbackRow {
   id: string;
+  ticket_number: number;
   message: string | null;
   transcript: string | null;
   has_audio: number; // SQLite has no boolean; 0/1, cast on the way out
@@ -85,7 +91,7 @@ export interface MyFeedbackRow {
 // recording it's cheap to just show back to the reporter so they can
 // confirm what they attached.
 const listForUserStmt = db.prepare(`
-  SELECT id, message, transcript, (audio_base64 IS NOT NULL) AS has_audio, created_at, status, resolution_note, title, summary, image_base64, image_mime
+  SELECT id, ticket_number, message, transcript, (audio_base64 IS NOT NULL) AS has_audio, created_at, status, resolution_note, title, summary, image_base64, image_mime
     FROM feedback
    WHERE user_id = :user_id
    ORDER BY created_at DESC

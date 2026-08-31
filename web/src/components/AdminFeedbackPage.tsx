@@ -43,7 +43,7 @@ function formatLog(raw: string): string {
 // chat, no need to describe what's in the audio or dig up the log yourself.
 function buildClaudeBlob(item: FeedbackItem): string {
   const lines = [
-    `Feedback from ${item.username}, ${fmtTime(item.created_at)}`,
+    `Ticket #${item.ticket_number}, feedback from ${item.username}, ${fmtTime(item.created_at)}`,
     item.message ? `\nMessage:\n${item.message}` : null,
     item.transcript ? `\nVoice note (transcribed):\n${item.transcript}` : item.audio_base64
       ? "\nVoice note: attached, not yet transcribed — transcribe it first."
@@ -263,14 +263,18 @@ function FeedbackCard({ item, onToggleStatus, onDelete, onTranscribed, onNoteSav
         <div>
           {item.title ? (
             <>
-              <div className="font-display text-sm font-extrabold tracking-tight text-ink">{item.title}</div>
+              <div className="font-display text-sm font-extrabold tracking-tight text-ink">
+                <span className="text-ink/35">#{item.ticket_number}</span> {item.title}
+              </div>
               <div className="text-xs font-semibold text-ink/40">
                 {item.username} · {fmtTime(item.created_at)}
               </div>
             </>
           ) : (
             <>
-              <div className="font-display text-sm font-extrabold tracking-tight text-ink">{item.username}</div>
+              <div className="font-display text-sm font-extrabold tracking-tight text-ink">
+                <span className="text-ink/35">#{item.ticket_number}</span> {item.username}
+              </div>
               <div className="text-xs font-semibold text-ink/40">{fmtTime(item.created_at)}</div>
             </>
           )}

@@ -183,6 +183,16 @@ if (!feedbackColumns.some((col) => col.name === "image_base64")) {
 if (!feedbackColumns.some((col) => col.name === "image_mime")) {
   db.exec(`ALTER TABLE feedback ADD COLUMN image_mime TEXT;`);
 }
+// A short, stable number ("ticket #5") so a report can be referenced in
+// conversation instead of by its UUID (2026-08-31, requested explicitly).
+// Backfilled in submission order so existing reports get a sensible
+// sequence; new ones are assigned the next number in feedback.ts.
+if (!feedbackColumns.some((col) => col.name === "ticket_number")) {
+  db.exec(`ALTER TABLE feedback ADD COLUMN ticket_number INTEGER;`);
+  const existing = db.prepare(`SELECT id FROM feedback ORDER BY created_at ASC`).all() as { id: string }[];
+  const backfillTicketStmt = db.prepare(`UPDATE feedback SET ticket_number = :ticket_number WHERE id = :id`);
+  existing.forEach((row, i) => backfillTicketStmt.run({ id: row.id, ticket_number: i + 1 }));
+}
 
 // One nutrition observation per (food_key, user): that user's best value for a
 // food, normalized to a basis (per 100g, or per one item when grams are

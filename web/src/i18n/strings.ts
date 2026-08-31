@@ -114,7 +114,6 @@ export const strings: Record<string, { en: string; ro: string }> = {
   },
   "profile.saving": { en: "Saving…", ro: "Se salvează…" },
   "profile.saved": { en: "Saved ✓", ro: "Salvat ✓" },
-  "profile.save": { en: "Save profile", ro: "Salvează profilul" },
 
   // Dashboard
   "dashboard.today": { en: "Today", ro: "Astăzi" },

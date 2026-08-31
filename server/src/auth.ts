@@ -1,4 +1,5 @@
-import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { randomBytes, scrypt, timingSafeEqual } from "node:crypto";
+import { promisify } from "node:util";
 import { db } from "./db.js";
 
 // Self-contained account auth: scrypt password hashing (no native deps —
@@ -7,6 +8,7 @@ import { db } from "./db.js";
 // the normalized username, which is also the user_id used everywhere else, so
 // a person's food log and profile follow their login automatically.
 
+const scryptAsync = promisify(scrypt);
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const SCRYPT_KEYLEN = 64;
 
@@ -44,17 +46,17 @@ export function validateCredentials(username: unknown, password: unknown): strin
 
 // --- password hashing ------------------------------------------------------
 
-export function hashPassword(password: string): string {
+export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16);
-  const derived = scryptSync(password, salt, SCRYPT_KEYLEN);
+  const derived = (await scryptAsync(password, salt, SCRYPT_KEYLEN)) as Buffer;
   return `${salt.toString("hex")}:${derived.toString("hex")}`;
 }
 
-export function verifyPassword(password: string, stored: string): boolean {
+export async function verifyPassword(password: string, stored: string): Promise<boolean> {
   const [saltHex, hashHex] = stored.split(":");
   if (!saltHex || !hashHex) return false;
   const expected = Buffer.from(hashHex, "hex");
-  const actual = scryptSync(password, Buffer.from(saltHex, "hex"), SCRYPT_KEYLEN);
+  const actual = (await scryptAsync(password, Buffer.from(saltHex, "hex"), SCRYPT_KEYLEN)) as Buffer;
   // Lengths always match for a well-formed hash, but timingSafeEqual throws on
   // a mismatch, so guard it — a malformed stored value must read as "wrong",
   // never crash the request.
@@ -81,13 +83,14 @@ export class UsernameTakenError extends Error {}
 
 // Creates the account and returns it. Throws UsernameTakenError if the
 // normalized username already exists.
-export function createUser(username: string, password: string): User {
+export async function createUser(username: string, password: string): Promise<User> {
   const id = normalizeUsername(username);
   if (findUser(id)) throw new UsernameTakenError("That username is already taken.");
+  const hash = await hashPassword(password);
   db.prepare(`INSERT INTO users (id, username, password_hash, created_at) VALUES (?, ?, ?, ?)`).run(
     id,
     username.trim(),
-    hashPassword(password),
+    hash,
     new Date().toISOString(),
   );
   return { id, username: username.trim() };

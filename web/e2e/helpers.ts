@@ -36,3 +36,43 @@ export async function registerAndLogin(page: Page, username: string): Promise<vo
   await page.getByRole("button", { name: "Sign up" }).click();
   await page.getByText("Tap to talk").waitFor();
 }
+
+// Same shape as the real /transcribe response ({ text }) — no real STT call,
+// no network dependency, no cost.
+export async function stubTranscribe(page: Page, text: string): Promise<void> {
+  await page.route("**/transcribe", (route) =>
+    route.fulfill({ contentType: "application/json", body: JSON.stringify({ text }) }),
+  );
+}
+
+// Same shape as the real /chat response (ChatResponse). delayMs lets a test
+// hold the response open to exercise what happens while a turn is still
+// in flight (e.g. ending the session before it resolves).
+export async function stubChat(
+  page: Page,
+  overrides: Partial<{
+    reply_text: string;
+    ended: boolean;
+    mutated: boolean;
+    audio_base64: string | null;
+    audio_mime: string;
+    lang: string;
+  }> = {},
+  delayMs = 0,
+): Promise<void> {
+  await page.route("**/chat", async (route) => {
+    if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
+    route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        reply_text: "Got it.",
+        ended: false,
+        mutated: false,
+        audio_base64: null,
+        audio_mime: "audio/mpeg",
+        lang: "en-US",
+        ...overrides,
+      }),
+    });
+  });
+}

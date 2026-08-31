@@ -42,7 +42,7 @@ Everything below is still open.
 
 ## Feedback & admin (from the friends-beta rollout, 2026-08-27)
 
-- [ ] **Full "see all users and their behavior" admin panel.** Bigger scope than the feedback inbox (new tables/queries for engagement, not just a list to triage), and there isn't enough real usage yet to make a dashboard worth building. Interim: Railway SSH access to the production SQLite file already lets Andrei run one-off queries directly (`... | railway ssh -- node`) — e.g. `SELECT COUNT(*) FROM users`, `SELECT user_id, COUNT(*), MAX(created_at) FROM food_entries GROUP BY user_id` for who's logging and how recently, `SELECT username, created_at FROM auth_sessions ORDER BY created_at DESC` for recent logins. Manual and ad-hoc, but sufficient for occasional spot-checks during a small beta.
+- [ ] **Admin panel engagement analytics — the users-by-usage table shipped 2026-08-31, this is the next layer.** The admin panel now has a real home (users table: username, join date, all-time estimated spend) plus Feedback inbox/Models in use/Corrections consolidated into it — no longer just Railway SSH one-off queries. What's still missing is *behavior*, not spend: who's actually logging regularly vs. went quiet, days-since-last-entry per user, a simple retention view. Low priority until there's a real user base beyond the current handful to make trends meaningful.
 
 ## Performance & cost
 

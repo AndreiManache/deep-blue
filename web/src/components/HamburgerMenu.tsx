@@ -5,7 +5,6 @@ export type MenuView = "dashboard" | "profile" | "feedback" | "admin-panel";
 interface HamburgerMenuProps {
   onNavigate: (view: MenuView) => void;
   onLogout: () => void;
-  isAdmin?: boolean;
   language?: "en" | "ro" | null;
 }
 
@@ -20,7 +19,7 @@ function getItems(language: "en" | "ro" | null | undefined) {
   ] as const;
 }
 
-export function HamburgerMenu({ onNavigate, onLogout, isAdmin, language }: HamburgerMenuProps) {
+export function HamburgerMenu({ onNavigate, onLogout, language }: HamburgerMenuProps) {
   const [open, setOpen] = useState(false);
   const items = getItems(language);
 
@@ -65,14 +64,6 @@ export function HamburgerMenu({ onNavigate, onLogout, isAdmin, language }: Hambu
                 {item.label}
               </button>
             ))}
-            {isAdmin && (
-              <button
-                className="block w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-ink transition-colors hover:bg-ink3"
-                onClick={() => go("admin-panel")}
-              >
-                Admin panel
-              </button>
-            )}
             <button
               className="block w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-coral transition-colors hover:bg-coral/10"
               onClick={handleLogout}

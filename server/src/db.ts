@@ -248,3 +248,19 @@ db.exec(`
     created_at TEXT NOT NULL
   );
 `);
+
+// Cached AI-generated "how's your day going" comment on the Dashboard
+// (2026-08-31 backlog item) — one row per (user, date). entry_count is the
+// cache-invalidation key: regenerated only when the day's logged-item count
+// has changed since the cached row, so reopening the Dashboard repeatedly
+// doesn't re-spend an LLM call for the same set of meals.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS day_insights (
+    user_id TEXT NOT NULL,
+    date TEXT NOT NULL,
+    entry_count INTEGER NOT NULL,
+    insight TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, date)
+  );
+`);

@@ -11,6 +11,7 @@ import {
   type FeedbackItem,
 } from "../api/client";
 import { BackHeader } from "./BackHeader";
+import { useAudioObjectUrl } from "../lib/useAudioObjectUrl";
 import { cn } from "../lib/utils";
 
 interface AdminFeedbackPageProps {
@@ -195,6 +196,7 @@ function FeedbackCard({ item, onToggleStatus, onDelete, onTranscribed, onNoteSav
   const [savingNote, setSavingNote] = useState(false);
   const [noteSaved, setNoteSaved] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
+  const audioUrl = useAudioObjectUrl(item.audio_base64, item.audio_mime);
 
   async function handleSummarize() {
     if (summarizing) return;
@@ -338,13 +340,9 @@ function FeedbackCard({ item, onToggleStatus, onDelete, onTranscribed, onNoteSav
       )}
       {summarizeError && <p className="mt-1 text-xs font-semibold text-coral">{summarizeError}</p>}
 
-      {item.audio_base64 && (
+      {item.audio_base64 && audioUrl && (
         <div className="mt-3 space-y-2">
-          <audio
-            className="h-8 w-full"
-            controls
-            src={`data:${item.audio_mime ?? "audio/mp4"};base64,${item.audio_base64}`}
-          />
+          <audio className="h-8 w-full" controls src={audioUrl} />
           {item.transcript ? (
             <p className="rounded-xl bg-ink3 px-3 py-2.5 text-sm font-medium leading-relaxed text-ink/70">
               {item.transcript}

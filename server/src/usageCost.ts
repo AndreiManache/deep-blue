@@ -63,60 +63,6 @@ export function unitPrice(provider: UsageProvider, kind: UsageKind): number {
   }
 }
 
-export interface UsageBreakdownRow {
-  provider: UsageProvider;
-  kind: UsageKind;
-  amount: number;
-  estimated_cost_usd: number;
-}
-
-export interface UsageSummary {
-  today: UsageBreakdownRow[];
-  today_total_usd: number;
-  this_month: UsageBreakdownRow[];
-  this_month_total_usd: number;
-}
-
-const sumStmt = db.prepare(`
-  SELECT provider, kind, SUM(amount) AS amount
-    FROM usage_log
-   WHERE user_id = :user_id AND created_at >= :since
-   GROUP BY provider, kind
-`);
-
-function summarize(userId: string, since: string): { rows: UsageBreakdownRow[]; total: number } {
-  const raw = sumStmt.all({ user_id: userId, since }) as unknown as {
-    provider: UsageProvider;
-    kind: UsageKind;
-    amount: number;
-  }[];
-  let total = 0;
-  const rows = raw.map((r) => {
-    const cost = r.amount * unitPrice(r.provider, r.kind);
-    total += cost;
-    return { ...r, estimated_cost_usd: Math.round(cost * 10000) / 10000 };
-  });
-  return { rows, total: Math.round(total * 10000) / 10000 };
-}
-
-// Both bucketed in the server's local time zone (matches how food entries
-// already bucket "today", see entries.ts's date('now','localtime') usage).
-export function getUsageSummary(userId: string): UsageSummary {
-  const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-
-  const today = summarize(userId, todayStart);
-  const thisMonth = summarize(userId, monthStart);
-
-  return {
-    today: today.rows,
-    today_total_usd: today.total,
-    this_month: thisMonth.rows,
-    this_month_total_usd: thisMonth.total,
-  };
-}
-
 export interface UserUsageRow {
   user_id: string;
   username: string;

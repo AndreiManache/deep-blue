@@ -42,7 +42,7 @@ import {
   scaleByQuantity,
   totalFromBasis,
 } from "./foods.js";
-import { getAllUsersUsage, getUsageSummary } from "./usageCost.js";
+import { getAllUsersUsage } from "./usageCost.js";
 import { lookupBarcode } from "./openfoodfacts.js";
 import {
   createFeedback,
@@ -58,6 +58,7 @@ import {
 } from "./feedback.js";
 import { summarizeFeedback } from "./feedbackSummary.js";
 import { autoTitleInBackground, backfillMissingTitles } from "./feedbackAutoTitle.js";
+import { getDayInsight } from "./dayInsight.js";
 import {
   computeTargets,
   getProfile,
@@ -696,12 +697,20 @@ app.get("/stats/foods", (_req, res) => {
   res.json(getFoodDbStats(res.locals.userId as string));
 });
 
-// In-app cost tracker (2026-08 backlog item) — a rough today/this-month
-// estimate of this user's own API spend by provider. See usageCost.ts for
-// the reference unit prices and their real, honest imprecision (STT/Gemini
-// TTS are byte/char-based approximations, not exact provider-billed units).
-app.get("/stats/usage", (_req, res) => {
-  res.json(getUsageSummary(res.locals.userId as string));
+// AI-generated "how's your day going" comment, cached per (user, date) —
+// see dayInsight.ts. date defaults to today (server-local), matching
+// /entries' own default day.
+app.get("/stats/insight", async (req, res) => {
+  const now = new Date();
+  const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const date = typeof req.query.date === "string" ? req.query.date : localToday;
+  try {
+    const insight = await getDayInsight(res.locals.userId as string, date);
+    res.json({ insight });
+  } catch (err) {
+    console.error("[/stats/insight] error:", err);
+    res.status(502).json({ insight: null });
+  }
 });
 
 // "My Foods" — view and directly seed/manage your own remembered value for a

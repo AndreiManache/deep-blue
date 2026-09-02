@@ -23,6 +23,14 @@ export interface SpeakOptions {
   audioMime?: string;
   /** BCP-47 tag (e.g. "ro-RO") — without it the fallback voice reads Romanian text with English phonemes. */
   lang?: string;
+  /**
+   * Optional diagnostic hook — fired at the points that actually decide
+   * whether sound comes out (2026-09-02: a live "I hear nothing" report
+   * that "Speaking…" showed for gave no way to tell, after the fact,
+   * whether the real AI voice played or a silent fallback ran instead).
+   * Wire this to the same log a feedback report can attach.
+   */
+  onDiag?: (label: string, detail?: string) => void;
 }
 
 let currentUtterance: SpeechSynthesisUtterance | null = null;
@@ -50,8 +58,9 @@ function clearAudioWatchdog(): void {
   }
 }
 
-function speakLocal(text: string, onEnd: () => void, lang?: string): void {
+function speakLocal(text: string, onEnd: () => void, lang?: string, onDiag?: (label: string, detail?: string) => void): void {
   if (!window.speechSynthesis) {
+    onDiag?.("local voice unavailable — speechSynthesis not supported");
     onEnd();
     return;
   }
@@ -64,7 +73,8 @@ function speakLocal(text: string, onEnd: () => void, lang?: string): void {
   currentUtterance = utterance;
 
   let done = false;
-  const finish = () => {
+  let watchdogFired = false;
+  const finish = (via: "onend" | "onerror" | "watchdog") => {
     if (done) return;
     done = true;
     clearTimers();
@@ -73,14 +83,21 @@ function speakLocal(text: string, onEnd: () => void, lang?: string): void {
     // still speaking — silence it before the caller reopens the mic, or
     // the mic hears the tail of our own speech.
     window.speechSynthesis.cancel();
+    onDiag?.(`local voice finished (${via})`, watchdogFired ? "watchdog already fired first" : undefined);
     onEnd();
   };
 
-  utterance.onend = finish;
-  utterance.onerror = finish;
+  utterance.onend = () => finish("onend");
+  utterance.onerror = () => finish("onerror");
+
+  const voiceCount = window.speechSynthesis.getVoices().length;
+  onDiag?.("speaking via local voice", `${voiceCount} voice(s) available`);
 
   const estimatedMs = Math.max(3000, (text.length / 14) * 1000 + 2000);
-  watchdogTimer = window.setTimeout(finish, estimatedMs);
+  watchdogTimer = window.setTimeout(() => {
+    watchdogFired = true;
+    finish("watchdog");
+  }, estimatedMs);
 
   keepAliveTimer = window.setInterval(() => {
     if (window.speechSynthesis.speaking) {
@@ -90,6 +107,10 @@ function speakLocal(text: string, onEnd: () => void, lang?: string): void {
   }, 10000);
 
   window.speechSynthesis.speak(utterance);
+  // Reported right after speak() is called — if this is false immediately
+  // and stays false, the utterance never actually started (a real, silent
+  // failure mode on some mobile browsers when no voice is loaded yet).
+  setTimeout(() => onDiag?.("speechSynthesis.speaking", String(window.speechSynthesis.speaking)), 50);
 }
 
 function getAudioElement(): HTMLAudioElement {
@@ -112,20 +133,20 @@ const SILENT_AUDIO_SRC =
 // switch even though a properly-unlocked element wouldn't (2026-09-02,
 // found live: "Speaking…" showed, phone was on silent, no sound at all).
 // Call this at the very top of the press handler, before anything async.
-export function unlockAudioPlayback(): void {
+export function unlockAudioPlayback(onDiag?: (label: string, detail?: string) => void): void {
   try {
     const el = getAudioElement();
     if (el.src) return; // a real reply is already queued/playing — don't stomp it
     el.src = SILENT_AUDIO_SRC;
-    const p = el.play();
-    if (p && typeof p.catch === "function") {
-      p.catch(() => {}).finally(() => {
+    el.play()
+      .then(() => onDiag?.("audio unlock: play() resolved"))
+      .catch((err) => onDiag?.("audio unlock: play() rejected", err instanceof Error ? err.message : String(err)))
+      .finally(() => {
         el.pause();
         el.removeAttribute("src");
       });
-    }
-  } catch {
-    /* best-effort unlock only — never block the actual turn on this */
+  } catch (err) {
+    onDiag?.("audio unlock: threw", err instanceof Error ? err.message : String(err));
   }
 }
 
@@ -135,15 +156,18 @@ function playRemoteAudio(
   text: string,
   onEnd: () => void,
   lang?: string,
+  onDiag?: (label: string, detail?: string) => void,
 ): void {
   const el = getAudioElement();
   clearAudioWatchdog();
 
   let done = false;
+  let viaWatchdog = false;
   const finish = () => {
     if (done) return;
     done = true;
     clearAudioWatchdog();
+    onDiag?.("remote audio finished", viaWatchdog ? "watchdog, not a real onended" : "onended");
     // Fully release the audio element before the caller reopens the mic. On
     // iOS, leaving playback attached keeps the audio session in playback mode,
     // which starves the SpeechRecognition that opens next (it starts but
@@ -156,17 +180,18 @@ function playRemoteAudio(
     el.load();
     onEnd();
   };
-  const fallbackToLocal = () => {
+  const fallbackToLocal = (reason: string) => {
     if (done) return;
     done = true;
     clearAudioWatchdog();
     // Playback failed (autoplay block, decode error, network hiccup, etc) —
     // never leave the conversation stuck; degrade to the local voice.
-    speakLocal(text, onEnd, lang);
+    onDiag?.("remote audio failed, falling back to local voice", reason);
+    speakLocal(text, onEnd, lang, onDiag);
   };
 
   el.onended = finish;
-  el.onerror = fallbackToLocal;
+  el.onerror = () => fallbackToLocal(`element error, code ${el.error?.code ?? "?"}`);
   // Once metadata arrives the element knows the real duration — re-arm the
   // watchdog from that instead of guessing. A chars/sec guess undershoots
   // slower speech (Romanian especially), and a watchdog that fires
@@ -174,24 +199,31 @@ function playRemoteAudio(
   el.onloadedmetadata = () => {
     if (done || !Number.isFinite(el.duration)) return;
     clearAudioWatchdog();
-    audioWatchdogTimer = window.setTimeout(finish, el.duration * 1000 + 2000);
+    audioWatchdogTimer = window.setTimeout(() => {
+      viaWatchdog = true;
+      finish();
+    }, el.duration * 1000 + 2000);
   };
   el.src = `data:${mime};base64,${base64}`;
 
   // Deliberately generous initial estimate — only a backstop for the case
   // where metadata never loads; the real deadline is set above.
   const estimatedMs = Math.max(8000, (text.length / 8) * 1000 + 4000);
-  audioWatchdogTimer = window.setTimeout(finish, estimatedMs);
+  audioWatchdogTimer = window.setTimeout(() => {
+    viaWatchdog = true;
+    finish();
+  }, estimatedMs);
 
-  el.play()?.catch(fallbackToLocal);
+  onDiag?.("remote audio play() called");
+  el.play().catch((err) => fallbackToLocal(err instanceof Error ? `${err.name}: ${err.message}` : String(err)));
 }
 
-export function speak(text: string, { onEnd, audioBase64, audioMime, lang }: SpeakOptions): void {
+export function speak(text: string, { onEnd, audioBase64, audioMime, lang, onDiag }: SpeakOptions): void {
   if (audioBase64) {
-    playRemoteAudio(audioBase64, audioMime ?? "audio/mpeg", text, onEnd, lang);
+    playRemoteAudio(audioBase64, audioMime ?? "audio/mpeg", text, onEnd, lang, onDiag);
     return;
   }
-  speakLocal(text, onEnd, lang);
+  speakLocal(text, onEnd, lang, onDiag);
 }
 
 export function cancelSpeech(): void {

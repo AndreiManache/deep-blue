@@ -191,6 +191,7 @@ export function useConversation(): ConversationApi {
       audioBase64,
       audioMime,
       lang: languageRef.current,
+      onDiag: logDiag,
       onEnd: () => {
         if (phaseRef.current !== "speaking") return; // barged in, or session ended meanwhile
         setPhaseBoth("idle");
@@ -234,6 +235,7 @@ export function useConversation(): ConversationApi {
           audioBase64: result.audio_base64,
           audioMime: result.audio_mime,
           lang: result.lang,
+          onDiag: logDiag,
           onEnd: () => endSession(),
         });
         return;

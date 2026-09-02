@@ -33,7 +33,6 @@ export function HomeScreen({ conversation, onNavigate, onScan, onLogout, isAdmin
     holdStart,
     holdEnd,
     requestMicPermission,
-    addDiagnostic,
     pendingImage,
     attachImage,
     clearImage,
@@ -66,7 +65,7 @@ export function HomeScreen({ conversation, onNavigate, onScan, onLogout, isAdmin
         ) : (
           <>
             <Greeting />
-            <TalkButton phase={phase} onHoldStart={holdStart} onHoldEnd={holdEnd} onDiag={addDiagnostic} />
+            <TalkButton phase={phase} onHoldStart={holdStart} onHoldEnd={holdEnd} />
             <div className="flex items-center justify-center gap-4">
               <PhotoAttach image={pendingImage} onAttach={attachImage} onClear={clearImage} />
               {!pendingImage && (

@@ -2,14 +2,12 @@ import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import type { Phase } from "../conversation/useConversation";
 import { useT, type StringKey } from "../i18n/useT";
 import { playReadyChime } from "../speech/chime";
-import { unlockAudioPlayback } from "../speech/synthesis";
 import { cn } from "../lib/utils";
 
 interface TalkButtonProps {
   phase: Phase;
   onHoldStart: () => void;
   onHoldEnd: () => void;
-  onDiag?: (label: string, detail?: string) => void;
 }
 
 const LABEL_KEYS: Partial<Record<Phase, StringKey>> = {
@@ -25,7 +23,7 @@ const BAR_HEIGHTS = ["h-5", "h-9", "h-12", "h-6", "h-8"];
 // handler; pointer capture keeps delivering the eventual pointerup/cancel
 // to THIS element even if the finger drifts outside the circular hit area
 // mid-hold, so a real hold never gets silently dropped.
-export function TalkButton({ phase, onHoldStart, onHoldEnd, onDiag }: TalkButtonProps) {
+export function TalkButton({ phase, onHoldStart, onHoldEnd }: TalkButtonProps) {
   const t = useT();
   const listening = phase === "listening";
   const speaking = phase === "speaking";
@@ -35,16 +33,9 @@ export function TalkButton({ phase, onHoldStart, onHoldEnd, onDiag }: TalkButton
 
   function handlePointerDown(e: ReactPointerEvent<HTMLButtonElement>) {
     e.preventDefault();
-    // Both of these MUST run synchronously, right here, inside the real
-    // gesture — not later inside onHoldStart's async chain. iOS only grants
-    // audio playback that ignores the ringer's silent switch to a <audio>
-    // element that's been play()'d within an actual user gesture; by the
-    // time the AI's reply is ready to play, several awaits (mic, STT, chat,
-    // TTS) have already happened and the gesture has long since expired.
-    // Found live 2026-09-02: "Speaking…" showed, phone was on silent, no
-    // sound at all — the reply was never unlocked.
+    // Instant feedback, right here inside the real gesture, before anything
+    // async happens.
     playReadyChime();
-    unlockAudioPlayback(onDiag);
     // Best-effort only — if the browser won't capture this pointer for any
     // reason, the hold must still start. Letting this throw would silently
     // swallow onHoldStart() entirely, leaving the button looking dead.

@@ -2,19 +2,15 @@
 // interaction redesign, ticket #13) — plays the instant the talk button is
 // pressed, telling the user it's safe to start speaking. Generated with the
 // Web Audio API rather than an audio file so it has zero network dependency
-// and zero playback latency (no fetch/decode before it can sound).
-let ctx: AudioContext | null = null;
-
-function getCtx(): AudioContext | null {
-  const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-  if (!Ctor) return null;
-  if (!ctx) ctx = new Ctor();
-  return ctx;
-}
+// and zero playback latency (no fetch/decode before it can sound). Shares
+// the app-wide AudioContext (see audioContext.ts) so pressing the button
+// both plays this cue AND unlocks that context for the AI reply that plays
+// on it later.
+import { getAudioContext } from "./audioContext";
 
 export function playReadyChime(): void {
   try {
-    const audioCtx = getCtx();
+    const audioCtx = getAudioContext();
     if (!audioCtx) return;
     if (audioCtx.state === "suspended") void audioCtx.resume();
 

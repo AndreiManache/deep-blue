@@ -1,6 +1,8 @@
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import type { Phase } from "../conversation/useConversation";
 import { useT, type StringKey } from "../i18n/useT";
+import { playReadyChime } from "../speech/chime";
+import { unlockAudioPlayback } from "../speech/synthesis";
 import { cn } from "../lib/utils";
 
 interface TalkButtonProps {
@@ -32,6 +34,16 @@ export function TalkButton({ phase, onHoldStart, onHoldEnd }: TalkButtonProps) {
 
   function handlePointerDown(e: ReactPointerEvent<HTMLButtonElement>) {
     e.preventDefault();
+    // Both of these MUST run synchronously, right here, inside the real
+    // gesture — not later inside onHoldStart's async chain. iOS only grants
+    // audio playback that ignores the ringer's silent switch to a <audio>
+    // element that's been play()'d within an actual user gesture; by the
+    // time the AI's reply is ready to play, several awaits (mic, STT, chat,
+    // TTS) have already happened and the gesture has long since expired.
+    // Found live 2026-09-02: "Speaking…" showed, phone was on silent, no
+    // sound at all — the reply was never unlocked.
+    playReadyChime();
+    unlockAudioPlayback();
     // Best-effort only — if the browser won't capture this pointer for any
     // reason, the hold must still start. Letting this throw would silently
     // swallow onHoldStart() entirely, leaving the button looking dead.

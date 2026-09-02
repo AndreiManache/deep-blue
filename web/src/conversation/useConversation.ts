@@ -1,7 +1,6 @@
 import { useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { ApiError, sendChat, synthesizeText, transcribeAudio, type ImageAttachment } from "../api/client";
-import { playReadyChime } from "../speech/chime";
 import { SpeechCapture, type MicPermission } from "../speech/capture";
 import { getSpeechSupport } from "../speech/support";
 import { cancelSpeech, speak } from "../speech/synthesis";
@@ -305,7 +304,6 @@ export function useConversation(): ConversationApi {
     }
 
     setMicPermissionDenied(false);
-    playReadyChime();
     holdStartedAtRef.current = Date.now();
     setPhaseBoth("listening");
     logDiag("listening (held)…");

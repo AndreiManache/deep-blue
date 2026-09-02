@@ -100,6 +100,35 @@ function getAudioElement(): HTMLAudioElement {
   return audioEl;
 }
 
+// A silent, valid WAV — just enough for iOS to accept the play() call below.
+const SILENT_AUDIO_SRC =
+  "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+
+// iOS Safari mutes <audio> playback that respects the ringer's silent
+// switch UNLESS the element has been "unlocked" by a play() call made
+// synchronously inside a real user gesture — every AI reply plays from
+// deep inside an async chain (STT → chat → TTS, well after the button was
+// actually pressed), so without this it silently respects the silent
+// switch even though a properly-unlocked element wouldn't (2026-09-02,
+// found live: "Speaking…" showed, phone was on silent, no sound at all).
+// Call this at the very top of the press handler, before anything async.
+export function unlockAudioPlayback(): void {
+  try {
+    const el = getAudioElement();
+    if (el.src) return; // a real reply is already queued/playing — don't stomp it
+    el.src = SILENT_AUDIO_SRC;
+    const p = el.play();
+    if (p && typeof p.catch === "function") {
+      p.catch(() => {}).finally(() => {
+        el.pause();
+        el.removeAttribute("src");
+      });
+    }
+  } catch {
+    /* best-effort unlock only — never block the actual turn on this */
+  }
+}
+
 function playRemoteAudio(
   base64: string,
   mime: string,

@@ -20,13 +20,13 @@ export const strings: Record<string, { en: string; ro: string }> = {
     ro: "Deep Blue are nevoie de un browser cu înregistrare audio și redare audio. Încearcă cea mai nouă versiune de Safari (iOS) sau Chrome (Android/desktop).",
   },
   "home.hintPhotoAttached": {
-    en: "Tap the orb and describe what's in the photo.",
-    ro: "Apasă pe orb și descrie ce se vede în fotografie.",
+    en: "Hold the orb and describe what's in the photo.",
+    ro: "Ține apăsat pe orb și descrie ce se vede în fotografie.",
   },
   "home.adminPanel": { en: "Admin panel", ro: "Panou de administrare" },
   "home.hintDefault": {
-    en: 'Tap the orb and just talk. "I had two eggs and a coffee for breakfast."',
-    ro: 'Apasă pe orb și vorbește. "Am mâncat două ouă și o cafea la micul dejun."',
+    en: 'Hold the orb and talk. "I had two eggs and a coffee for breakfast."',
+    ro: 'Ține apăsat pe orb și vorbește. "Am mâncat două ouă și o cafea la micul dejun."',
   },
   "home.scanBarcode": { en: "Scan a barcode", ro: "Scanează un cod de bare" },
 
@@ -41,7 +41,7 @@ export const strings: Record<string, { en: string; ro: string }> = {
   "backHeader.back": { en: "Back", ro: "Înapoi" },
 
   // TalkButton
-  "talkButton.tapToTalk": { en: "Tap to talk", ro: "Apasă pentru a vorbi" },
+  "talkButton.holdToTalk": { en: "Hold to talk", ro: "Ține apăsat pentru a vorbi" },
   "talkButton.allowingMic": { en: "Allow mic…", ro: "Se cere microfonul…" },
 
   // MicPermissionHelp

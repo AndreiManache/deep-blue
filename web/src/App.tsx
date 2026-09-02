@@ -80,20 +80,6 @@ export function App() {
       .catch(() => {});
   }, [authed]);
 
-  // Warm the greeting as soon as we know we're actually logged in, so the
-  // tap that starts a session usually finds it already resolved instead of
-  // fetching cold. useConversation() has no auth state of its own, hence
-  // triggering this from here rather than inside the hook.
-  useEffect(() => {
-    if (!authed) return;
-    conversation.prefetchGreeting();
-    // Deliberately only re-run on an auth transition, not on every render
-    // that happens to produce a new prefetchGreeting reference — refetching
-    // the greeting on unrelated re-renders would defeat the point of a
-    // one-shot prefetch.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authed]);
-
   async function handleLogout() {
     endSession();
     setView("home");

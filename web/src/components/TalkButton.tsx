@@ -9,6 +9,7 @@ interface TalkButtonProps {
   phase: Phase;
   onHoldStart: () => void;
   onHoldEnd: () => void;
+  onDiag?: (label: string, detail?: string) => void;
 }
 
 const LABEL_KEYS: Partial<Record<Phase, StringKey>> = {
@@ -24,7 +25,7 @@ const BAR_HEIGHTS = ["h-5", "h-9", "h-12", "h-6", "h-8"];
 // handler; pointer capture keeps delivering the eventual pointerup/cancel
 // to THIS element even if the finger drifts outside the circular hit area
 // mid-hold, so a real hold never gets silently dropped.
-export function TalkButton({ phase, onHoldStart, onHoldEnd }: TalkButtonProps) {
+export function TalkButton({ phase, onHoldStart, onHoldEnd, onDiag }: TalkButtonProps) {
   const t = useT();
   const listening = phase === "listening";
   const speaking = phase === "speaking";
@@ -43,7 +44,7 @@ export function TalkButton({ phase, onHoldStart, onHoldEnd }: TalkButtonProps) {
     // Found live 2026-09-02: "Speaking…" showed, phone was on silent, no
     // sound at all — the reply was never unlocked.
     playReadyChime();
-    unlockAudioPlayback();
+    unlockAudioPlayback(onDiag);
     // Best-effort only — if the browser won't capture this pointer for any
     // reason, the hold must still start. Letting this throw would silently
     // swallow onHoldStart() entirely, leaving the button looking dead.

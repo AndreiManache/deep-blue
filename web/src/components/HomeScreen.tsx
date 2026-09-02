@@ -30,26 +30,13 @@ export function HomeScreen({ conversation, onNavigate, onScan, onLogout, isAdmin
     phase,
     errorMessage,
     micPermissionDenied,
-    startSession,
-    endTurn,
-    interrupt,
-    endSession,
+    holdStart,
+    holdEnd,
+    requestMicPermission,
     pendingImage,
     attachImage,
     clearImage,
   } = conversation;
-
-  function handleTap() {
-    if (phase === "idle") {
-      startSession();
-    } else if (phase === "listening") {
-      endTurn();
-    } else if (phase === "speaking") {
-      interrupt(); // barge-in: cut the reply short and listen
-    } else if (phase === "awaiting-mic" || phase === "thinking") {
-      endSession();
-    }
-  }
 
   return (
     <div className="flex min-h-dvh flex-col px-6 pb-10 pt-5">
@@ -73,12 +60,12 @@ export function HomeScreen({ conversation, onNavigate, onScan, onLogout, isAdmin
           </div>
         ) : micPermissionDenied ? (
           <div className="w-full max-w-sm">
-            <MicPermissionHelp onRetry={startSession} />
+            <MicPermissionHelp onRetry={requestMicPermission} />
           </div>
         ) : (
           <>
             <Greeting />
-            <TalkButton phase={phase} onTap={handleTap} />
+            <TalkButton phase={phase} onHoldStart={holdStart} onHoldEnd={holdEnd} />
             <div className="flex items-center justify-center gap-4">
               <PhotoAttach image={pendingImage} onAttach={attachImage} onClear={clearImage} />
               {!pendingImage && (

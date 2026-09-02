@@ -1,21 +1,28 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import type { Phase } from "../conversation/useConversation";
 import { useT, type StringKey } from "../i18n/useT";
 import { cn } from "../lib/utils";
 
 interface TalkButtonProps {
   phase: Phase;
-  onTap: () => void;
+  onHoldStart: () => void;
+  onHoldEnd: () => void;
 }
 
 const LABEL_KEYS: Partial<Record<Phase, StringKey>> = {
-  idle: "talkButton.tapToTalk",
+  idle: "talkButton.holdToTalk",
   "awaiting-mic": "talkButton.allowingMic",
 };
 
 const BAR_HEIGHTS = ["h-5", "h-9", "h-12", "h-6", "h-8"];
 
-export function TalkButton({ phase, onTap }: TalkButtonProps) {
+// Press-and-hold to talk, release to send (2026-09-01 interaction redesign,
+// ticket #13) — replaces the old tap-to-start/tap-to-end model. Pointer
+// events (not touch/mouse separately) cover mouse, touch, and pen in one
+// handler; pointer capture keeps delivering the eventual pointerup/cancel
+// to THIS element even if the finger drifts outside the circular hit area
+// mid-hold, so a real hold never gets silently dropped.
+export function TalkButton({ phase, onHoldStart, onHoldEnd }: TalkButtonProps) {
   const t = useT();
   const listening = phase === "listening";
   const speaking = phase === "speaking";
@@ -23,13 +30,35 @@ export function TalkButton({ phase, onTap }: TalkButtonProps) {
   const live = listening || speaking;
   const label = LABEL_KEYS[phase] ? t(LABEL_KEYS[phase]!) : phase;
 
+  function handlePointerDown(e: ReactPointerEvent<HTMLButtonElement>) {
+    e.preventDefault();
+    // Best-effort only — if the browser won't capture this pointer for any
+    // reason, the hold must still start. Letting this throw would silently
+    // swallow onHoldStart() entirely, leaving the button looking dead.
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      /* fall through — pointerup/cancel may not re-target this element if
+         the finger drifts off it, but the hold itself still works */
+    }
+    onHoldStart();
+  }
+
+  function handlePointerUp(e: ReactPointerEvent<HTMLButtonElement>) {
+    e.preventDefault();
+    onHoldEnd();
+  }
+
   return (
     <button
-      onClick={onTap}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      onContextMenu={(e) => e.preventDefault()}
       aria-label={label}
       style={speaking ? ({ "--orb": "var(--color-sky)" } as CSSProperties) : undefined}
       className={cn(
-        "relative grid size-56 place-items-center rounded-full transition-all duration-300",
+        "relative grid size-56 touch-none select-none place-items-center rounded-full transition-all duration-300",
         live && "orb-ring",
         speaking && "bg-sky shadow-[0_20px_60px_-10px_var(--color-sky)]",
         (listening || phase === "idle") &&

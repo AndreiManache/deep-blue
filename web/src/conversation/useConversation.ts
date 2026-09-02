@@ -1,28 +1,26 @@
 import { useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import {
-  ApiError,
-  fetchGreeting,
-  sendChat,
-  synthesizeText,
-  transcribeAudio,
-  type GreetingResponse,
-  type ImageAttachment,
-} from "../api/client";
-import { SpeechCapture } from "../speech/capture";
+import { ApiError, sendChat, synthesizeText, transcribeAudio, type ImageAttachment } from "../api/client";
+import { playReadyChime } from "../speech/chime";
+import { SpeechCapture, type MicPermission } from "../speech/capture";
 import { getSpeechSupport } from "../speech/support";
 import { cancelSpeech, speak } from "../speech/synthesis";
 
 export type Phase = "idle" | "awaiting-mic" | "listening" | "thinking" | "speaking" | "unsupported";
 
-// Used when no profile name has been set yet.
-const FALLBACK_NAME = "there";
-
-// After the AI finishes speaking, wait this long before opening the mic. We now
-// hold the mic stream open for the whole session (see SpeechCapture), so iOS
-// stays in record mode; this is just a small guard so the <audio> element is
-// fully released first.
-const MIC_REARM_DELAY_MS = 250;
+// Hold-to-talk (2026-09-01 interaction redesign, ticket #13): press the orb
+// to talk, release to send. A hold shorter than this is almost certainly an
+// accidental tap, not a real turn — discarded silently rather than sent.
+const MIN_HOLD_MS = 200;
+// No activity (no hold) for this long quietly ends the session — releases
+// the mic and resets conversation context, with no spoken goodbye. The user
+// never has to explicitly "end" anything; it just fades out on its own.
+const IDLE_TIMEOUT_MS = 75000;
+// Barging in cuts the AI's audio off immediately, but iOS needs a beat to
+// finish flipping its audio session back from playback to record before a
+// new MediaRecorder reliably captures anything (see capture.ts's header) —
+// this is that beat, only paid when actually interrupting speech.
+const BARGE_IN_REARM_DELAY_MS = 150;
 
 // A single line in the on-screen diagnostics log.
 export interface DiagEvent {
@@ -33,7 +31,6 @@ export interface DiagEvent {
 
 export interface ConversationApi {
   phase: Phase;
-  interimTranscript: string;
   errorMessage: string | null;
   micPermissionDenied: boolean;
   mutationSignal: number;
@@ -50,24 +47,20 @@ export interface ConversationApi {
   pendingImage: ImageAttachment | null;
   attachImage: (image: ImageAttachment) => void;
   clearImage: () => void;
-  startSession: () => void;
-  endTurn: () => void;
+  /** Press the talk button: always wins, even mid-AI-reply (barge-in). */
+  holdStart: () => void;
+  /** Release the talk button: stop recording and send the turn. */
+  holdEnd: () => void;
+  /** Hard stop — releases the mic entirely and ends the session right now. */
   endSession: () => void;
-  /** Barge-in: cut the AI off mid-reply and open the mic. */
-  interrupt: () => void;
-  /**
-   * Call once known to be authenticated (useConversation() has no auth
-   * state of its own) to warm the greeting ahead of the tap that would
-   * otherwise fetch it cold — see the ref this populates for why.
-   */
-  prefetchGreeting: () => void;
+  /** Re-prompts for mic permission without starting to record — for the "Try again" retry button. */
+  requestMicPermission: () => void;
 }
 
 export function useConversation(): ConversationApi {
   const [phase, setPhase] = useState<Phase>(() =>
     getSpeechSupport().fullySupported ? "idle" : "unsupported",
   );
-  const [interimTranscript] = useState(""); // no interim results with batch STT
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [micPermissionDenied, setMicPermissionDenied] = useState(false);
   const [mutationSignal, setMutationSignal] = useState(0);
@@ -81,24 +74,21 @@ export function useConversation(): ConversationApi {
   if (!captureRef.current) captureRef.current = new SpeechCapture();
 
   const sessionIdRef = useRef<string>("");
-  // BCP-47 tag, refreshed after every /greeting and /chat response so a
-  // mid-conversation language switch takes effect immediately (drives TTS).
+  // BCP-47 tag, refreshed after every /chat response so a mid-conversation
+  // language switch takes effect immediately (drives TTS).
   const languageRef = useRef<string>("en-US");
-  // Every transition bumps this, so a capture/transcribe result that resolves
-  // after we've already moved on is ignored.
+  // Every transition bumps this, so a capture/transcribe/chat result that
+  // resolves after we've already moved on (barge-in, idle timeout, a newer
+  // hold) is ignored.
   const epochRef = useRef(0);
   // A synchronous phase check readable inside async/event callbacks.
   const phaseRef = useRef<Phase>(phase);
-  // Populated by prefetchGreeting() (called once the caller knows we're
-  // actually authenticated — useConversation() itself has no auth state) —
-  // by the time the user taps to start a session, the network round trip
-  // (and the server-side TTS synthesis behind it, on a cache miss) has
-  // usually already happened, so startSession() sees an already-resolved
-  // promise instead of a fresh multi-hundred-ms wait.
-  const greetingPrefetchRef = useRef<Promise<GreetingResponse | null> | null>(null);
-  function prefetchGreeting() {
-    greetingPrefetchRef.current = fetchGreeting().catch(() => null);
-  }
+  // Whether the button is physically down right now — distinct from `phase`,
+  // since phase can still say "awaiting-mic" or "speaking" (mid-barge-in
+  // rearm delay) for a moment after a very quick press-and-release.
+  const heldRef = useRef(false);
+  const holdStartedAtRef = useRef(0);
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function logDiag(label: string, detail?: string) {
     setDiagnostics((prev) => {
@@ -122,43 +112,41 @@ export function useConversation(): ConversationApi {
     setPendingImage(null);
   }
 
-  // Plain hoisted function declarations on purpose — openMic, speakThenListen
-  // and handleFinalTranscript call each other in a cycle.
-
   function setPhaseBoth(p: Phase) {
     phaseRef.current = p;
     setPhase(p);
   }
 
-  function openMic() {
-    const myEpoch = ++epochRef.current;
-    setPhaseBoth("listening");
-    logDiag("listening…");
-
-    const fresh = () => epochRef.current === myEpoch && phaseRef.current === "listening";
-
-    captureRef.current!.listen({
-      onSpeechStart: () => {
-        if (!fresh()) return;
-        logDiag("first audio heard");
-      },
-      onResult: (blob) => {
-        if (!fresh()) return;
-        void transcribeAndSend(blob, myEpoch);
-      },
-      onNoSpeech: () => {
-        if (!fresh()) return;
-        logDiag("silence — nobody spoke, ending");
-        endSession();
-      },
-      onError: (message) => {
-        if (epochRef.current !== myEpoch) return;
-        logDiag("capture error", message);
-        setErrorMessage("Microphone trouble — tap to try again.");
-        endSession();
-      },
-    });
+  function clearIdleTimer() {
+    if (idleTimerRef.current !== null) {
+      clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = null;
+    }
   }
+
+  // No spoken goodbye — the conversation just quietly stops listening for a
+  // new hold. Scheduled after every turn settles back to idle.
+  function scheduleIdleTimeout() {
+    clearIdleTimer();
+    idleTimerRef.current = setTimeout(() => {
+      logDiag("idle timeout — session ended quietly");
+      endSession();
+    }, IDLE_TIMEOUT_MS);
+  }
+
+  // Common "give up and go back to idle" path for holdStart's early-exit
+  // checkpoints (released before permission resolved, permission denied,
+  // mic unavailable, or a capture error) — always leaves things in a state
+  // where the next hold starts clean.
+  function bailToIdle(permission?: MicPermission) {
+    if (permission === "denied") setMicPermissionDenied(true);
+    else if (permission === "unavailable") setErrorMessage("Microphone isn't available in this browser.");
+    setPhaseBoth("idle");
+    scheduleIdleTimeout();
+  }
+
+  // Plain hoisted function declarations on purpose — several of these call
+  // each other in a cycle.
 
   async function transcribeAndSend(blob: Blob, myEpoch: number) {
     setPhaseBoth("thinking"); // end of speech — show loading through STT + model
@@ -182,21 +170,22 @@ export function useConversation(): ConversationApi {
   // message) used to always fall back to the browser's speechSynthesis,
   // regardless of which premium voice was configured — routes them through
   // the same server TTS as every other reply instead (2026-08-29 backlog
-  // item). Falls back to no audio (speakThenListen's own local-voice
+  // item). Falls back to no audio (speakThenIdle's own local-voice
   // fallback) on any failure, including a timeout — deliberately, since
   // this runs in error-recovery paths where the network may itself be down.
   async function speakLocalPhrase(text: string) {
     try {
       const result = await synthesizeText(text);
-      speakThenListen(text, result.audio_base64, result.audio_mime);
+      speakThenIdle(text, result.audio_base64, result.audio_mime);
     } catch {
-      speakThenListen(text);
+      speakThenIdle(text);
     }
   }
 
-  function speakThenListen(text: string, audioBase64?: string | null, audioMime?: string) {
-    captureRef.current!.abort(); // never record while the AI talks
-    epochRef.current++;
+  // AI finishes talking, then goes back to idle (never auto-reopens the mic
+  // — hold-to-talk means the user always presses again to keep going).
+  function speakThenIdle(text: string, audioBase64?: string | null, audioMime?: string) {
+    epochRef.current++; // invalidate anything still pending from the network phase
     setPhaseBoth("speaking");
     logDiag("AI speaks", text.slice(0, 60));
     speak(text, {
@@ -204,13 +193,9 @@ export function useConversation(): ConversationApi {
       audioMime,
       lang: languageRef.current,
       onEnd: () => {
-        if (phaseRef.current !== "speaking") return; // session may have ended meanwhile
-        // Small beat so iOS finishes releasing the <audio> element before the
-        // mic re-opens; re-check phase after the wait.
-        setTimeout(() => {
-          if (phaseRef.current !== "speaking") return;
-          openMic();
-        }, MIC_REARM_DELAY_MS);
+        if (phaseRef.current !== "speaking") return; // barged in, or session ended meanwhile
+        setPhaseBoth("idle");
+        scheduleIdleTimeout();
       },
     });
   }
@@ -239,12 +224,11 @@ export function useConversation(): ConversationApi {
       // of what the UI does with it, so let the Dashboard know even if the
       // session ended while this was in flight.
       if (result.mutated) setMutationSignal((n) => n + 1);
-      if (epochRef.current !== myEpoch) return; // endSession() fired while we were waiting — don't reopen the mic or speak into a session that's over
+      if (epochRef.current !== myEpoch) return; // superseded while we were waiting — don't speak into a session that's moved on
       setErrorMessage(null);
       languageRef.current = result.lang;
 
       if (result.ended) {
-        captureRef.current!.abort();
         setPhaseBoth("speaking");
         logDiag("AI speaks", result.reply_text.slice(0, 60));
         speak(result.reply_text, {
@@ -256,99 +240,140 @@ export function useConversation(): ConversationApi {
         return;
       }
 
-      speakThenListen(result.reply_text, result.audio_base64, result.audio_mime);
+      speakThenIdle(result.reply_text, result.audio_base64, result.audio_mime);
     } catch (err) {
       logDiag("✕ request failed", `${Date.now() - startedAt}ms`);
-      if (epochRef.current !== myEpoch) return; // endSession() fired while we were waiting
+      if (epochRef.current !== myEpoch) return; // superseded while we were waiting
       const message = err instanceof ApiError ? err.message : "Something went wrong. Try again.";
       setErrorMessage(message);
       void speakLocalPhrase(message);
     }
   }
 
-  async function startSession() {
+  // Press the talk button. Always wins immediately, regardless of what's
+  // currently happening — idle, still thinking about the last turn, or the
+  // AI mid-reply (barge-in: cuts it off and starts listening right away),
+  // like a real walkie-talkie.
+  async function holdStart() {
     if (!getSpeechSupport().fullySupported) {
       setPhaseBoth("unsupported");
       return;
     }
-    setMicPermissionDenied(false);
+    if (heldRef.current) return; // already holding — ignore a duplicate press
+    heldRef.current = true;
+    clearIdleTimer();
     setErrorMessage(null);
-    sessionIdRef.current = uuidv4();
-    const myEpoch = ++epochRef.current;
-    logDiag("── tap → start session ──");
 
-    // Acquire (and hold) the mic inside the tap gesture. The greeting was
-    // already kicked off on mount (see greetingPrefetchRef above) — reuse
-    // that instead of starting a fresh fetch, unless it's already been
-    // consumed by an earlier session this app-load (or never started, e.g.
-    // the effect hasn't run yet), in which case fall back to fetching now.
-    // Cleared after use so a later session in the same app-load re-checks
-    // the name/language rather than replaying a possibly-stale greeting.
-    const permission = captureRef.current!.acquire();
-    const greeting = greetingPrefetchRef.current ?? fetchGreeting().catch(() => null);
-    greetingPrefetchRef.current = null;
+    const wasSpeaking = phaseRef.current === "speaking";
+    if (wasSpeaking) {
+      cancelSpeech();
+      logDiag("barge-in");
+    }
+    captureRef.current!.abort(); // discard any stray recorder state defensively
+    const myEpoch = ++epochRef.current; // invalidates any in-flight thinking/speaking continuation
 
-    setPhaseBoth("awaiting-mic");
-    const granted = await permission;
-    if (epochRef.current !== myEpoch) return; // endSession() fired while we waited
-    logDiag("mic permission", granted);
+    if (!sessionIdRef.current) {
+      sessionIdRef.current = uuidv4();
+      logDiag("── hold → new session ──");
+    } else {
+      logDiag("── hold ──");
+    }
+
+    if (wasSpeaking) {
+      await new Promise((resolve) => setTimeout(resolve, BARGE_IN_REARM_DELAY_MS));
+      if (epochRef.current !== myEpoch) return; // superseded meanwhile
+      if (!heldRef.current) {
+        bailToIdle();
+        return;
+      }
+    }
+
+    const alreadyAcquired = captureRef.current!.isAcquired;
+    if (!alreadyAcquired) setPhaseBoth("awaiting-mic");
+    const granted = await captureRef.current!.acquire();
+    if (epochRef.current !== myEpoch) return; // superseded meanwhile
+
+    if (!heldRef.current) {
+      // Released before permission even resolved — settle without recording.
+      bailToIdle(granted);
+      return;
+    }
+    if (granted !== "granted") {
+      heldRef.current = false;
+      bailToIdle(granted);
+      return;
+    }
+
+    setMicPermissionDenied(false);
+    playReadyChime();
+    holdStartedAtRef.current = Date.now();
+    setPhaseBoth("listening");
+    logDiag("listening (held)…");
+
+    captureRef.current!.startTurn({
+      onResult: (blob) => {
+        if (epochRef.current !== myEpoch) return;
+        void transcribeAndSend(blob, myEpoch);
+      },
+      onError: (message) => {
+        if (epochRef.current !== myEpoch) return;
+        logDiag("capture error", message);
+        setErrorMessage("Microphone trouble — try again.");
+        bailToIdle();
+      },
+    });
+  }
+
+  // Release the talk button: stop recording and send whatever was captured.
+  // A hold under MIN_HOLD_MS is treated as an accidental tap and discarded.
+  function holdEnd() {
+    if (!heldRef.current) return;
+    heldRef.current = false;
+    // Still awaiting-mic (permission not resolved yet) or mid barge-in rearm
+    // delay — holdStart's own continuation settles state once it resumes.
+    if (phaseRef.current !== "listening") return;
+
+    const heldMs = Date.now() - holdStartedAtRef.current;
+    if (heldMs < MIN_HOLD_MS) {
+      captureRef.current!.abort();
+      setPhaseBoth("idle");
+      scheduleIdleTimeout();
+      return;
+    }
+    captureRef.current!.endTurn(); // -> onResult -> transcribeAndSend
+  }
+
+  // Re-requests mic permission without starting to record — used by the
+  // "Try again" button on the permission-denied screen. A real hold (press
+  // + release) is what actually starts listening; this only settles the
+  // permission prompt itself.
+  async function requestMicPermission() {
+    setErrorMessage(null);
+    const granted = await captureRef.current!.acquire();
     if (granted === "denied") {
       setMicPermissionDenied(true);
-      setPhaseBoth("idle");
       return;
     }
     if (granted === "unavailable") {
       setErrorMessage("Microphone isn't available in this browser.");
-      setPhaseBoth("idle");
       return;
     }
-
-    setPhaseBoth("thinking"); // permission settled; greeting may still be loading
-
-    let text = `Hello ${FALLBACK_NAME}`;
-    let audioBase64: string | null = null;
-    let audioMime: string | undefined;
-    const result = await greeting;
-    if (result) {
-      text = result.text;
-      audioBase64 = result.audio_base64;
-      audioMime = result.audio_mime;
-      languageRef.current = result.lang;
-    }
-
-    if (epochRef.current !== myEpoch) return; // endSession() fired while we were fetching
-    speakThenListen(text, audioBase64, audioMime);
-  }
-
-  // Manual "tap to end my turn": stop recording now and transcribe what we have.
-  function endTurn() {
-    if (phaseRef.current === "listening") {
-      captureRef.current!.stopTurn();
-    }
+    setMicPermissionDenied(false);
   }
 
   function endSession() {
+    heldRef.current = false;
+    clearIdleTimer();
     epochRef.current++;
     captureRef.current!.release(); // stops the held mic stream — session over
     cancelSpeech();
+    sessionIdRef.current = ""; // next hold starts a fresh conversation
     setPhaseBoth("idle");
     logDiag("session ended");
   }
 
-  // Barge-in: talk over the AI. Silence it and listen. The held stream is still
-  // open, so this just re-opens the mic; the epoch bump discards any in-flight
-  // transcription.
-  function interrupt() {
-    if (phaseRef.current !== "speaking") return;
-    epochRef.current++;
-    cancelSpeech();
-    logDiag("barge-in");
-    openMic();
-  }
-
   return {
     phase,
-    interimTranscript,
     errorMessage,
     micPermissionDenied,
     mutationSignal,
@@ -358,10 +383,9 @@ export function useConversation(): ConversationApi {
     pendingImage,
     attachImage,
     clearImage,
-    startSession,
-    endTurn,
+    holdStart,
+    holdEnd,
     endSession,
-    interrupt,
-    prefetchGreeting,
+    requestMicPermission,
   };
 }

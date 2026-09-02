@@ -1,6 +1,7 @@
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import type { Phase } from "../conversation/useConversation";
 import { useT, type StringKey } from "../i18n/useT";
+import { resumeAudioContext } from "../speech/audioContext";
 import { playReadyChime } from "../speech/chime";
 import { cn } from "../lib/utils";
 
@@ -33,8 +34,11 @@ export function TalkButton({ phase, onHoldStart, onHoldEnd }: TalkButtonProps) {
 
   function handlePointerDown(e: ReactPointerEvent<HTMLButtonElement>) {
     e.preventDefault();
-    // Instant feedback, right here inside the real gesture, before anything
-    // async happens.
+    // Both run synchronously inside the real gesture, before anything async:
+    // the chime is instant feedback, and resuming the shared AudioContext
+    // here is what lets the AI's reply play later even though it starts far
+    // outside any gesture (iOS requirement — see synthesis.ts/audioContext.ts).
+    resumeAudioContext();
     playReadyChime();
     // Best-effort only — if the browser won't capture this pointer for any
     // reason, the hold must still start. Letting this throw would silently

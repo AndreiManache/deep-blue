@@ -11,6 +11,7 @@ import {
   setSteps,
   truncateSteps,
 } from "./geminiSessions.js";
+import { hedgedCall } from "./hedge.js";
 import { buildSystemPrompt } from "./systemPrompt.js";
 import { executeTool, geminiTools } from "./tools.js";
 import { synthesizeSpeech } from "./ttsProvider.js";
@@ -59,6 +60,17 @@ const TURN_BUDGET_MS = 40_000;
 // Below this much remaining budget, don't even start another call — there
 // isn't time for it to plausibly finish and still leave room for TTS.
 const MIN_CALL_HEADROOM_MS = 4_000;
+// Tail-latency hedge: if a model call hasn't returned within this long, fire
+// a SECOND identical call and take whichever finishes first. Gemini's
+// per-call latency is bimodal — a ~1-3s common case with a heavy tail that
+// spiked to 18-35s in production (2026-09-03), and those spikes are what made
+// the voice UX unusable, not the median. A duplicate request almost never
+// draws the same tail, so hedging collapses P90 back toward the median. The
+// cost is one extra call ONLY on the slow fraction (a call that beats the
+// threshold never triggers a hedge), which is the right trade for a latency-
+// critical voice turn. The hedge is on the LLM call ONLY; tools still execute
+// once, on the winning response, back in the loop — so nothing runs twice.
+const HEDGE_AFTER_MS = 4_000;
 
 // One retry only (2 attempts total). Takes a thunk (rather than params) so
 // the create() call's own overload resolution — which distinguishes the
@@ -166,23 +178,33 @@ async function runTurnUnguarded(
     // budget still left for the whole turn, so a single call can never
     // overshoot the turn deadline.
     const perCallTimeout = Math.min(PER_CALL_TIMEOUT_MS, remaining);
-    const interaction = await withGeminiRetry(
+    const systemInstruction = buildSystemPrompt(userId);
+    const interaction = await hedgedCall(
       () =>
-        client.interactions.create(
-          {
-            model: GEMINI_MODEL,
-            input: steps,
-            system_instruction: buildSystemPrompt(userId),
-            tools: geminiTools,
-            store: false, // this app manages history itself, same as the Anthropic path
-            generation_config: {
-              max_output_tokens: 400,
-              thinking_level: GEMINI_THINKING_LEVEL,
-            },
-          },
-          { timeout: perCallTimeout },
+        withGeminiRetry(
+          () =>
+            client.interactions.create(
+              {
+                model: GEMINI_MODEL,
+                input: steps,
+                system_instruction: systemInstruction,
+                tools: geminiTools,
+                store: false, // this app manages history itself, same as the Anthropic path
+                generation_config: {
+                  max_output_tokens: 400,
+                  thinking_level: GEMINI_THINKING_LEVEL,
+                },
+              },
+              { timeout: perCallTimeout },
+            ),
+          deadline,
         ),
-      deadline,
+      {
+        hedgeAfterMs: HEDGE_AFTER_MS,
+        // Don't fire a hedge if too little turn budget remains for it to land.
+        shouldHedge: () => deadline - Date.now() > MIN_CALL_HEADROOM_MS,
+        onHedge: () => console.warn(`[chatGemini] call slow (>${HEDGE_AFTER_MS}ms) — firing a hedge request`),
+      },
     );
     inputTokens += interaction.usage?.total_input_tokens ?? 0;
     outputTokens += interaction.usage?.total_output_tokens ?? 0;

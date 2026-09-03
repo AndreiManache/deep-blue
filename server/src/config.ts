@@ -63,21 +63,25 @@ export type TtsProviderName = "elevenlabs" | "gemini";
 export const TTS_PROVIDER: TtsProviderName = process.env.TTS_PROVIDER === "gemini" ? "gemini" : "elevenlabs";
 
 export const GEMINI_API_KEY = process.env.GEMINI_API_KEY ?? "";
-// Was gemini-3.7-flash, then 3.6-flash (dodging a 3.7 capacity issue), but
-// both are full Flash models sized for complex agentic work — overkill for
-// this app's actual model-side job. The real complexity (calorie/macro math)
-// is deterministic server code (see foods.ts/log_food); the model's job is
-// narrow — parse a sentence, call a tool. gemini-3.5-flash-lite is built and
-// benchmarked specifically for that (fast extraction/classification/tool-
-// calling), and measured 10-15x faster than 3.6-flash on identical turns
-// (2026-08-28) with no loss where quality actually lives, since the math
-// never came from the model in the first place.
-export const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-3.5-flash-lite";
-// "low" | "medium" | "high". Was "high", but measured latency on identical
-// simple turns (2026-08-28) was 28-47s at high vs 10-25s at low — high was
-// the dominant cause of replies effectively never arriving in a voice UX.
-// Food logging ("parse two eggs -> log_food") isn't a deep-reasoning task,
-// so "low" is the default; override via env to trade latency for reasoning.
+// gemini-3.8-flash (2026-09-03). Was gemini-3.5-flash-lite, chosen purely for
+// speed on the theory that this app's model-side job is narrow (parse a
+// sentence, call a tool; the calorie/macro math is deterministic server
+// code). Two things forced a rethink: (1) flash-lite is measurably weak at
+// instruction-following/context — it logged food from casual chat that wasn't
+// a logging request (feedback #32); (2) production latency on flash-lite was
+// wildly inconsistent (measured 18-35s spikes on trivial turns, 2026-09-03)
+// despite its headline speed, so its "fast" reputation didn't hold up under
+// our load. 3.8-flash scores near the frontier on intelligence (59 vs
+// flash-lite's low-tier) AND benchmarks as one of the fastest models (#3 by
+// output tok/s, Artificial Analysis 2026-09-03); smoke-tested here at ~1.2s
+// per call at thinking_level "low". The remaining latency work (hedged calls,
+// below) is a pipeline concern, orthogonal to the model choice.
+export const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-3.8-flash";
+// "low" | "medium" | "high". "low" keeps latency lowest and is plenty for
+// parse-and-tool-call now that the base model (3.8-flash) is far more capable
+// than flash-lite was — measured ~1.2s/call at low vs ~3.1s at medium
+// (2026-09-03). Bump to "medium" via env if context/instruction errors like
+// feedback #32 resurface and low isn't holding the line.
 export const GEMINI_THINKING_LEVEL = process.env.GEMINI_THINKING_LEVEL ?? "low";
 
 export const GEMINI_TTS_MODEL = process.env.GEMINI_TTS_MODEL ?? "gemini-3.1-flash-tts-preview";

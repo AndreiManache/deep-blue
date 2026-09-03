@@ -170,4 +170,16 @@ describe("recipes and favorites (2026-09-03)", () => {
     assert.equal(row!.is_favorite, 1, "naming it a recipe doesn't clobber the existing favorite flag");
     assert.equal(row!.calories, 90);
   });
+
+  it("listNamedFoods returns only recipes/favorites, not ordinary logged foods", () => {
+    const userId = "priya";
+    foods.recordObservation(userId, "an ordinary snack", "per_100g", per100(200), "estimate");
+    foods.createRecipe(userId, "priya's dal", "per_item", { calories: 400, protein_g: 20, carbs_g: 50, fat_g: 10 });
+    foods.recordObservation(userId, "iced coffee", "per_100g", per100(5), "estimate");
+    foods.setFavorite(userId, "iced coffee", true);
+
+    const named = foods.listNamedFoods(userId).map((f) => f.food_key);
+    assert.deepEqual(new Set(named), new Set(["priya's dal", "iced coffee"]));
+    assert.ok(!named.includes("an ordinary snack"), "a plain logged food with neither flag is excluded");
+  });
 });

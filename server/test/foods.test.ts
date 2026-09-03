@@ -182,4 +182,25 @@ describe("recipes and favorites (2026-09-03)", () => {
     assert.deepEqual(new Set(named), new Set(["priya's dal", "iced coffee"]));
     assert.ok(!named.includes("an ordinary snack"), "a plain logged food with neither flag is excluded");
   });
+
+  it("a saved recipe's basis wins even when this turn's estimate lands on a different basis", () => {
+    const key = "zurna kebab de pui";
+    foods.createRecipe("andrei2", key, "per_item", { calories: 1658, protein_g: 50, carbs_g: 74, fat_g: 72 });
+
+    // This turn the model also guessed a portion weight, which derives
+    // per_100g instead of per_item — the saved recipe must still apply.
+    const { basis: modelBasis, nutrition: modelPerBasis } = foods.perBasisFromTotal(
+      { calories: 750, protein_g: 45, carbs_g: 75, fat_g: 30 },
+      450,
+    );
+    assert.equal(modelBasis, "per_100g");
+
+    const resolved = foods.resolveNutrition("andrei2", key, modelBasis, modelPerBasis);
+    assert.equal(resolved.source, "yours");
+    assert.equal(resolved.basis, "per_item");
+    assert.equal(resolved.nutrition.calories, 1658);
+
+    const total = foods.totalFromBasis(resolved.nutrition, resolved.basis, 450);
+    assert.equal(total.calories, 1658, "the recipe's fixed total, not scaled by the guessed portion weight");
+  });
 });

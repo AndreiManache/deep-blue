@@ -18,6 +18,7 @@ export interface Nutrition {
 
 export interface ResolvedNutrition {
   nutrition: Nutrition;
+  basis: Basis;
   source: Provenance;
   agreementCount: number | null; // set when source === "verified"
 }
@@ -324,29 +325,37 @@ export function getFoodDbStats(userId: string): { yours: number; verified: numbe
 
 // Decide the nutrition to actually use for this log, best source first:
 // the user's own remembered value, then crowd-verified, else the model's
-// estimate. Only values on the SAME basis as the current log are eligible.
+// estimate.
 export function resolveNutrition(
   userId: string,
   foodKey: string,
   basis: Basis,
   modelNutrition: Nutrition,
 ): ResolvedNutrition {
+  // The saved basis is authoritative for a food the user already has a
+  // value for — it must win even when this turn's own estimate lands on a
+  // different basis (e.g. a whole-dish recipe saved per_item still applies
+  // when the model also guesses a portion weight, deriving per_100g this
+  // turn instead — see 2026-09-03, the "zurna kebab" bug: the food_key
+  // matched, but the saved 1658-calorie recipe was skipped in favor of a
+  // fresh ~800-calorie guess purely because the bases didn't line up).
+  // Macro backfill from this turn's estimate only applies when the bases do
+  // match, since a per_100g macro can't be dropped into a per_item slot (or
+  // vice versa) without knowing the item's weight.
   const mine = getUserObsStmt.get(foodKey, userId) as unknown as ObservationRow | undefined;
-  if (mine && mine.basis === basis) {
+  if (mine) {
+    const backfill = mine.basis === basis ? modelNutrition : null;
     return {
       nutrition: {
         // Calories is the one field "yours" exists to protect (a value
         // this user has already corrected or confirmed), so it's never
-        // overridden. A macro that's null on the remembered value (e.g.
-        // an earlier turn where the model didn't estimate carbs/fat) is
-        // backfilled from this turn's fresh estimate instead of staying
-        // null forever — otherwise one incomplete first log permanently
-        // caps every future log of that food at the same missing data.
+        // overridden.
         calories: mine.calories,
-        protein_g: mine.protein_g ?? modelNutrition.protein_g ?? null,
-        carbs_g: mine.carbs_g ?? modelNutrition.carbs_g ?? null,
-        fat_g: mine.fat_g ?? modelNutrition.fat_g ?? null,
+        protein_g: mine.protein_g ?? backfill?.protein_g ?? null,
+        carbs_g: mine.carbs_g ?? backfill?.carbs_g ?? null,
+        fat_g: mine.fat_g ?? backfill?.fat_g ?? null,
       },
+      basis: mine.basis,
       source: "yours",
       agreementCount: null,
     };
@@ -354,8 +363,8 @@ export function resolveNutrition(
 
   const consensus = getConsensus(foodKey);
   if (consensus && consensus.basis === basis) {
-    return { nutrition: consensus.nutrition, source: "verified", agreementCount: consensus.agreementCount };
+    return { nutrition: consensus.nutrition, basis, source: "verified", agreementCount: consensus.agreementCount };
   }
 
-  return { nutrition: modelNutrition, source: "estimate", agreementCount: null };
+  return { nutrition: modelNutrition, basis, source: "estimate", agreementCount: null };
 }

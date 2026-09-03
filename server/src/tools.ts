@@ -262,7 +262,7 @@ export function executeTool(
             source = "estimate";
           } else {
             const resolved = resolveNutrition(userId, foodKey, basis, perBasisModel);
-            used = totalFromBasis(resolved.nutrition, basis, grams);
+            used = totalFromBasis(resolved.nutrition, resolved.basis, grams);
             source = resolved.source;
             agreementCount = resolved.agreementCount;
           }

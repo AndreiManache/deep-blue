@@ -60,6 +60,8 @@ export function unitPrice(provider: UsageProvider, kind: UsageKind): number {
       return TTS_PER_CHAR[provider] ?? 0;
     case "stt_bytes":
       return STT_PER_BYTE[provider] ?? 0;
+    case "chat_latency_ms":
+      return 0; // a latency metric, not a billed quantity — never a cost
   }
 }
 

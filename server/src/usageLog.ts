@@ -5,7 +5,12 @@ export type UsageProvider = "anthropic" | "gemini" | "murf" | "elevenlabs" | "sm
 // LLM input/output tokens are split rather than summed — the two are
 // typically priced 4-5x apart, so a single blended "tokens" number can't
 // support an accurate cost estimate.
-export type UsageKind = "llm_input_tokens" | "llm_output_tokens" | "tts_chars" | "stt_bytes";
+// The token/char/byte kinds are priced (see usageCost.ts). "chat_latency_ms"
+// is a non-cost metric riding the same generic (kind, amount) columns: the
+// end-to-end server time for one /chat reply, in milliseconds — surfaced as
+// the admin panel's average-response-time reality check (see latency.ts). It
+// has a unitPrice of 0 so it never touches spend aggregation.
+export type UsageKind = "llm_input_tokens" | "llm_output_tokens" | "tts_chars" | "stt_bytes" | "chat_latency_ms";
 
 const insertStmt = db.prepare(`
   INSERT INTO usage_log (id, user_id, provider, kind, amount, created_at)

@@ -45,6 +45,8 @@ import {
   totalFromBasis,
 } from "./foods.js";
 import { getAllUsersUsage } from "./usageCost.js";
+import { getChatLatencyStats } from "./latency.js";
+import { logUsage } from "./usageLog.js";
 import { lookupBarcode } from "./openfoodfacts.js";
 import {
   createFeedback,
@@ -386,6 +388,12 @@ app.get("/admin/users", (_req, res) => {
   res.json(getAllUsersUsage());
 });
 
+// Average (and p95) end-to-end reply time across all users' /chat turns — the
+// admin panel's "how fast is the model actually replying" reality check.
+app.get("/admin/latency", (_req, res) => {
+  res.json(getChatLatencyStats());
+});
+
 // Audit trail of calorie edits with a reason/evidence — see corrections.ts.
 app.get("/admin/corrections", (_req, res) => {
   res.json(listCorrections());
@@ -507,7 +515,14 @@ app.post("/chat", async (req, res) => {
   }
 
   try {
+    const startedAt = Date.now();
     const result = await runTurn(session_id, res.locals.userId as string, user_text, image);
+    // End-to-end server reply time (model tool-loop + voice synthesis) — the
+    // admin panel's average-response-time metric (see latency.ts). Recorded
+    // only for a reply that actually came back; a thrown turn isn't a
+    // "response time". logUsage swallows its own errors, so this can't break
+    // the reply.
+    logUsage(res.locals.userId as string, LLM_PROVIDER, "chat_latency_ms", Date.now() - startedAt);
     if (result.ended) {
       endSession(session_id);
     }

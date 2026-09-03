@@ -487,6 +487,20 @@ export async function fetchAdminUsers(): Promise<AdminUserRow[]> {
   return res.json();
 }
 
+export interface AdminLatencyStats {
+  count: number;
+  avg_ms: number | null;
+  p95_ms: number | null;
+  recent_count: number;
+  recent_avg_ms: number | null;
+}
+
+export async function fetchAdminLatency(): Promise<AdminLatencyStats> {
+  const res = await apiFetch("/admin/latency");
+  if (!res.ok) throw new ApiError("Could not load latency.");
+  return res.json();
+}
+
 export type FoodBasis = "per_100g" | "per_item";
 
 export interface MyFoodItem {

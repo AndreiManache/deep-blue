@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
-import { Inbox, ListChecks, Sparkles } from "lucide-react";
-import { ApiError, fetchAdminUsers, type AdminUserRow } from "../api/client";
+import { Gauge, Inbox, ListChecks, Sparkles } from "lucide-react";
+import {
+  ApiError,
+  fetchAdminLatency,
+  fetchAdminUsers,
+  type AdminLatencyStats,
+  type AdminUserRow,
+} from "../api/client";
 import { BackHeader } from "./BackHeader";
 
 interface AdminPanelPageProps {
@@ -20,6 +26,11 @@ function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
+function fmtMs(ms: number | null): string {
+  if (ms == null) return "—";
+  return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.round(ms)}ms`;
+}
+
 // Landing page for the admin-only area (2026-08-31). Deliberately small —
 // a users table plus links out to the pages that used to sit directly in
 // the hamburger menu — with more admin views expected to move in here over
@@ -33,12 +44,18 @@ export function AdminPanelPage({
   const [users, setUsers] = useState<AdminUserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [latency, setLatency] = useState<AdminLatencyStats | null>(null);
 
   useEffect(() => {
     fetchAdminUsers()
       .then(setUsers)
       .catch((err) => setError(err instanceof ApiError ? err.message : "Could not load users."))
       .finally(() => setLoading(false));
+    // Independent of the users load — a latency error just hides the card
+    // rather than blocking the rest of the panel.
+    fetchAdminLatency()
+      .then(setLatency)
+      .catch(() => setLatency(null));
   }, []);
 
   return (
@@ -68,6 +85,37 @@ export function AdminPanelPage({
           Corrections
         </button>
       </div>
+
+      {latency && latency.count > 0 && (
+        <div>
+          <h2 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-ink/40">
+            <Gauge className="size-4 text-sky" />
+            Response time
+          </h2>
+          <div className="rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-ink/5">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <div className="text-3xl font-black text-ink">{fmtMs(latency.avg_ms)}</div>
+                <div className="mt-0.5 text-xs font-semibold text-ink/40">
+                  Average over {latency.count.toLocaleString()} replies
+                </div>
+              </div>
+              <div>
+                <div className="text-3xl font-black text-ink">{fmtMs(latency.p95_ms)}</div>
+                <div className="mt-0.5 text-xs font-semibold text-ink/40">95th percentile (slowest 5%)</div>
+              </div>
+            </div>
+            {latency.recent_count > 0 && (
+              <div className="mt-4 border-t border-ink/5 pt-3 text-xs font-semibold text-ink/50">
+                Last 7 days: {fmtMs(latency.recent_avg_ms)} avg over {latency.recent_count.toLocaleString()} replies
+              </div>
+            )}
+            <p className="mt-3 text-[11px] font-medium leading-relaxed text-ink/35">
+              End-to-end server time per reply — the model plus voice synthesis — across all users.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div>
         <h2 className="mb-3 text-xs font-bold uppercase tracking-wide text-ink/40">

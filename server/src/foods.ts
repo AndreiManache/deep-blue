@@ -151,6 +151,29 @@ export function createRecipe(userId: string, foodKey: string, basis: Basis, nutr
   });
 }
 
+const listNamedFoodsStmt = db.prepare(
+  `SELECT food_key, is_recipe, is_favorite FROM food_observations
+    WHERE user_id = :user_id AND (is_recipe = 1 OR is_favorite = 1)
+    ORDER BY updated_at DESC`,
+);
+
+export interface NamedFood {
+  food_key: string;
+  is_recipe: number;
+  is_favorite: number;
+}
+
+// The user's deliberately-named foods (My Foods' two sections) — for
+// injecting into the system prompt so the model can recognize a spoken
+// description as matching one of these and use the food_key text verbatim,
+// rather than guessing its own generic key that then silently misses the
+// saved value entirely (2026-09-03, found live: recipe "zurna kebab de pui"
+// existed, but "zurna kebab" got logged under the model's own guessed key
+// "chicken wrap" instead — a complete miss, wrong calories with no error).
+export function listNamedFoods(userId: string): NamedFood[] {
+  return listNamedFoodsStmt.all({ user_id: userId }) as unknown as NamedFood[];
+}
+
 const setFavoriteStmt = db.prepare(
   `UPDATE food_observations SET is_favorite = :is_favorite WHERE food_key = :food_key AND user_id = :user_id`,
 );

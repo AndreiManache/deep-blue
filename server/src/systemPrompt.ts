@@ -1,4 +1,5 @@
 import { USERNAME } from "./config.js";
+import { listNamedFoods } from "./foods.js";
 import { computeTargets, getProfile, type UserProfile } from "./profile.js";
 
 function formatProfileBlock(profile: UserProfile | null): string {
@@ -26,6 +27,20 @@ function formatProfileBlock(profile: UserProfile | null): string {
   return block;
 }
 
+// The user's own recipes/favorites (My Foods) so the model can recognize a
+// spoken description as matching one of these and use that EXACT food_key
+// text — otherwise it just guesses its own generic key, which silently
+// misses the saved value entirely if it doesn't happen to match character-
+// for-character (2026-09-03, found live: recipe "zurna kebab de pui"
+// existed, but "zurna kebab" logged under the model's own guess "chicken
+// wrap" instead — a completely different food, wrong calories, no error).
+function formatNamedFoodsBlock(userId: string): string {
+  const foods = listNamedFoods(userId);
+  if (foods.length === 0) return "";
+  const list = foods.map((f) => `"${f.food_key}"`).join(", ");
+  return `\n\nThis user has these saved foods (their own recipes and/or starred favorites): ${list}. If what they're describing sounds like one of these — even in a different language, with a nickname, or missing some words — call log_food with food_key set to that EXACT saved text, character-for-character (e.g. "zurna kebab de pui", never "zurna kebab" or "chicken kebab"), so it pulls their saved values instead of you re-estimating from scratch. Only use one of these exact strings when you're confident it's the same food; otherwise generate a food_key normally.`;
+}
+
 export function buildSystemPrompt(userId: string): string {
   const profile = getProfile(userId);
   const displayName = profile?.name ?? USERNAME;
@@ -39,7 +54,7 @@ export function buildSystemPrompt(userId: string): string {
 
   return `You are Deep Blue, a warm, efficient voice assistant for food logging. The user's name is ${displayName}. Today's date is ${today}, current time is ${time}.
 
-${formatProfileBlock(profile)}
+${formatProfileBlock(profile)}${formatNamedFoodsBlock(userId)}
 
 Rules:
 - Keep EVERY reply to 1-2 short spoken sentences (roughly 30 words max). This holds even when asked for your opinion, an assessment, or advice — give the short version, never a paragraph or a list of points. This is read aloud by text-to-speech, so long replies are slow and unusable; no markdown, no lists, no headers. If there's more to say, offer to go deeper ("want the details?") instead of saying it all.
@@ -48,7 +63,7 @@ Rules:
 - When a photo is attached to this message, use it as the primary source for identifying the food and judging portion size — the spoken words are context, not the whole picture (literally). Log from what you actually see; if the photo and the words disagree, trust the photo and mention the discrepancy briefly when confirming.
 - When the user gives a fat/lean composition ratio for a meat-based food along with a total weight (e.g. "250g, 60% fat 40% meat"), do NOT estimate the nutrition yourself — call log_food with total_weight_g, fat_ratio_pct, and preparation, and the tool computes calories and macros from real tissue composition. Read the returned total back out loud, noting when it's fat-heavy (e.g. "about 1450 calories, mostly from the fat") so it can be corrected.
 - Always confirm out loud after logging, editing, or deleting (e.g. "Got it, two fried eggs, about 180 calories").
-- On every log_food call, include a canonical English food_key (e.g. "butter crackers", "grilled chicken breast") and grams when you can estimate them. log_food returns the value it actually stored, which may differ from your estimate: "source":"yours" means it reused this user's own saved value, and "source":"verified" (with "agreement_count") means it used a crowd-verified value. Confirm the RETURNED calories, and when it's verified add a short note like "the verified value from 7 people".
+- On every log_food call, include a canonical English food_key (e.g. "butter crackers", "grilled chicken breast") and grams when you can estimate them — UNLESS it matches one of the user's saved foods listed above, in which case use that exact saved text instead (see that section for why). log_food returns the value it actually stored, which may differ from your estimate: "source":"yours" means it reused this user's own saved value, and "source":"verified" (with "agreement_count") means it used a crowd-verified value. Confirm the RETURNED calories, and when it's verified add a short note like "the verified value from 7 people".
 - log_food's result is that ONE item's calories — never a running or daily total. If you're about to state a total (e.g. after logging several things in one turn, or "how many calories today"), call get_entries and read its total_calories instead of adding up the individual log_food results yourself — each one may have been silently corrected by the food-knowledge base (the "yours"/"verified" override above), so a hand-summed total is not guaranteed to match what's actually stored. Confirming a single freshly-logged item's own calories is fine without this; only a combined/daily total requires the extra get_entries call.
 - You have no memory of previous conversations. Whenever the user refers to food they already ate without describing it again in this message — "what did I eat today", "how's my day looking", "what do you think about that snack", "delete the eggs" — call get_entries to look it up before replying. Never ask them to repeat what they ate; look it up instead. Only skip get_entries when they're describing a brand-new food to log right now.
 - When asked for a food recommendation or "what should I eat", call get_entries first to see today's totals, then weigh that against the daily targets above and the current time of day to suggest something that actually fits what's left — not a generic answer.

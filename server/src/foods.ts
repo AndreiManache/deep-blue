@@ -61,7 +61,7 @@ const countUserFoodsStmt = db.prepare(
 const distinctFoodKeysStmt = db.prepare(`SELECT DISTINCT food_key FROM food_observations`);
 
 const listUserObsStmt = db.prepare(
-  `SELECT food_key, basis, calories, protein_g, carbs_g, fat_g, source, updated_at
+  `SELECT food_key, basis, calories, protein_g, carbs_g, fat_g, source, is_favorite, is_recipe, updated_at
      FROM food_observations WHERE user_id = :user_id
     ORDER BY updated_at DESC`,
 );
@@ -74,6 +74,8 @@ export interface UserObservation {
   carbs_g: number | null;
   fat_g: number | null;
   source: ObservationSource;
+  is_favorite: number;
+  is_recipe: number;
   updated_at: string;
 }
 
@@ -112,6 +114,53 @@ const deleteObsStmt = db.prepare(
 
 export function deleteObservation(userId: string, foodKey: string): boolean {
   const result = deleteObsStmt.run({ food_key: foodKey, user_id: userId });
+  return Number(result.changes) > 0;
+}
+
+const createRecipeStmt = db.prepare(`
+  INSERT INTO food_observations (food_key, user_id, basis, calories, protein_g, carbs_g, fat_g, source, is_favorite, is_recipe, updated_at)
+  VALUES (:food_key, :user_id, :basis, :calories, :protein_g, :carbs_g, :fat_g, 'correction', 0, 1, :updated_at)
+  ON CONFLICT(food_key, user_id) DO UPDATE SET
+    basis = excluded.basis,
+    calories = excluded.calories,
+    protein_g = excluded.protein_g,
+    carbs_g = excluded.carbs_g,
+    fat_g = excluded.fat_g,
+    source = excluded.source,
+    is_recipe = 1,
+    updated_at = excluded.updated_at
+`);
+
+// "Your recipes" — the user defining a food from scratch (name + full
+// nutrition facts) rather than it being derived from ever logging it.
+// Marks is_recipe unconditionally, even if food_key happens to collide with
+// something already auto-logged: naming a recipe is an explicit assertion
+// that this food's numbers are now user-authored going forward. Leaves
+// is_favorite alone on an existing row (only forced to 0 on a fresh insert),
+// so a recipe that was already favorited stays that way.
+export function createRecipe(userId: string, foodKey: string, basis: Basis, nutrition: Nutrition): void {
+  createRecipeStmt.run({
+    food_key: foodKey,
+    user_id: userId,
+    basis,
+    calories: Math.round(nutrition.calories * 10) / 10,
+    protein_g: nutrition.protein_g,
+    carbs_g: nutrition.carbs_g,
+    fat_g: nutrition.fat_g,
+    updated_at: new Date().toISOString(),
+  });
+}
+
+const setFavoriteStmt = db.prepare(
+  `UPDATE food_observations SET is_favorite = :is_favorite WHERE food_key = :food_key AND user_id = :user_id`,
+);
+
+// Starring a food (from a Dashboard entry, see EntryRow.tsx) requires an
+// observation row to already exist — it always does by the time an entry
+// with a food_key is on screen, since logging one always calls
+// recordObservation. Returns false if somehow it doesn't (nothing to star).
+export function setFavorite(userId: string, foodKey: string, isFavorite: boolean): boolean {
+  const result = setFavoriteStmt.run({ food_key: foodKey, user_id: userId, is_favorite: isFavorite ? 1 : 0 });
   return Number(result.changes) > 0;
 }
 

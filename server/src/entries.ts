@@ -18,6 +18,10 @@ export interface FoodEntry {
   grams: number | null;
   source: string | null; // 'estimate' | 'yours' | 'verified' | 'barcode'
   agreement_count: number | null;
+  // Whether this food_key is starred — see the "Favorite foods" section of
+  // My Foods (2026-09-03). False (not null) when food_key is null, since
+  // there's nothing to favorite.
+  is_favorite: boolean;
 }
 
 interface FoodEntryRow {
@@ -35,11 +39,12 @@ interface FoodEntryRow {
   grams: number | null;
   source: string | null;
   agreement_count: number | null;
+  is_favorite: number;
 }
 
 function rowToEntry(row: FoodEntryRow): FoodEntry {
-  const { user_id: _userId, edited, ...rest } = row;
-  return { ...rest, edited: Boolean(edited) };
+  const { user_id: _userId, edited, is_favorite, ...rest } = row;
+  return { ...rest, edited: Boolean(edited), is_favorite: Boolean(is_favorite) };
 }
 
 export interface CreateEntryInput {
@@ -76,15 +81,22 @@ export function createEntry(userId: string, input: CreateEntryInput): FoodEntry 
     grams: input.grams ?? null,
     source: input.source ?? null,
     agreement_count: input.agreement_count ?? null,
+    is_favorite: 0, // not a real column on food_entries — freshly logged, never favorited yet
   };
-  insertStmt.run(row as unknown as Record<string, string | number | null>);
+  const { is_favorite: _unused, ...insertRow } = row;
+  insertStmt.run(insertRow as unknown as Record<string, string | number | null>);
   return rowToEntry(row);
 }
 
+// LEFT JOINed so an entry whose food_key has no observation row (or no
+// food_key at all — a composition-described meat) still comes back, just
+// with is_favorite false rather than dropping the entry.
 const selectByDateStmt = db.prepare(`
-  SELECT * FROM food_entries
-  WHERE user_id = :user_id AND date(created_at, 'localtime') = date(:anchor, 'localtime')
-  ORDER BY created_at ASC
+  SELECT fe.*, COALESCE(fo.is_favorite, 0) AS is_favorite
+    FROM food_entries fe
+    LEFT JOIN food_observations fo ON fo.food_key = fe.food_key AND fo.user_id = fe.user_id
+   WHERE fe.user_id = :user_id AND date(fe.created_at, 'localtime') = date(:anchor, 'localtime')
+   ORDER BY fe.created_at ASC
 `);
 
 // date: 'YYYY-MM-DD' (interpreted as a local calendar day) — defaults to today.
@@ -94,7 +106,12 @@ export function getEntriesForDate(userId: string, date?: string): FoodEntry[] {
   return rows.map(rowToEntry);
 }
 
-const selectByIdStmt = db.prepare(`SELECT * FROM food_entries WHERE id = :id AND user_id = :user_id`);
+const selectByIdStmt = db.prepare(`
+  SELECT fe.*, COALESCE(fo.is_favorite, 0) AS is_favorite
+    FROM food_entries fe
+    LEFT JOIN food_observations fo ON fo.food_key = fe.food_key AND fo.user_id = fe.user_id
+   WHERE fe.id = :id AND fe.user_id = :user_id
+`);
 
 export function getEntryById(userId: string, id: string): FoodEntry | undefined {
   const row = selectByIdStmt.get({ id, user_id: userId }) as unknown as FoodEntryRow | undefined;
@@ -143,6 +160,7 @@ export function updateEntry(userId: string, id: string, fields: UpdateEntryInput
     // and feeds the knowledge base as a correction below.
     source: caloriesChanged ? "yours" : existing.source,
     agreement_count: caloriesChanged ? null : existing.agreement_count,
+    is_favorite: existing.is_favorite ? 1 : 0,
   };
 
   updateStmt.run({

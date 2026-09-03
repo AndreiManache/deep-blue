@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { Check, Pencil, Trash2, X } from "lucide-react";
+import { Check, Pencil, Star, Trash2, X } from "lucide-react";
 import {
   ApiError,
   editEntry,
   removeEntry,
+  setFoodFavorite,
   timeLabel,
   type CorrectionReason,
   type FoodEntry,
@@ -43,6 +44,12 @@ export function EntryRow({ entry, onChanged, onMutated }: EntryRowProps) {
   });
   const [correctionReason, setCorrectionReason] = useState<CorrectionReason | null>(null);
   const [evidenceUrl, setEvidenceUrl] = useState("");
+  // Optimistic — flips instantly on tap rather than waiting on the round
+  // trip, reverted if the request fails. Reset whenever a fresh `entry`
+  // comes in (a real refetch), so it never drifts from server truth.
+  const [favoriteOverride, setFavoriteOverride] = useState<boolean | null>(null);
+  const [favoriteBusy, setFavoriteBusy] = useState(false);
+  const isFavorite = favoriteOverride ?? entry.is_favorite;
 
   useEffect(() => {
     setForm({
@@ -53,6 +60,7 @@ export function EntryRow({ entry, onChanged, onMutated }: EntryRowProps) {
     setEvidenceUrl("");
     setError(null);
     setConfirmingDelete(false);
+    setFavoriteOverride(null);
   }, [entry]);
 
   const kcal = Number(form.calories);
@@ -98,6 +106,23 @@ export function EntryRow({ entry, onChanged, onMutated }: EntryRowProps) {
       setConfirmingDelete(false);
     } finally {
       setBusy(false);
+    }
+  }
+
+  // Starring/unstarring for the "Favorite foods" section of My Foods —
+  // requires a food_key (composition-described meat has none, so the star
+  // just doesn't render for those entries; see the render below).
+  async function handleToggleFavorite() {
+    if (favoriteBusy || !entry.food_key) return;
+    const next = !isFavorite;
+    setFavoriteOverride(next);
+    setFavoriteBusy(true);
+    try {
+      await setFoodFavorite(entry.food_key, next);
+    } catch {
+      setFavoriteOverride(!next); // revert — the toast-less failure is rare enough not to need its own error banner here
+    } finally {
+      setFavoriteBusy(false);
     }
   }
 
@@ -214,6 +239,19 @@ export function EntryRow({ entry, onChanged, onMutated }: EntryRowProps) {
             {timeLabel(entry.created_at)}
           </span>
           <div className="flex gap-1">
+            {entry.food_key && (
+              <button
+                className={cn(
+                  "grid size-8 place-items-center rounded-lg transition-colors",
+                  isFavorite ? "text-sun hover:bg-sun/10" : "text-ink/40 hover:bg-ink3 hover:text-ink",
+                )}
+                onClick={handleToggleFavorite}
+                disabled={favoriteBusy}
+                aria-label={isFavorite ? t("entry.unfavoriteLabel") : t("entry.favoriteLabel")}
+              >
+                <Star className="size-3.5" fill={isFavorite ? "currentColor" : "none"} />
+              </button>
+            )}
             <button
               className="grid size-8 place-items-center rounded-lg text-ink/40 transition-colors hover:bg-ink3 hover:text-ink"
               onClick={() => {

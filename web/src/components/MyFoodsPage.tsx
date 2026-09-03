@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
-import { Check, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react";
+import { Check, Pencil, Plus, RotateCcw, Star, Trash2, X } from "lucide-react";
 import {
   ApiError,
+  createRecipe,
   deleteMyFood,
   fetchMyFoods,
   logFoodAgain,
+  setFoodFavorite,
   upsertMyFood,
   type FoodBasis,
   type MyFoodItem,
+  type UpsertMyFoodInput,
 } from "../api/client";
 import { BackHeader } from "./BackHeader";
 import { cn } from "../lib/utils";
@@ -73,32 +76,23 @@ export function MyFoodsPage({ onBack, onLogged }: MyFoodsPageProps) {
 
   useEffect(load, []);
 
+  function updateItem(foodKey: string, updated: MyFoodItem) {
+    setItems((prev) => prev.map((i) => (i.food_key === foodKey ? updated : i)));
+  }
+  function removeItem(foodKey: string) {
+    setItems((prev) => prev.filter((i) => i.food_key !== foodKey));
+  }
+
+  // Two independent flags, not one list split three ways — a food can be a
+  // recipe, a favorite, both, or (everything else, not shown here at all)
+  // neither. Only foods the user did something deliberate to belong on this
+  // page; the full auto-logged history lives on the Dashboard, not here.
+  const recipes = items.filter((i) => i.is_recipe);
+  const favorites = items.filter((i) => i.is_favorite);
+
   return (
     <div className="flex min-h-dvh flex-col gap-6 px-6 pb-16 pt-5">
-      <BackHeader
-        title={t("profile.myFoods")}
-        subtitle={t(items.length === 1 ? "myFoods.subtitleOne" : "myFoods.subtitleMany", { count: items.length })}
-        onBack={onBack}
-      />
-
-      {!adding && (
-        <button
-          className="flex items-center justify-center gap-1.5 rounded-2xl bg-ink px-4 py-3 text-sm font-bold text-cream transition-colors hover:bg-ink/80"
-          onClick={() => setAdding(true)}
-        >
-          <Plus className="size-4" /> {t("myFoods.addFood")}
-        </button>
-      )}
-      {adding && (
-        <FoodForm
-          initial={blankForm()}
-          onCancel={() => setAdding(false)}
-          onSaved={(item) => {
-            setItems((prev) => [item, ...prev.filter((i) => i.food_key !== item.food_key)]);
-            setAdding(false);
-          }}
-        />
-      )}
+      <BackHeader title={t("profile.myFoods")} subtitle={t("myFoods.subtitle")} onBack={onBack} />
 
       {loading && <p className="py-10 text-center text-sm font-medium text-ink/40">{t("myFoods.loading")}</p>}
       {error && (
@@ -106,25 +100,71 @@ export function MyFoodsPage({ onBack, onLogged }: MyFoodsPageProps) {
           {error}
         </p>
       )}
-      {!loading && !error && items.length === 0 && !adding && (
-        <p className="py-10 text-center text-sm font-medium text-ink/40">
-          {t("myFoods.empty")}
-        </p>
-      )}
 
-      <div className="space-y-3">
-        {items.map((item) => (
-          <FoodCard
-            key={item.food_key}
-            item={item}
-            onSaved={(updated) =>
-              setItems((prev) => prev.map((i) => (i.food_key === item.food_key ? updated : i)))
-            }
-            onDeleted={() => setItems((prev) => prev.filter((i) => i.food_key !== item.food_key))}
-            onLogged={onLogged}
-          />
-        ))}
-      </div>
+      {!loading && !error && (
+        <>
+          <section className="space-y-3">
+            <h2 className="font-display text-lg font-extrabold tracking-tight text-ink">
+              {t("myFoods.recipesTitle", { count: recipes.length })}
+            </h2>
+
+            {!adding && (
+              <button
+                className="flex items-center justify-center gap-1.5 rounded-2xl bg-ink px-4 py-3 text-sm font-bold text-cream transition-colors hover:bg-ink/80"
+                onClick={() => setAdding(true)}
+              >
+                <Plus className="size-4" /> {t("myFoods.addRecipe")}
+              </button>
+            )}
+            {adding && (
+              <FoodForm
+                initial={blankForm()}
+                save={createRecipe}
+                onCancel={() => setAdding(false)}
+                onSaved={(item) => {
+                  setItems((prev) => [item, ...prev.filter((i) => i.food_key !== item.food_key)]);
+                  setAdding(false);
+                }}
+              />
+            )}
+
+            {recipes.length === 0 && !adding && (
+              <p className="py-6 text-center text-sm font-medium text-ink/40">{t("myFoods.emptyRecipes")}</p>
+            )}
+            <div className="space-y-3">
+              {recipes.map((item) => (
+                <FoodCard
+                  key={item.food_key}
+                  item={item}
+                  onSaved={(updated) => updateItem(item.food_key, updated)}
+                  onDeleted={() => removeItem(item.food_key)}
+                  onLogged={onLogged}
+                />
+              ))}
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="font-display text-lg font-extrabold tracking-tight text-ink">
+              {t("myFoods.favoritesTitle", { count: favorites.length })}
+            </h2>
+            {favorites.length === 0 && (
+              <p className="py-6 text-center text-sm font-medium text-ink/40">{t("myFoods.emptyFavorites")}</p>
+            )}
+            <div className="space-y-3">
+              {favorites.map((item) => (
+                <FoodCard
+                  key={item.food_key}
+                  item={item}
+                  onSaved={(updated) => updateItem(item.food_key, updated)}
+                  onDeleted={() => removeItem(item.food_key)}
+                  onLogged={onLogged}
+                />
+              ))}
+            </div>
+          </section>
+        </>
+      )}
     </div>
   );
 }
@@ -146,6 +186,21 @@ function FoodCard({ item, onSaved, onDeleted, onLogged }: FoodCardProps) {
   const [loggingAgain, setLoggingAgain] = useState(false);
   const [quantity, setQuantity] = useState(item.basis === "per_100g" ? "100" : "1");
   const [justLogged, setJustLogged] = useState(false);
+  const [favoriteBusy, setFavoriteBusy] = useState(false);
+
+  async function handleToggleFavorite() {
+    if (favoriteBusy) return;
+    const next = !item.is_favorite;
+    setFavoriteBusy(true);
+    try {
+      await setFoodFavorite(item.food_key, next);
+      onSaved({ ...item, is_favorite: next ? 1 : 0 });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t("myFoods.favoriteFailed"));
+    } finally {
+      setFavoriteBusy(false);
+    }
+  }
 
   async function handleLogAgain() {
     const qty = Number(quantity);
@@ -191,6 +246,7 @@ function FoodCard({ item, onSaved, onDeleted, onLogged }: FoodCardProps) {
       <FoodForm
         initial={formFromItem(item)}
         lockKey
+        save={upsertMyFood}
         onCancel={() => setEditing(false)}
         onSaved={(updated) => {
           onSaved(updated);
@@ -215,6 +271,17 @@ function FoodCard({ item, onSaved, onDeleted, onLogged }: FoodCardProps) {
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          <button
+            className={cn(
+              "grid size-8 place-items-center rounded-lg transition-colors",
+              item.is_favorite ? "text-sun hover:bg-sun/10" : "text-ink/40 hover:bg-ink3 hover:text-ink",
+            )}
+            onClick={handleToggleFavorite}
+            disabled={favoriteBusy}
+            aria-label={item.is_favorite ? t("myFoods.unfavoriteLabel") : t("myFoods.favoriteLabel")}
+          >
+            <Star className="size-3.5" fill={item.is_favorite ? "currentColor" : "none"} />
+          </button>
           <button
             className="grid size-8 place-items-center rounded-lg text-ink/40 transition-colors hover:bg-ink3 hover:text-ink"
             onClick={() => setLoggingAgain((v) => !v)}
@@ -285,9 +352,14 @@ interface FoodFormProps {
   lockKey?: boolean;
   onCancel: () => void;
   onSaved: (item: MyFoodItem) => void;
+  // Recipe creation (POST /foods/mine/recipes) vs. editing an existing food's
+  // numbers (PUT /foods/mine, always a plain correction) — two different
+  // endpoints so is_recipe is only ever set by the create-a-recipe flow,
+  // never as a side effect of editing a favorited-but-not-recipe food.
+  save: (input: UpsertMyFoodInput) => Promise<MyFoodItem>;
 }
 
-function FoodForm({ initial, lockKey, onCancel, onSaved }: FoodFormProps) {
+function FoodForm({ initial, lockKey, onCancel, onSaved, save }: FoodFormProps) {
   const t = useT();
   const [form, setForm] = useState(initial);
   const [busy, setBusy] = useState(false);
@@ -307,7 +379,7 @@ function FoodForm({ initial, lockKey, onCancel, onSaved }: FoodFormProps) {
     setBusy(true);
     setError(null);
     try {
-      const item = await upsertMyFood({
+      const item = await save({
         food_key: form.food_key.trim(),
         basis: form.basis,
         calories: kcal,

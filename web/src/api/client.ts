@@ -23,6 +23,8 @@ export interface FoodEntry {
   // (or null on older entries / foods without a canonical key).
   source: string | null;
   agreement_count: number | null;
+  food_key: string | null;
+  is_favorite: boolean;
 }
 
 export type Sex = "male" | "female";
@@ -495,6 +497,8 @@ export interface MyFoodItem {
   carbs_g: number | null;
   fat_g: number | null;
   source: "estimate" | "correction";
+  is_favorite: number;
+  is_recipe: number;
   updated_at: string;
 }
 
@@ -529,6 +533,34 @@ export async function upsertMyFood(input: UpsertMyFoodInput): Promise<MyFoodItem
 export async function deleteMyFood(foodKey: string): Promise<void> {
   const res = await apiFetch(`/foods/mine/${encodeURIComponent(foodKey)}`, { method: "DELETE" });
   if (!res.ok) throw new ApiError("Could not delete this food.");
+}
+
+// "Your recipes" — defining a food from scratch (see MyFoodsPage.tsx).
+export async function createRecipe(input: UpsertMyFoodInput): Promise<MyFoodItem> {
+  const res = await apiFetch("/foods/mine/recipes", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new ApiError(data.error ?? "Could not save this recipe.");
+  }
+  return res.json();
+}
+
+// Star/unstar a food for "Favorite foods" — called from a Dashboard entry's
+// star toggle (EntryRow.tsx) or from the Favorite Foods section itself.
+export async function setFoodFavorite(foodKey: string, isFavorite: boolean): Promise<void> {
+  const res = await apiFetch(`/foods/mine/${encodeURIComponent(foodKey)}/favorite`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ is_favorite: isFavorite }),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new ApiError(data.error ?? "Could not update this favorite.");
+  }
 }
 
 // "Log this again" — quantity means grams for a per_100g food, item count

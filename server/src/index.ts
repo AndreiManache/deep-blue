@@ -33,6 +33,7 @@ import {
 import { listCorrections } from "./corrections.js";
 import { createEntry, deleteEntry, getEntriesForDate, updateEntry } from "./entries.js";
 import {
+  createRecipe,
   deleteObservation,
   getFoodDbStats,
   getUserObservation,
@@ -40,6 +41,7 @@ import {
   normalizeFoodKey,
   recordObservation,
   scaleByQuantity,
+  setFavorite,
   totalFromBasis,
 } from "./foods.js";
 import { getAllUsersUsage } from "./usageCost.js";
@@ -755,10 +757,65 @@ app.put("/foods/mine", (req, res) => {
   res.json(listUserObservations(res.locals.userId as string).find((o) => o.food_key === foodKey));
 });
 
+// "Your recipes" — defining a food from scratch (name + full nutrition
+// facts) rather than it being derived from ever logging it (2026-09-03,
+// requested explicitly: "that particular food didn't exist in any database,
+// but the user created it"). Separate from the PUT above so recipe-ness
+// (is_recipe) is only ever set here, never as a side effect of editing an
+// already-favorited-but-not-recipe food's macros.
+app.post("/foods/mine/recipes", (req, res) => {
+  const validationError = validateFoodObservation(req.body ?? {});
+  if (validationError) {
+    res.status(400).json({ error: validationError });
+    return;
+  }
+  const { food_key, basis, calories, protein_g, carbs_g, fat_g } = req.body as {
+    food_key: string;
+    basis: "per_100g" | "per_item";
+    calories: number;
+    protein_g?: number | null;
+    carbs_g?: number | null;
+    fat_g?: number | null;
+  };
+  const foodKey = normalizeFoodKey(food_key);
+  if (!foodKey) {
+    res.status(400).json({ error: "food_key must be a non-empty string." });
+    return;
+  }
+  createRecipe(res.locals.userId as string, foodKey, basis, {
+    calories,
+    protein_g: protein_g ?? null,
+    carbs_g: carbs_g ?? null,
+    fat_g: fat_g ?? null,
+  });
+  res.json(listUserObservations(res.locals.userId as string).find((o) => o.food_key === foodKey));
+});
+
 app.delete("/foods/mine/:foodKey", (req, res) => {
   const ok = deleteObservation(res.locals.userId as string, req.params.foodKey);
   if (!ok) {
     res.status(404).json({ error: "Not found" });
+    return;
+  }
+  res.status(204).end();
+});
+
+// Star/unstar a food for the "Favorite foods" section — set from a
+// Dashboard entry's star toggle (EntryRow.tsx), independent of is_recipe.
+app.patch("/foods/mine/:foodKey/favorite", (req, res) => {
+  const { is_favorite } = (req.body ?? {}) as { is_favorite?: unknown };
+  if (typeof is_favorite !== "boolean") {
+    res.status(400).json({ error: "is_favorite must be a boolean." });
+    return;
+  }
+  const foodKey = normalizeFoodKey(req.params.foodKey);
+  if (!foodKey) {
+    res.status(400).json({ error: "Invalid food key." });
+    return;
+  }
+  const ok = setFavorite(res.locals.userId as string, foodKey, is_favorite);
+  if (!ok) {
+    res.status(404).json({ error: "You haven't logged this food before." });
     return;
   }
   res.status(204).end();

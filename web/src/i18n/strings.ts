@@ -29,6 +29,7 @@ export const strings: Record<string, { en: string; ro: string }> = {
     ro: 'Ține apăsat pe orb și vorbește. "Am mâncat două ouă și o cafea la micul dejun."',
   },
   "home.scanBarcode": { en: "Scan a barcode", ro: "Scanează un cod de bare" },
+  "home.openFavorites": { en: "Favorite foods", ro: "Alimente favorite" },
 
   // HamburgerMenu
   "menu.open": { en: "Open menu", ro: "Deschide meniul" },
@@ -158,6 +159,8 @@ export const strings: Record<string, { en: string; ro: string }> = {
   "entry.save": { en: "Save", ro: "Salvează" },
   "entry.cancel": { en: "Cancel", ro: "Anulează" },
   "entry.sure": { en: "Sure?", ro: "Sigur?" },
+  "entry.favoriteLabel": { en: "Add to favorites", ro: "Adaugă la favorite" },
+  "entry.unfavoriteLabel": { en: "Remove from favorites", ro: "Elimină din favorite" },
   "entry.editLabel": { en: "Edit entry", ro: "Editează înregistrarea" },
   "entry.deleteLabel": { en: "Delete entry", ro: "Șterge înregistrarea" },
   "entry.confirmDeleteLabel": { en: "Confirm delete", ro: "Confirmă ștergerea" },
@@ -192,21 +195,23 @@ export const strings: Record<string, { en: string; ro: string }> = {
   "photo.attachedAlt": { en: "Attached food photo", ro: "Fotografie alimentară atașată" },
 
   // MyFoodsPage
-  "myFoods.subtitleOne": {
-    en: "{count} food you've taught Deep Blue",
-    ro: "{count} aliment pe care l-ai învățat pe Deep Blue",
-  },
-  "myFoods.subtitleMany": {
-    en: "{count} foods you've taught Deep Blue",
-    ro: "{count} alimente pe care le-ai învățat pe Deep Blue",
-  },
-  "myFoods.addFood": { en: "Add a food", ro: "Adaugă un aliment" },
+  "myFoods.subtitle": { en: "Your recipes and favorite foods", ro: "Rețetele și alimentele tale favorite" },
+  "myFoods.addRecipe": { en: "Add a recipe", ro: "Adaugă o rețetă" },
   "myFoods.loading": { en: "Loading…", ro: "Se încarcă…" },
   "myFoods.loadError": { en: "Could not load your foods.", ro: "Alimentele tale nu au putut fi încărcate." },
-  "myFoods.empty": {
-    en: "Nothing yet. Foods you log or correct will show up here, or add one directly.",
-    ro: "Nimic încă. Alimentele pe care le înregistrezi sau le corectezi vor apărea aici, sau adaugă unul direct.",
+  "myFoods.recipesTitle": { en: "Your recipes ({count})", ro: "Rețetele tale ({count})" },
+  "myFoods.favoritesTitle": { en: "Favorite foods ({count})", ro: "Alimente favorite ({count})" },
+  "myFoods.emptyRecipes": {
+    en: "You haven't created any recipes yet. A recipe is a food you define yourself, with its own name and nutrition facts.",
+    ro: "Nu ai creat încă nicio rețetă. O rețetă este un aliment definit de tine, cu propriul nume și valori nutriționale.",
   },
+  "myFoods.emptyFavorites": {
+    en: "Nothing starred yet. Tap the star on any logged food to save it here for quick access.",
+    ro: "Niciun aliment marcat încă. Apasă pe stea la un aliment înregistrat ca să-l salvezi aici pentru acces rapid.",
+  },
+  "myFoods.favoriteLabel": { en: "Add to favorites", ro: "Adaugă la favorite" },
+  "myFoods.unfavoriteLabel": { en: "Remove from favorites", ro: "Elimină din favorite" },
+  "myFoods.favoriteFailed": { en: "Couldn't update this favorite.", ro: "Acest favorit nu a putut fi actualizat." },
   "myFoods.per100g": { en: "per 100g", ro: "la 100g" },
   "myFoods.perItem": { en: "per item", ro: "la bucată" },
   "myFoods.updatedOn": { en: "Updated {date} · {basis}", ro: "Actualizat {date} · {basis}" },

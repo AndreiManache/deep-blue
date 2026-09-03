@@ -1,4 +1,4 @@
-import { ScanBarcode, Shield } from "lucide-react";
+import { ScanBarcode, Shield, Star } from "lucide-react";
 import type { ConversationApi, Phase } from "../conversation/useConversation";
 import { useT, type StringKey } from "../i18n/useT";
 import { ErrorBanner } from "./ErrorBanner";
@@ -13,6 +13,7 @@ interface HomeScreenProps {
   conversation: ConversationApi;
   onNavigate: (view: MenuView) => void;
   onScan: () => void;
+  onOpenFavorites: () => void;
   onLogout: () => void;
   isAdmin?: boolean;
 }
@@ -24,7 +25,7 @@ const HINT_KEYS: Partial<Record<Phase, StringKey>> = {
   speaking: "home.hintSpeaking",
 };
 
-export function HomeScreen({ conversation, onNavigate, onScan, onLogout, isAdmin }: HomeScreenProps) {
+export function HomeScreen({ conversation, onNavigate, onScan, onOpenFavorites, onLogout, isAdmin }: HomeScreenProps) {
   const t = useT();
   const {
     phase,
@@ -78,6 +79,14 @@ export function HomeScreen({ conversation, onNavigate, onScan, onLogout, isAdmin
                   <ScanBarcode className="size-5" />
                 </button>
               )}
+              <button
+                className="grid size-14 place-items-center rounded-full bg-white text-ink/70 shadow-sm ring-1 ring-ink/5 transition-colors hover:bg-ink3"
+                onClick={onOpenFavorites}
+                aria-label={t("home.openFavorites")}
+                title={t("home.openFavorites")}
+              >
+                <Star className="size-5" />
+              </button>
             </div>
             {HINT_KEYS[phase] ? (
               <p className="min-h-6 text-center text-sm font-semibold text-ink/50">{t(HINT_KEYS[phase]!)}</p>

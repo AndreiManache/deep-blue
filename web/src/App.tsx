@@ -146,6 +146,7 @@ function AppShell({ view, setView, conversation, endSession, scanSignal, setScan
             endSession();
             setView("scan");
           }}
+          onOpenFavorites={() => setView("my-foods")}
           onLogout={onLogout}
           isAdmin={isAdmin}
         />
@@ -169,7 +170,10 @@ function AppShell({ view, setView, conversation, endSession, scanSignal, setScan
         <ProfilePage onBack={() => setView("home")} onOpenMyFoods={() => setView("my-foods")} />
       )}
       {view === "my-foods" && (
-        <MyFoodsPage onBack={() => setView("profile")} onLogged={() => setScanSignal((s) => s + 1)} />
+        // "home", not "profile" — reachable directly from Home now too (the
+        // favorites star), so there's no single correct "where I came from"
+        // to detour back through.
+        <MyFoodsPage onBack={() => setView("home")} onLogged={() => setScanSignal((s) => s + 1)} />
       )}
       {view === "feedback" && (
         <FeedbackPage diagnostics={conversation.diagnostics} onBack={() => setView("home")} />

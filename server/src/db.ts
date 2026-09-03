@@ -215,6 +215,20 @@ db.exec(`
   );
 `);
 
+// is_recipe: this food's numbers were authored from scratch by the user (the
+// "Your recipes" section of My Foods) rather than derived from ever actually
+// logging it — a food that didn't exist in any database until the user typed
+// it in. is_favorite: starred from a Dashboard entry for quick access later
+// (the "Favorite foods" section) — completely independent of is_recipe; a
+// food can be neither, either, or both. (2026-09-03, requested explicitly.)
+const foodObservationColumns = db.prepare(`PRAGMA table_info(food_observations)`).all() as { name: string }[];
+if (!foodObservationColumns.some((col) => col.name === "is_favorite")) {
+  db.exec(`ALTER TABLE food_observations ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0;`);
+}
+if (!foodObservationColumns.some((col) => col.name === "is_recipe")) {
+  db.exec(`ALTER TABLE food_observations ADD COLUMN is_recipe INTEGER NOT NULL DEFAULT 0;`);
+}
+
 // One row per provider call — the raw material for the in-app cost tracker
 // (2026-08 backlog item) and per-user usage visibility. kind's unit varies by
 // what that provider actually bills on: 'llm_input_tokens'/'llm_output_tokens'

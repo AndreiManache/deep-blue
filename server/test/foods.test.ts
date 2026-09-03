@@ -123,3 +123,51 @@ describe("resolveNutrition priority", () => {
     assert.equal(r.nutrition.calories, 600);
   });
 });
+
+describe("recipes and favorites (2026-09-03)", () => {
+  it("createRecipe marks is_recipe on a brand-new food, leaving is_favorite unset", () => {
+    const key = "my protein shake";
+    foods.createRecipe("andrei", key, "per_item", { calories: 320, protein_g: 40, carbs_g: 10, fat_g: 5 });
+    const row = foods.listUserObservations("andrei").find((o) => o.food_key === key);
+    assert.ok(row, "recipe was saved");
+    assert.equal(row!.is_recipe, 1);
+    assert.equal(row!.is_favorite, 0);
+    assert.equal(row!.calories, 320);
+  });
+
+  it("setFavorite stars an existing observation without touching is_recipe", () => {
+    const key = "yogurt with granola";
+    foods.recordObservation("andrei", key, "per_100g", per100(150), "estimate");
+    const starred = foods.setFavorite("andrei", key, true);
+    assert.equal(starred, true);
+    const row = foods.listUserObservations("andrei").find((o) => o.food_key === key);
+    assert.equal(row!.is_favorite, 1);
+    assert.equal(row!.is_recipe, 0, "favoriting a logged food never makes it a recipe");
+  });
+
+  it("setFavorite on a food never logged returns false — nothing to star", () => {
+    assert.equal(foods.setFavorite("andrei", "never logged this", true), false);
+  });
+
+  it("re-logging a favorited food does not un-favorite it", () => {
+    const key = "morning coffee";
+    foods.recordObservation("andrei", key, "per_100g", per100(5), "estimate");
+    foods.setFavorite("andrei", key, true);
+    // Logging it again later (a real turn re-recording the same food).
+    foods.recordObservation("andrei", key, "per_100g", per100(6), "estimate");
+    const row = foods.listUserObservations("andrei").find((o) => o.food_key === key);
+    assert.equal(row!.is_favorite, 1, "favorite status survives being logged again");
+    assert.equal(row!.calories, 6, "the fresh estimate still updates the numbers");
+  });
+
+  it("creating a recipe over an already-favorited food_key keeps it favorited", () => {
+    const key = "grandma's soup";
+    foods.recordObservation("andrei", key, "per_100g", per100(80), "estimate");
+    foods.setFavorite("andrei", key, true);
+    foods.createRecipe("andrei", key, "per_100g", { calories: 90, protein_g: 3, carbs_g: 8, fat_g: 2 });
+    const row = foods.listUserObservations("andrei").find((o) => o.food_key === key);
+    assert.equal(row!.is_recipe, 1);
+    assert.equal(row!.is_favorite, 1, "naming it a recipe doesn't clobber the existing favorite flag");
+    assert.equal(row!.calories, 90);
+  });
+});

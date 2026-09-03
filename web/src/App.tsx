@@ -28,6 +28,43 @@ type View =
   | "providers"
   | "scan";
 
+const VIEWS: readonly View[] = [
+  "home",
+  "dashboard",
+  "profile",
+  "my-foods",
+  "feedback",
+  "admin",
+  "admin-panel",
+  "corrections",
+  "providers",
+  "scan",
+];
+
+// Feedback #19: refreshing any page other than home bounced back to home,
+// since `view` was plain component state with nothing to restore it from.
+// sessionStorage (not localStorage) is the right shelf for this — it
+// survives a reload but clears when the tab/app actually closes, which
+// matches "stay where I was" without permanently sticking days later.
+const VIEW_STORAGE_KEY = "deepblue_view";
+
+function loadStoredView(): View {
+  try {
+    const stored = sessionStorage.getItem(VIEW_STORAGE_KEY);
+    return (VIEWS as readonly string[]).includes(stored ?? "") ? (stored as View) : "home";
+  } catch {
+    return "home"; // sessionStorage can throw in some private-browsing modes
+  }
+}
+
+function storeView(view: View): void {
+  try {
+    sessionStorage.setItem(VIEW_STORAGE_KEY, view);
+  } catch {
+    // non-fatal — refresh just won't restore the page this time
+  }
+}
+
 // Menu visibility only — the real gate is server-side (ADMIN_USERNAMES on
 // /admin/*). Comma-separated to match the server's env var shape.
 const ADMIN_USERNAMES = new Set(
@@ -45,7 +82,11 @@ const PILL_LABEL_KEYS: Partial<Record<Phase, StringKey>> = {
 };
 
 export function App() {
-  const [view, setView] = useState<View>("home");
+  const [view, setViewState] = useState<View>(loadStoredView);
+  const setView = (next: View) => {
+    setViewState(next);
+    storeView(next);
+  };
   // Authed purely by whether a session token is stored. A stale/expired token
   // is caught the first time an API call 401s (see the invalidated event
   // below), which clears it and flips this back to the login screen.

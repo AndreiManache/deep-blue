@@ -137,6 +137,11 @@ export const strings: Record<string, { en: string; ro: string }> = {
   "water.glassesOf": { en: "{count} of {target} glasses", ro: "{count} din {target} pahare" },
   "water.glassLabel": { en: "Glass {n}", ro: "Pahar {n}" },
   "water.loadError": { en: "Could not load water intake.", ro: "Nu am putut încărca hidratarea." },
+  "workout.title": { en: "Workouts", ro: "Exerciții" },
+  "workout.loadError": { en: "Could not load workouts.", ro: "Exercițiile nu au putut fi încărcate." },
+  "workout.deleteLabel": { en: "Delete workout", ro: "Șterge exercițiul" },
+  "workout.deleteError": { en: "Could not delete this workout.", ro: "Acest exercițiu nu a putut fi șters." },
+  "workout.minutes": { en: "{n} min", ro: "{n} min" },
 
   // DaySummary
   "daySummary.noTarget": { en: "no target", ro: "fără obiectiv" },

@@ -21,6 +21,16 @@ const IDLE_TIMEOUT_MS = 75000;
 // this is that beat, only paid when actually interrupting speech.
 const BARGE_IN_REARM_DELAY_MS = 150;
 
+// Checked at each network-touching step (ticket #21: warn when a poor
+// connection is blocking a log, rather than the generic "Something went
+// wrong" every failure used to show regardless of cause). `navigator.onLine`
+// only reliably catches the fully-offline case (no interface up at all) —
+// a slow-but-technically-connected network still reports true — but that's
+// still a real, common, and clearly-labelable case worth distinguishing.
+function isOffline(): boolean {
+  return typeof navigator !== "undefined" && "onLine" in navigator && !navigator.onLine;
+}
+
 // A single line in the on-screen diagnostics log.
 export interface DiagEvent {
   t: number; // Date.now()
@@ -173,7 +183,11 @@ export function useConversation(): ConversationApi {
     } catch {
       logDiag("✕ transcribe failed", `${Date.now() - t0}ms`);
       if (epochRef.current !== myEpoch) return;
-      void speakLocalPhrase("Sorry, I didn't catch that.");
+      // A generic "didn't catch that" is actively misleading when the real
+      // cause is no connection at all — this wasn't a hearing problem.
+      void speakLocalPhrase(
+        isOffline() ? "Looks like you're offline — try again once you're back online." : "Sorry, I didn't catch that.",
+      );
       return;
     }
     logDiag("transcript", `"${text}" (${Date.now() - t0}ms)`);
@@ -270,7 +284,14 @@ export function useConversation(): ConversationApi {
     } catch (err) {
       logDiag("✕ request failed", `${Date.now() - startedAt}ms`);
       if (epochRef.current !== myEpoch) return; // superseded while we were waiting
-      const message = err instanceof ApiError ? err.message : "Something went wrong. Try again.";
+      // Same reasoning as transcribeAndSend's catch — a dropped connection
+      // isn't "something went wrong" in the app, it's a poor-connection case
+      // the user should be told plainly (ticket #21).
+      const message = isOffline()
+        ? "Looks like you're offline — try again once you're back online."
+        : err instanceof ApiError
+          ? err.message
+          : "Something went wrong. Try again.";
       setErrorMessage(message);
       void speakLocalPhrase(message);
     }
@@ -286,6 +307,14 @@ export function useConversation(): ConversationApi {
       return;
     }
     if (heldRef.current) return; // already holding — ignore a duplicate press
+    // Checked before even opening the mic (ticket #21) — recording anyway
+    // would just waste a breath before failing at the transcribe/chat step
+    // regardless, since there's nowhere to queue an offline turn for later.
+    if (isOffline()) {
+      logDiag("offline — turn not started");
+      setErrorMessage("You're offline — reconnect to log this.");
+      return;
+    }
     heldRef.current = true;
     clearIdleTimer();
     setErrorMessage(null);

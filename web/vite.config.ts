@@ -45,6 +45,7 @@ export default defineConfig({
       "/admin": "http://localhost:3001",
       "/barcode": "http://localhost:3001",
       "/foods": "http://localhost:3001",
+      "/water": "http://localhost:3001",
     },
   },
 });

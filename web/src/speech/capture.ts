@@ -61,11 +61,22 @@ export class SpeechCapture {
   }
 
   // Acquire the mic once and keep it hot for the whole session. Idempotent.
+  //
+  // Explicit constraints rather than bare `audio: true` (ticket #5, "noisy
+  // bar" report): a bare boolean leaves noise suppression/echo cancellation/
+  // gain control to whatever the browser's own default happens to be, which
+  // is unspecified and inconsistent across engines — iOS Safari's default
+  // isn't documented to enable them the way Chrome's is. Requesting them
+  // explicitly is a real, standard capability (not a vendor hack); a
+  // constraint the browser can't honor is simply ignored, not an error, so
+  // this is safe everywhere getUserMedia already works.
   async acquire(): Promise<MicPermission> {
     if (this.stream) return "granted";
     if (!navigator.mediaDevices?.getUserMedia) return "unavailable";
     try {
-      this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      this.stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
     } catch (err) {
       const name = err instanceof Error ? err.name : "";
       return name === "NotAllowedError" || name === "SecurityError" ? "denied" : "unavailable";

@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Check, Pencil, Star, Trash2, X } from "lucide-react";
+import { Check, CopyPlus, Pencil, Star, Trash2, X } from "lucide-react";
 import {
   ApiError,
   editEntry,
+  logFoodAgain,
   removeEntry,
   setFoodFavorite,
   timeLabel,
@@ -54,6 +55,12 @@ export function EntryRow({ entry, onChanged, onMutated }: EntryRowProps) {
   const [favoriteOverride, setFavoriteOverride] = useState<boolean | null>(null);
   const [favoriteBusy, setFavoriteBusy] = useState(false);
   const isFavorite = favoriteOverride ?? entry.is_favorite;
+  // Quick "log one more of the same" (ticket #23) — same quantity as this
+  // entry already logged, no re-prompting, so it's actually quick. A brief
+  // checkmark flash confirms it fired, matching MyFoodsPage's own
+  // logFoodAgain button (there is a modal on that page to explain success;
+  // here the new entry appearing on the Dashboard already does that job).
+  const [justLoggedAgain, setJustLoggedAgain] = useState(false);
 
   useEffect(() => {
     setForm({
@@ -65,6 +72,7 @@ export function EntryRow({ entry, onChanged, onMutated }: EntryRowProps) {
     setError(null);
     setConfirmingDelete(false);
     setFavoriteOverride(null);
+    setJustLoggedAgain(false);
   }, [entry]);
 
   const kcal = Number(form.calories);
@@ -127,6 +135,29 @@ export function EntryRow({ entry, onChanged, onMutated }: EntryRowProps) {
       setFavoriteOverride(!next); // revert — the toast-less failure is rare enough not to need its own error banner here
     } finally {
       setFavoriteBusy(false);
+    }
+  }
+
+  // Re-logs this exact food at the same amount it was logged at — grams for
+  // a per_100g food (recorded on the entry itself), one item for a per_item
+  // food (grams is null on those). Pulls the food's current remembered
+  // ("yours") value rather than duplicating this entry's own numbers
+  // verbatim, consistent with how every other food_key-based log works —
+  // if it's been corrected since, the correction is what gets reused.
+  async function handleLogAgain() {
+    if (busy || !entry.food_key) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await logFoodAgain(entry.food_key, entry.grams ?? 1);
+      onChanged();
+      onMutated?.();
+      setJustLoggedAgain(true);
+      setTimeout(() => setJustLoggedAgain(false), 1500);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t("entry.logAgainError"));
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -259,6 +290,19 @@ export function EntryRow({ entry, onChanged, onMutated }: EntryRowProps) {
             {timeLabel(entry.created_at)}
           </span>
           <div className="flex gap-1">
+            {entry.food_key && (
+              <button
+                className={cn(
+                  "grid size-8 place-items-center rounded-lg transition-colors",
+                  justLoggedAgain ? "text-leaf" : "text-ink/40 hover:bg-ink3 hover:text-ink",
+                )}
+                onClick={handleLogAgain}
+                disabled={busy}
+                aria-label={t("entry.logAgainLabel")}
+              >
+                {justLoggedAgain ? <Check className="size-3.5" /> : <CopyPlus className="size-3.5" />}
+              </button>
+            )}
             {entry.food_key && (
               <button
                 className={cn(

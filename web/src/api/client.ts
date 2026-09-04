@@ -200,6 +200,26 @@ export async function setWaterToday(count: number): Promise<number> {
   return data.count;
 }
 
+// Workout logging (ticket #18) — a plain record, no calorie-math effect.
+export interface WorkoutEntry {
+  id: string;
+  description: string;
+  duration_minutes: number | null;
+  created_at: string;
+}
+
+export async function fetchWorkouts(date?: string): Promise<WorkoutEntry[]> {
+  const qs = date ? `?date=${encodeURIComponent(date)}` : "";
+  const res = await apiFetch(`/workouts${qs}`);
+  if (!res.ok) throw new ApiError("Could not load workouts.");
+  return res.json();
+}
+
+export async function removeWorkout(id: string): Promise<void> {
+  const res = await apiFetch(`/workouts/${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (!res.ok) throw new ApiError("Could not delete this workout.");
+}
+
 export type CorrectionReason = "wrong_portion" | "wrong_food" | "has_label" | "skip";
 
 export interface EditEntryFields extends Partial<Pick<FoodEntry, "description" | "calories">> {

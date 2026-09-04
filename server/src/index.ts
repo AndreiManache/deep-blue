@@ -33,6 +33,7 @@ import {
 import { listCorrections } from "./corrections.js";
 import { createEntry, deleteEntry, getEntriesForDate, updateEntry } from "./entries.js";
 import { addWater, getWaterCount, setWaterToday } from "./water.js";
+import { deleteWorkout, getWorkoutsForDate, logWorkout } from "./workouts.js";
 import {
   createRecipe,
   deleteObservation,
@@ -225,6 +226,7 @@ app.use(
     "/synthesize",
     "/foods",
     "/water",
+    "/workouts",
   ],
   requireAuth,
 );
@@ -564,6 +566,40 @@ app.post("/water/set", (req, res) => {
     return;
   }
   res.json({ count: setWaterToday(res.locals.userId as string, count) });
+});
+
+// Workout logging (ticket #18) — a plain record, see workouts.ts.
+app.get("/workouts", (req, res) => {
+  const date = typeof req.query.date === "string" ? req.query.date : undefined;
+  res.json(getWorkoutsForDate(res.locals.userId as string, date));
+});
+
+app.post("/workouts", (req, res) => {
+  const { description, duration_minutes } = (req.body ?? {}) as {
+    description?: unknown;
+    duration_minutes?: unknown;
+  };
+  if (typeof description !== "string" || !description.trim()) {
+    res.status(400).json({ error: "description is required" });
+    return;
+  }
+  const duration =
+    typeof duration_minutes === "number" && Number.isFinite(duration_minutes) ? duration_minutes : null;
+  const entry = logWorkout(res.locals.userId as string, {
+    raw_transcript: description,
+    description,
+    duration_minutes: duration,
+  });
+  res.json(entry);
+});
+
+app.delete("/workouts/:id", (req, res) => {
+  const ok = deleteWorkout(res.locals.userId as string, req.params.id);
+  if (!ok) {
+    res.status(404).json({ error: "Workout not found" });
+    return;
+  }
+  res.status(204).end();
 });
 
 app.patch("/entries/:id", (req, res) => {

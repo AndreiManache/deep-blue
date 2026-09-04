@@ -12,6 +12,7 @@ import { computeCompositionNutrition, type Preparation } from "./nutrition.js";
 import { upsertProfile, type ProfileUpdateInput } from "./profile.js";
 import { validateProfileInput } from "./validation.js";
 import { addWater } from "./water.js";
+import { logWorkout } from "./workouts.js";
 
 // Plain JSON Schema — the shape both Anthropic's `input_schema` and Gemini's
 // `parameters` already use natively, so one definition covers both providers.
@@ -166,6 +167,25 @@ export const toolDefs: ToolDef[] = [
             "How many glasses (roughly 250ml each). Defaults to 1 if they didn't say a number ('I had some water' -> 1). Convert an explicit volume yourself (e.g. '500ml' -> 2, 'a liter' -> 4).",
         },
       },
+    },
+  },
+  {
+    name: "log_workout",
+    description:
+      "Record a workout/exercise the user mentions (e.g. 'I went for a run', 'did an hour of gym'). This is purely a record for their own log — it does NOT estimate calories burned and does NOT change their daily calorie target, so never mention calories burned when confirming one of these.",
+    parameters: {
+      type: "object",
+      properties: {
+        description: {
+          type: "string",
+          description: "Short description of the activity, e.g. '30 minute run', 'gym session — legs'. Same language as the conversation.",
+        },
+        duration_minutes: {
+          type: "number",
+          description: "How long, in minutes, if mentioned or reasonably inferable. Omit if genuinely unknown.",
+        },
+      },
+      required: ["description"],
     },
   },
   {
@@ -342,6 +362,16 @@ export function executeTool(
         const glasses = typeof input.glasses === "number" && Number.isFinite(input.glasses) ? input.glasses : 1;
         const total = addWater(userId, glasses);
         return { content: JSON.stringify({ glasses_added: glasses, total_today: total }), isError: false, mutated: true, ended: false };
+      }
+      case "log_workout": {
+        const durationRaw = input.duration_minutes;
+        const duration_minutes = typeof durationRaw === "number" && Number.isFinite(durationRaw) ? durationRaw : null;
+        const entry = logWorkout(userId, {
+          raw_transcript: userTranscript ?? (input.description as string),
+          description: input.description as string,
+          duration_minutes,
+        });
+        return { content: JSON.stringify(entry), isError: false, mutated: true, ended: false };
       }
       case "end_conversation": {
         return { content: "session ending", isError: false, mutated: false, ended: true };

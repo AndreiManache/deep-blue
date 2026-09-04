@@ -307,3 +307,19 @@ db.exec(`
   );
 `);
 db.exec(`CREATE INDEX IF NOT EXISTS idx_water_entries_user_created ON water_entries (user_id, created_at);`);
+
+// Workout logging (2026-09-04, ticket #18). Deliberately just a record —
+// Andrei's explicit call: no calorie-burn estimate, no effect on the
+// calorie target/TDEE math. Same date(created_at, 'localtime') anchoring
+// as food_entries/water_entries, no precomputed date column.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS workout_entries (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    raw_transcript TEXT NOT NULL,
+    description TEXT NOT NULL,
+    duration_minutes INTEGER,
+    created_at TEXT NOT NULL
+  );
+`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_workout_entries_user_created ON workout_entries (user_id, created_at);`);

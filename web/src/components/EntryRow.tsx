@@ -9,8 +9,10 @@ import {
   type CorrectionReason,
   type FoodEntry,
 } from "../api/client";
+import { useLanguage } from "../i18n/LanguageContext";
 import { useT, type StringKey } from "../i18n/useT";
 import { cn } from "../lib/utils";
+import { DetailSheet } from "./DetailSheet";
 
 interface EntryRowProps {
   entry: FoodEntry;
@@ -34,7 +36,9 @@ const REASON_CHIPS: { value: CorrectionReason; labelKey: StringKey }[] = [
 // and then trigger a refresh via onChanged.
 export function EntryRow({ entry, onChanged, onMutated }: EntryRowProps) {
   const t = useT();
+  const { language } = useLanguage();
   const [editing, setEditing] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -129,7 +133,23 @@ export function EntryRow({ entry, onChanged, onMutated }: EntryRowProps) {
   return (
     <div className={cn("flex items-center gap-3 py-3", editing && "rounded-2xl bg-ink3 px-3")}>
       <div className="size-2.5 shrink-0 rounded-full bg-coral" />
-      <div className="min-w-0 flex-1">
+      <div
+        className={cn("min-w-0 flex-1", !editing && "cursor-pointer")}
+        onClick={editing ? undefined : () => setDetailOpen(true)}
+        role={editing ? undefined : "button"}
+        tabIndex={editing ? undefined : 0}
+        aria-label={editing ? undefined : t("entry.detailLabel")}
+        onKeyDown={
+          editing
+            ? undefined
+            : (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setDetailOpen(true);
+                }
+              }
+        }
+      >
         {editing ? (
           <div className="space-y-2">
             <input
@@ -284,6 +304,86 @@ export function EntryRow({ entry, onChanged, onMutated }: EntryRowProps) {
           {error && <div className="text-[11px] font-semibold text-coral">{error}</div>}
         </div>
       )}
+
+      <DetailSheet
+        open={detailOpen}
+        onClose={() => setDetailOpen(false)}
+        closeLabel={t("entry.closeDetail")}
+        title={
+          <div className="min-w-0">
+            <div className="truncate font-display text-base font-extrabold text-ink">
+              {entry.description || t("entry.untitled")}
+            </div>
+            <div className="text-xs font-semibold text-ink/40">
+              {new Date(entry.created_at).toLocaleString(language === "ro" ? "ro-RO" : "en-US", {
+                month: "short",
+                day: "numeric",
+                hour: "numeric",
+                minute: "2-digit",
+              })}
+            </div>
+          </div>
+        }
+      >
+        <div className="space-y-5">
+          <div className="flex items-end justify-between rounded-2xl bg-ink3 px-5 py-4">
+            <div>
+              <div className="text-3xl font-black text-ink">{Math.round(entry.calories || 0)}</div>
+              <div className="text-xs font-bold uppercase tracking-wide text-ink/40">{t("entry.calories")}</div>
+            </div>
+            {entry.source === "verified" && (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-leaf/15 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-leaf">
+                ✓ {t("entry.verified")}{entry.agreement_count ? ` ${entry.agreement_count}` : ""}
+              </span>
+            )}
+            {entry.source === "yours" && (
+              <span className="inline-flex items-center rounded-full bg-ink/8 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-ink/45">
+                {t("entry.yourValue")}
+              </span>
+            )}
+            {entry.source === "barcode" && (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-sky/15 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-sky">
+                {t("entry.barcode")}
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-2xl bg-ink3 px-3 py-3 text-center">
+              <div className="text-lg font-extrabold text-ink">
+                {entry.protein_g != null ? Math.round(entry.protein_g) : "—"}
+              </div>
+              <div className="text-[11px] font-bold uppercase tracking-wide text-ink/40">{t("entry.protein")}</div>
+            </div>
+            <div className="rounded-2xl bg-ink3 px-3 py-3 text-center">
+              <div className="text-lg font-extrabold text-ink">
+                {entry.carbs_g != null ? Math.round(entry.carbs_g) : "—"}
+              </div>
+              <div className="text-[11px] font-bold uppercase tracking-wide text-ink/40">{t("entry.carbs")}</div>
+            </div>
+            <div className="rounded-2xl bg-ink3 px-3 py-3 text-center">
+              <div className="text-lg font-extrabold text-ink">
+                {entry.fat_g != null ? Math.round(entry.fat_g) : "—"}
+              </div>
+              <div className="text-[11px] font-bold uppercase tracking-wide text-ink/40">{t("entry.fat")}</div>
+            </div>
+          </div>
+
+          {entry.grams != null && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-semibold text-ink/50">{t("entry.grams")}</span>
+              <span className="font-bold text-ink">{Math.round(entry.grams)} g</span>
+            </div>
+          )}
+
+          {entry.raw_transcript && entry.raw_transcript !== entry.description && (
+            <div>
+              <div className="text-xs font-bold uppercase tracking-wide text-ink/40">{t("entry.youSaid")}</div>
+              <p className="mt-1 text-sm font-medium leading-relaxed text-ink/70">"{entry.raw_transcript}"</p>
+            </div>
+          )}
+        </div>
+      </DetailSheet>
     </div>
   );
 }

@@ -25,6 +25,7 @@ export interface FoodEntry {
   agreement_count: number | null;
   food_key: string | null;
   is_favorite: boolean;
+  grams: number | null;
 }
 
 export type Sex = "male" | "female";

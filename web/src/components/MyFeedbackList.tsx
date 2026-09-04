@@ -4,6 +4,7 @@ import { ApiError, fetchMyFeedback, type MyFeedbackItem } from "../api/client";
 import { useLanguage } from "../i18n/LanguageContext";
 import { useT } from "../i18n/useT";
 import { cn } from "../lib/utils";
+import { DetailSheet } from "./DetailSheet";
 
 function fmtTime(iso: string, locale: string): string {
   return new Date(iso).toLocaleString(locale, {
@@ -27,20 +28,53 @@ function descriptionFor(item: MyFeedbackItem, t: ReturnType<typeof useT>): strin
   return t("myFeedback.emptyReport");
 }
 
+function statusBadge(item: MyFeedbackItem, isFixed: boolean, t: ReturnType<typeof useT>) {
+  return (
+    <span
+      className={cn(
+        "shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide",
+        isFixed
+          ? "bg-leaf/15 text-leaf"
+          : item.status === "new"
+            ? "bg-coral/10 text-coral"
+            : "bg-sky/10 text-sky",
+      )}
+    >
+      {isFixed ? t("myFeedback.statusDone") : item.status === "new" ? t("myFeedback.statusSent") : t("myFeedback.statusReviewed")}
+    </span>
+  );
+}
+
 interface FeedbackCardProps {
   item: MyFeedbackItem;
   // A card in the "Fixed issues" section always shows the green "Done" tag
   // regardless of the underlying new/reviewed status — that status was only
   // ever about admin-side triage, and stops being relevant once it's fixed.
   isFixed: boolean;
+  onOpen: () => void;
 }
 
-function FeedbackCard({ item, isFixed }: FeedbackCardProps) {
+// Tapping a card opens the same content in a focused DetailSheet (2026-09-04)
+// — the card itself stays exactly as informative as before at a glance, this
+// just adds a second, more comfortable way to read a longer report.
+function FeedbackCard({ item, isFixed, onOpen }: FeedbackCardProps) {
   const t = useT();
   const { language } = useLanguage();
   const locale = language === "ro" ? "ro-RO" : "en-US";
   return (
-    <div className="rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-ink/5">
+    <div
+      className="cursor-pointer rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-ink/5 transition-colors hover:bg-ink3/40"
+      onClick={onOpen}
+      role="button"
+      tabIndex={0}
+      aria-label={t("myFeedback.detailLabel")}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="truncate font-display text-sm font-extrabold tracking-tight text-ink">
@@ -49,18 +83,7 @@ function FeedbackCard({ item, isFixed }: FeedbackCardProps) {
           </div>
           <div className="text-xs font-semibold text-ink/40">{fmtTime(item.created_at, locale)}</div>
         </div>
-        <span
-          className={cn(
-            "shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide",
-            isFixed
-              ? "bg-leaf/15 text-leaf"
-              : item.status === "new"
-                ? "bg-coral/10 text-coral"
-                : "bg-sky/10 text-sky",
-          )}
-        >
-          {isFixed ? t("myFeedback.statusDone") : item.status === "new" ? t("myFeedback.statusSent") : t("myFeedback.statusReviewed")}
-        </span>
+        {statusBadge(item, isFixed, t)}
       </div>
       <p className="mt-2 text-sm font-medium leading-relaxed text-ink/80">{descriptionFor(item, t)}</p>
       {item.image_base64 && (
@@ -80,6 +103,37 @@ function FeedbackCard({ item, isFixed }: FeedbackCardProps) {
   );
 }
 
+interface FeedbackDetailProps {
+  item: MyFeedbackItem;
+  isFixed: boolean;
+}
+
+// The DetailSheet's body — same content as the card, just with room to
+// breathe when a report is long enough that scanning it in the list is
+// uncomfortable.
+function FeedbackDetail({ item, isFixed }: FeedbackDetailProps) {
+  const t = useT();
+  return (
+    <div className="space-y-4">
+      <div>{statusBadge(item, isFixed, t)}</div>
+      <p className="text-sm font-medium leading-relaxed text-ink/80">{descriptionFor(item, t)}</p>
+      {item.image_base64 && (
+        <img
+          src={`data:${item.image_mime ?? "image/jpeg"};base64,${item.image_base64}`}
+          alt={t("myFeedback.attachedAlt")}
+          className="max-h-72 w-full rounded-xl bg-ink3 object-contain"
+        />
+      )}
+      {item.resolution_note && (
+        <div className="rounded-xl bg-sky/10 px-3 py-2.5">
+          <div className="text-[11px] font-bold uppercase tracking-wide text-sky">{t("myFeedback.fromAndrei")}</div>
+          <p className="mt-1 text-sm font-medium leading-relaxed text-ink/80">{item.resolution_note}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // The reporter's own list of what they've sent and what happened to it —
 // formerly its own page ("My feedback"), now the second tab of the merged
 // Feedback page (2026-08-31, "we don't want two separate items in the main
@@ -87,12 +141,18 @@ function FeedbackCard({ item, isFixed }: FeedbackCardProps) {
 // it's always embedded inside another page's layout.
 export function MyFeedbackList() {
   const t = useT();
+  const { language } = useLanguage();
   const [items, setItems] = useState<MyFeedbackItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // Collapsed by default — the active reports above are what a reporter
   // checks on; closed-out ones are here to look back at, not to see every time.
   const [showFixed, setShowFixed] = useState(false);
+  // detailItem is deliberately NOT cleared on close — it stays put so the
+  // sheet's content keeps rendering through the closing transition instead
+  // of going blank mid-animation; the next open just overwrites it.
+  const [detailItem, setDetailItem] = useState<MyFeedbackItem | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   useEffect(() => {
     fetchMyFeedback()
@@ -122,7 +182,15 @@ export function MyFeedbackList() {
       {active.length > 0 && (
         <div className="space-y-3">
           {active.map((item) => (
-            <FeedbackCard key={item.id} item={item} isFixed={false} />
+            <FeedbackCard
+              key={item.id}
+              item={item}
+              isFixed={false}
+              onOpen={() => {
+                setDetailItem(item);
+                setDetailOpen(true);
+              }}
+            />
           ))}
         </div>
       )}
@@ -150,12 +218,41 @@ export function MyFeedbackList() {
           {showFixed && (
             <div className="mt-3 space-y-3">
               {fixed.map((item) => (
-                <FeedbackCard key={item.id} item={item} isFixed />
+                <FeedbackCard
+                  key={item.id}
+                  item={item}
+                  isFixed
+                  onOpen={() => {
+                    setDetailItem(item);
+                    setDetailOpen(true);
+                  }}
+                />
               ))}
             </div>
           )}
         </div>
       )}
+
+      <DetailSheet
+        open={detailOpen}
+        onClose={() => setDetailOpen(false)}
+        closeLabel={t("myFeedback.closeDetail")}
+        title={
+          detailItem && (
+            <div className="min-w-0">
+              <div className="truncate font-display text-base font-extrabold tracking-tight text-ink">
+                <span className="text-ink/35">#{detailItem.ticket_number}</span>
+                {detailItem.title ? ` ${detailItem.title}` : ""}
+              </div>
+              <div className="text-xs font-semibold text-ink/40">
+                {fmtTime(detailItem.created_at, language === "ro" ? "ro-RO" : "en-US")}
+              </div>
+            </div>
+          )
+        }
+      >
+        {detailItem && <FeedbackDetail item={detailItem} isFixed={detailItem.status === "completed"} />}
+      </DetailSheet>
     </div>
   );
 }

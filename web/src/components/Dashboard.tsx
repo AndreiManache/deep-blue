@@ -17,6 +17,7 @@ import { useT, type StringKey } from "../i18n/useT";
 import { BackHeader } from "./BackHeader";
 import { DaySummary } from "./DaySummary";
 import { EntryRow } from "./EntryRow";
+import { WaterTracker } from "./WaterTracker";
 import { WeekStrip } from "./WeekStrip";
 
 interface DashboardProps {
@@ -138,6 +139,8 @@ export function Dashboard({ onBack, refreshSignal }: DashboardProps) {
       {stats && <WeekStrip selected={selectedDay} stats={stats.days} onSelect={setSelectedDay} />}
 
       <DaySummary entries={entries} targets={stats?.targets ?? null} selectedDay={selectedDay} />
+
+      <WaterTracker selectedDay={selectedDay} refreshSignal={refreshSignal} />
 
       {insight && (
         <div className="flex items-start gap-3 rounded-2xl bg-ink px-5 py-4 text-cream shadow-sm">

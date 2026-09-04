@@ -11,6 +11,7 @@ import {
 import { computeCompositionNutrition, type Preparation } from "./nutrition.js";
 import { upsertProfile, type ProfileUpdateInput } from "./profile.js";
 import { validateProfileInput } from "./validation.js";
+import { addWater } from "./water.js";
 
 // Plain JSON Schema — the shape both Anthropic's `input_schema` and Gemini's
 // `parameters` already use natively, so one definition covers both providers.
@@ -148,6 +149,21 @@ export const toolDefs: ToolDef[] = [
           enum: ["en", "ro"],
           description:
             "The user's preferred spoken language. Call this if they ask to switch to Romanian/English, or address you in Romanian for the first time. Takes effect starting with this reply.",
+        },
+      },
+    },
+  },
+  {
+    name: "log_water",
+    description:
+      "Log water the user just drank. Call whenever they mention drinking water (or a comparable plain-water amount) — never asks them to repeat it later, just log it in the same turn. Purely a count of glasses, no calories/macros involved.",
+    parameters: {
+      type: "object",
+      properties: {
+        glasses: {
+          type: "number",
+          description:
+            "How many glasses (roughly 250ml each). Defaults to 1 if they didn't say a number ('I had some water' -> 1). Convert an explicit volume yourself (e.g. '500ml' -> 2, 'a liter' -> 4).",
         },
       },
     },
@@ -321,6 +337,11 @@ export function executeTool(
         }
         const updated = upsertProfile(userId, input as ProfileUpdateInput);
         return { content: JSON.stringify(updated), isError: false, mutated: false, ended: false };
+      }
+      case "log_water": {
+        const glasses = typeof input.glasses === "number" && Number.isFinite(input.glasses) ? input.glasses : 1;
+        const total = addWater(userId, glasses);
+        return { content: JSON.stringify({ glasses_added: glasses, total_today: total }), isError: false, mutated: true, ended: false };
       }
       case "end_conversation": {
         return { content: "session ending", isError: false, mutated: false, ended: true };

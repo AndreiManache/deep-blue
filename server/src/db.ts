@@ -288,3 +288,22 @@ db.exec(`
     PRIMARY KEY (user_id, date)
   );
 `);
+
+// Water tracking (2026-09-04, ticket #17). Append-only per log event, not
+// one row per user per day — a voice log ("I had two glasses") and a tap
+// both just insert a row; a day's total is SUM(glasses) WHERE
+// date(created_at, 'localtime') = that day. No separate `date` column,
+// same reasoning as food_entries (see entries.ts): computing "today" in JS
+// (UTC-based) instead of via SQLite's own localtime comparison is exactly
+// what caused late-night entries to land on the wrong day once already
+// (fixed by setting TZ=Europe/Bucharest and always comparing this way) —
+// don't reintroduce that split for a new table.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS water_entries (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    glasses INTEGER NOT NULL,
+    created_at TEXT NOT NULL
+  );
+`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_water_entries_user_created ON water_entries (user_id, created_at);`);

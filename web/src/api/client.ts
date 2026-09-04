@@ -180,6 +180,26 @@ export async function fetchEntries(date?: string): Promise<FoodEntry[]> {
   return res.json();
 }
 
+// Water tracking (ticket #17) — see WaterTracker.tsx for the UI.
+export async function fetchWaterCount(date?: string): Promise<number> {
+  const qs = date ? `?date=${encodeURIComponent(date)}` : "";
+  const res = await apiFetch(`/water${qs}`);
+  if (!res.ok) throw new ApiError("Could not load water intake.");
+  const data = (await res.json()) as { count: number };
+  return data.count;
+}
+
+export async function setWaterToday(count: number): Promise<number> {
+  const res = await apiFetch("/water/set", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ count }),
+  });
+  if (!res.ok) throw new ApiError("Could not update water intake.");
+  const data = (await res.json()) as { count: number };
+  return data.count;
+}
+
 export type CorrectionReason = "wrong_portion" | "wrong_food" | "has_label" | "skip";
 
 export interface EditEntryFields extends Partial<Pick<FoodEntry, "description" | "calories">> {

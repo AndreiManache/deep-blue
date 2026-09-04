@@ -133,6 +133,10 @@ export const strings: Record<string, { en: string; ro: string }> = {
   },
   "dashboard.leftOf": { en: "{left} left of {target}", ro: "{left} rămase din {target}" },
   "dashboard.noTargetSet": { en: "No target set yet", ro: "Niciun obiectiv setat încă" },
+  "water.title": { en: "Water", ro: "Apă" },
+  "water.glassesOf": { en: "{count} of {target} glasses", ro: "{count} din {target} pahare" },
+  "water.glassLabel": { en: "Glass {n}", ro: "Pahar {n}" },
+  "water.loadError": { en: "Could not load water intake.", ro: "Nu am putut încărca hidratarea." },
 
   // DaySummary
   "daySummary.noTarget": { en: "no target", ro: "fără obiectiv" },

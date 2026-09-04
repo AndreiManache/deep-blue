@@ -32,6 +32,7 @@ import {
 } from "./config.js";
 import { listCorrections } from "./corrections.js";
 import { createEntry, deleteEntry, getEntriesForDate, updateEntry } from "./entries.js";
+import { addWater, getWaterCount, setWaterToday } from "./water.js";
 import {
   createRecipe,
   deleteObservation,
@@ -223,6 +224,7 @@ app.use(
     "/barcode",
     "/synthesize",
     "/foods",
+    "/water",
   ],
   requireAuth,
 );
@@ -536,6 +538,32 @@ app.post("/chat", async (req, res) => {
 app.get("/entries", (req, res) => {
   const date = typeof req.query.date === "string" ? req.query.date : undefined;
   res.json(getEntriesForDate(res.locals.userId as string, date));
+});
+
+// Water tracking (ticket #17). GET reads today's (or a given day's) glass
+// count for the Dashboard's WaterTracker; /add is the voice path's HTTP
+// twin (not actually called by the voice loop itself — log_water goes
+// through tools.ts directly — but kept for symmetry/possible direct use);
+// /set is the tap-a-glass-to-jump-the-level gesture, always "today" since
+// the UI only ever shows the current day.
+app.get("/water", (req, res) => {
+  const date = typeof req.query.date === "string" ? req.query.date : undefined;
+  res.json({ count: getWaterCount(res.locals.userId as string, date) });
+});
+
+app.post("/water/add", (req, res) => {
+  const { glasses } = (req.body ?? {}) as { glasses?: unknown };
+  const g = typeof glasses === "number" && Number.isFinite(glasses) ? glasses : 1;
+  res.json({ count: addWater(res.locals.userId as string, g) });
+});
+
+app.post("/water/set", (req, res) => {
+  const { count } = (req.body ?? {}) as { count?: unknown };
+  if (typeof count !== "number" || !Number.isFinite(count)) {
+    res.status(400).json({ error: "count must be a number" });
+    return;
+  }
+  res.json({ count: setWaterToday(res.locals.userId as string, count) });
 });
 
 app.patch("/entries/:id", (req, res) => {

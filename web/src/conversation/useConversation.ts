@@ -71,6 +71,22 @@ export function useConversation(): ConversationApi {
 
   const captureRef = useRef<SpeechCapture | null>(null);
   if (!captureRef.current) captureRef.current = new SpeechCapture();
+  // Re-registered every render (cheap, always current closures) rather than
+  // via useEffect — SpeechCapture just holds the latest reference, nothing
+  // to clean up between renders.
+  captureRef.current.onInterrupted(() => {
+    // Idle already means nothing was actually happening — the OS took the
+    // mic for a call, say, but there was no turn to interrupt, so there's
+    // nothing to recover from and no reason to surface anything.
+    if (phaseRef.current === "idle" || phaseRef.current === "unsupported") return;
+    logDiag("mic interrupted (phone call?)");
+    heldRef.current = false;
+    epochRef.current++; // invalidate anything still in flight from the interrupted turn
+    cancelSpeech();
+    setErrorMessage("Looks like you got interrupted — press and hold to continue.");
+    setPhaseBoth("idle");
+    scheduleIdleTimeout();
+  });
 
   const sessionIdRef = useRef<string>("");
   // BCP-47 tag, refreshed after every /chat response so a mid-conversation

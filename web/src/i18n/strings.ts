@@ -166,6 +166,8 @@ export const strings: Record<string, { en: string; ro: string }> = {
   "entry.confirmDeleteLabel": { en: "Confirm delete", ro: "Confirmă ștergerea" },
   "entry.saveError": { en: "Couldn't save changes.", ro: "Modificările nu au putut fi salvate." },
   "entry.deleteError": { en: "Couldn't delete this entry.", ro: "Această înregistrare nu a putut fi ștearsă." },
+  "entry.logAgainLabel": { en: "Log one more of this", ro: "Înregistrează încă una" },
+  "entry.logAgainError": { en: "Couldn't log this again.", ro: "Nu am putut înregistra din nou." },
   "entry.detailLabel": { en: "See details", ro: "Vezi detalii" },
   "entry.closeDetail": { en: "Close", ro: "Închide" },
   "entry.calories": { en: "Calories", ro: "Calorii" },

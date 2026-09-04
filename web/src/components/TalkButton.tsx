@@ -39,7 +39,7 @@ export function TalkButton({ phase, onHoldStart, onHoldEnd }: TalkButtonProps) {
     // here is what lets the AI's reply play later even though it starts far
     // outside any gesture (iOS requirement — see synthesis.ts/audioContext.ts).
     resumeAudioContext();
-    playReadyChime();
+    void playReadyChime();
     // Best-effort only — if the browser won't capture this pointer for any
     // reason, the hold must still start. Letting this throw would silently
     // swallow onHoldStart() entirely, leaving the button looking dead.

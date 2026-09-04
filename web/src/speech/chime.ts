@@ -8,11 +8,27 @@
 // on it later.
 import { getAudioContext } from "./audioContext";
 
-export function playReadyChime(): void {
+// Bug (2026-09-04): the chime never played on the very first hold after
+// opening the app fresh, only from the second press onward in the same
+// session. Root cause: `getAudioContext()` constructs the AudioContext
+// lazily, on whichever call happens to be first — on a fresh open, that's
+// THIS call, made in the same synchronous tick as TalkButton's own
+// resume(). A brand-new context's `currentTime` clock hasn't started
+// advancing yet (it stays pinned near 0 until the context actually reaches
+// "running"), and resume() is asynchronous — so scheduling the oscillator
+// against `currentTime` read in that same tick schedules it against a
+// clock that isn't ticking, and the sound is silently lost. By the second
+// press the context is already running from the first press's resume
+// having long since completed, so `currentTime` is a live clock and it
+// plays fine — exactly the reported asymmetry. Fix: actually wait for
+// "running" before reading currentTime/scheduling anything on it.
+export async function playReadyChime(): Promise<void> {
   try {
     const audioCtx = getAudioContext();
     if (!audioCtx) return;
-    if (audioCtx.state === "suspended") void audioCtx.resume();
+    if (audioCtx.state !== "running") {
+      await audioCtx.resume().catch(() => {});
+    }
 
     const now = audioCtx.currentTime;
     const osc = audioCtx.createOscillator();

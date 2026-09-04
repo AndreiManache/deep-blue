@@ -20,8 +20,8 @@ export const strings: Record<string, { en: string; ro: string }> = {
     ro: "Deep Blue are nevoie de un browser cu înregistrare audio și redare audio. Încearcă cea mai nouă versiune de Safari (iOS) sau Chrome (Android/desktop).",
   },
   "home.hintPhotoAttached": {
-    en: "Hold the orb and describe what's in the photo.",
-    ro: "Ține apăsat pe orb și descrie ce se vede în fotografie.",
+    en: "Hold the orb to log it — describe it, or just release without saying anything.",
+    ro: "Ține apăsat pe orb ca să înregistrezi — descrie-o, sau eliberează fără să spui nimic.",
   },
   "home.adminPanel": { en: "Admin panel", ro: "Panou de administrare" },
   "home.hintDefault": {

@@ -216,8 +216,17 @@ export function useConversation(): ConversationApi {
     });
   }
 
-  async function handleFinalTranscript(text: string) {
-    if (!text || text.trim().length === 0) {
+  async function handleFinalTranscript(rawText: string) {
+    // A photo attached with nothing said is a real, deliberate way to log —
+    // "just send a picture, no talking needed" (ticket #20) — rather than a
+    // failed turn. Only bail on empty speech when there's nothing else (no
+    // photo) for the model to go on. Deliberately honest rather than a
+    // fabricated command ("log this food") — this same string becomes the
+    // entry's raw_transcript, and the detail modal shows that verbatim as
+    // "what you said" whenever it differs from the food's name, so it must
+    // never look like a quote from the user.
+    const text = rawText && rawText.trim().length > 0 ? rawText : pendingImageRef.current ? "(no words spoken — logging from the photo)" : "";
+    if (!text) {
       logDiag("heard nothing usable");
       void speakLocalPhrase("Sorry, I didn't catch that.");
       return;

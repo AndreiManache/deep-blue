@@ -166,6 +166,15 @@ export const strings: Record<string, { en: string; ro: string }> = {
   "entry.confirmDeleteLabel": { en: "Confirm delete", ro: "Confirmă ștergerea" },
   "entry.saveError": { en: "Couldn't save changes.", ro: "Modificările nu au putut fi salvate." },
   "entry.deleteError": { en: "Couldn't delete this entry.", ro: "Această înregistrare nu a putut fi ștearsă." },
+  "entry.detailLabel": { en: "See details", ro: "Vezi detalii" },
+  "entry.closeDetail": { en: "Close", ro: "Închide" },
+  "entry.calories": { en: "Calories", ro: "Calorii" },
+  "entry.protein": { en: "Protein", ro: "Proteine" },
+  "entry.carbs": { en: "Carbs", ro: "Carbohidrați" },
+  "entry.fat": { en: "Fat", ro: "Grăsimi" },
+  "entry.grams": { en: "Amount", ro: "Cantitate" },
+  "entry.loggedAt": { en: "Logged", ro: "Înregistrat" },
+  "entry.youSaid": { en: "What you said", ro: "Ce ai spus" },
 
   // MyFeedbackList
   "myFeedback.nothingSent": {
@@ -187,6 +196,8 @@ export const strings: Record<string, { en: string; ro: string }> = {
     en: "Everything you've sent has been addressed. Thank you for helping make Deep Blue better.",
     ro: "Tot ce ai trimis a fost analizat și rezolvat. Îți mulțumim că ne ajuți să facem Deep Blue mai bun.",
   },
+  "myFeedback.detailLabel": { en: "See report details", ro: "Vezi detaliile raportului" },
+  "myFeedback.closeDetail": { en: "Close", ro: "Închide" },
 
   // PhotoAttach
   "photo.add": { en: "Add a photo", ro: "Adaugă o fotografie" },

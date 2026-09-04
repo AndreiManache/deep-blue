@@ -136,6 +136,8 @@ export const strings: Record<string, { en: string; ro: string }> = {
 
   // DaySummary
   "daySummary.noTarget": { en: "no target", ro: "fără obiectiv" },
+  "daySummary.goodSourcesOf": { en: "Good sources of {macro}", ro: "Surse bune de {macro}" },
+  "daySummary.closeSources": { en: "Close", ro: "Închide" },
 
   // WeekStrip
   "weekStrip.previousWeek": { en: "Previous week", ro: "Săptămâna trecută" },

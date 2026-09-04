@@ -1,6 +1,9 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { todayKey, type FoodEntry, type Targets } from "../api/client";
+import { MACRO_FOOD_SOURCES, type MacroKey } from "../data/macroFoodSources";
+import { useLanguage } from "../i18n/LanguageContext";
 import { useT } from "../i18n/useT";
+import { DetailSheet } from "./DetailSheet";
 import { Ring } from "./Ring";
 
 interface DaySummaryProps {
@@ -23,8 +26,11 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
 // The white headline card: big calorie ring + small protein/carbs/fat rings.
 export function DaySummary({ entries, targets, selectedDay }: DaySummaryProps) {
   const t = useT();
+  const { language } = useLanguage();
   const totals = useMemo(() => sum(entries), [entries]);
   const kcalTarget = targets?.calorie_target ?? null;
+  // Ticket #24: tap a macro ring to see good food sources for it.
+  const [openMacro, setOpenMacro] = useState<MacroKey | null>(null);
 
   const macro = (target: number | null, value: number) => {
     if (!target) return { pct: 0, over: false, value: null as number | null, target };
@@ -33,6 +39,12 @@ export function DaySummary({ entries, targets, selectedDay }: DaySummaryProps) {
 
   const kcalPct = kcalTarget && kcalTarget > 0 ? totals.kcal / kcalTarget : 0;
   const kcalOver = kcalTarget != null && totals.kcal > kcalTarget;
+
+  const macroLabels: Record<MacroKey, string> = {
+    protein: t("profile.protein"),
+    carbs: t("profile.carbs"),
+    fat: t("profile.fat"),
+  };
 
   return (
     <div className="rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-ink/5">
@@ -66,10 +78,51 @@ export function DaySummary({ entries, targets, selectedDay }: DaySummaryProps) {
       </div>
 
       <div className="mt-5 grid grid-cols-3 gap-3">
-        <MacroTile label={t("profile.protein")} {...macro(targets?.protein_target_g ?? null, totals.protein_g)} color="var(--color-sky)" t={t} />
-        <MacroTile label={t("profile.carbs")} {...macro(targets?.carbs_target_g ?? null, totals.carbs_g)} color="var(--color-sun)" t={t} />
-        <MacroTile label={t("profile.fat")} {...macro(targets?.fat_target_g ?? null, totals.fat_g)} color="var(--color-coral)" t={t} />
+        <MacroTile
+          label={macroLabels.protein}
+          {...macro(targets?.protein_target_g ?? null, totals.protein_g)}
+          color="var(--color-sky)"
+          t={t}
+          onOpen={() => setOpenMacro("protein")}
+        />
+        <MacroTile
+          label={macroLabels.carbs}
+          {...macro(targets?.carbs_target_g ?? null, totals.carbs_g)}
+          color="var(--color-sun)"
+          t={t}
+          onOpen={() => setOpenMacro("carbs")}
+        />
+        <MacroTile
+          label={macroLabels.fat}
+          {...macro(targets?.fat_target_g ?? null, totals.fat_g)}
+          color="var(--color-coral)"
+          t={t}
+          onOpen={() => setOpenMacro("fat")}
+        />
       </div>
+
+      <DetailSheet
+        open={openMacro != null}
+        onClose={() => setOpenMacro(null)}
+        closeLabel={t("daySummary.closeSources")}
+        title={
+          <div className="font-display text-base font-extrabold text-ink">
+            {t("daySummary.goodSourcesOf", { macro: openMacro ? macroLabels[openMacro].toLowerCase() : "" })}
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          {(openMacro ? MACRO_FOOD_SOURCES[openMacro][language === "ro" ? "ro" : "en"] : []).map((source) => (
+            <div
+              key={source.name}
+              className="flex items-baseline justify-between gap-3 border-b border-ink/5 pb-3 last:border-0 last:pb-0"
+            >
+              <span className="text-sm font-bold text-ink">{source.name}</span>
+              <span className="text-right text-xs font-medium text-ink/50">{source.note}</span>
+            </div>
+          ))}
+        </div>
+      </DetailSheet>
     </div>
   );
 }
@@ -82,11 +135,16 @@ interface MacroTileProps {
   target: number | null;
   color: string;
   t: (key: "daySummary.noTarget") => string;
+  onOpen: () => void;
 }
 
-function MacroTile({ label, pct, over, value, target, color, t }: MacroTileProps) {
+function MacroTile({ label, pct, over, value, target, color, t, onOpen }: MacroTileProps) {
   return (
-    <div className="flex flex-col items-center gap-2 rounded-2xl bg-cream px-2 py-4">
+    <button
+      type="button"
+      className="flex flex-col items-center gap-2 rounded-2xl bg-cream px-2 py-4 transition-colors hover:bg-ink3"
+      onClick={onOpen}
+    >
       <Ring size={72} stroke={9} pct={pct} over={over} color={color}>
         <div className="text-center">
           <div className="font-display text-base font-extrabold leading-none text-ink">
@@ -101,6 +159,6 @@ function MacroTile({ label, pct, over, value, target, color, t }: MacroTileProps
           {target == null ? t("daySummary.noTarget") : `/ ${round1(target)}g`}
         </div>
       </div>
-    </div>
+    </button>
   );
 }

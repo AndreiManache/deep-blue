@@ -124,6 +124,12 @@ export interface UpdateEntryInput {
   protein_g?: number | null;
   carbs_g?: number | null;
   fat_g?: number | null;
+  // A portion change — the logged amount in grams. Recomputes calories and
+  // macros proportionally (see below). Distinct from a calorie correction:
+  // the food's per-100g value is unchanged, so it does NOT feed the knowledge
+  // base or record a correction. Only meaningful for entries that already
+  // carry a positive grams (per_100g foods); ignored otherwise.
+  grams?: number | null;
   // Optional context for *why* a calorie edit happened — see corrections.ts.
   // Ignored (silently) when calories isn't also being changed this call.
   correction_reason?: CorrectionReason | null;
@@ -134,7 +140,7 @@ const updateStmt = db.prepare(`
   UPDATE food_entries
   SET description = :description, calories = :calories, protein_g = :protein_g,
       carbs_g = :carbs_g, fat_g = :fat_g, edited = :edited, source = :source,
-      agreement_count = :agreement_count
+      agreement_count = :agreement_count, grams = :grams
   WHERE id = :id AND user_id = :user_id
 `);
 
@@ -142,22 +148,54 @@ export function updateEntry(userId: string, id: string, fields: UpdateEntryInput
   const existing = getEntryById(userId, id);
   if (!existing) return undefined;
 
-  const caloriesChanged = fields.calories !== undefined;
+  // A grams/portion change scales this entry's nutrition by newGrams/oldGrams.
+  // Exact for a per_100g food (nutrition is linear in grams). Only valid when
+  // the entry already has a positive grams — per_item foods carry grams=null
+  // and can't be rescaled this way. A portion change is NOT a correction of
+  // the food's remembered value, so it takes precedence over any calories
+  // field in the same call and skips the knowledge-base/correction writes.
+  const gramsChanged =
+    fields.grams != null &&
+    existing.grams != null &&
+    existing.grams > 0 &&
+    fields.grams !== existing.grams;
+  const ratio = gramsChanged ? (fields.grams as number) / (existing.grams as number) : 1;
+  const scaleMacro = (v: number | null): number | null =>
+    v != null ? Math.round(v * ratio * 10) / 10 : null;
+
+  const caloriesChanged = !gramsChanged && fields.calories !== undefined;
   const merged: FoodEntryRow = {
     id: existing.id,
     user_id: userId,
     raw_transcript: existing.raw_transcript,
     description: fields.description ?? existing.description,
-    calories: caloriesChanged ? Math.round(fields.calories as number) : existing.calories,
-    protein_g: fields.protein_g !== undefined ? fields.protein_g : existing.protein_g,
-    carbs_g: fields.carbs_g !== undefined ? fields.carbs_g : existing.carbs_g,
-    fat_g: fields.fat_g !== undefined ? fields.fat_g : existing.fat_g,
+    calories: gramsChanged
+      ? Math.round(existing.calories * ratio)
+      : caloriesChanged
+        ? Math.round(fields.calories as number)
+        : existing.calories,
+    protein_g: gramsChanged
+      ? scaleMacro(existing.protein_g)
+      : fields.protein_g !== undefined
+        ? fields.protein_g
+        : existing.protein_g,
+    carbs_g: gramsChanged
+      ? scaleMacro(existing.carbs_g)
+      : fields.carbs_g !== undefined
+        ? fields.carbs_g
+        : existing.carbs_g,
+    fat_g: gramsChanged
+      ? scaleMacro(existing.fat_g)
+      : fields.fat_g !== undefined
+        ? fields.fat_g
+        : existing.fat_g,
     created_at: existing.created_at,
     edited: 1,
     food_key: existing.food_key,
-    grams: existing.grams,
+    grams: gramsChanged ? (fields.grams as number) : existing.grams,
     // A calorie edit is the user's own confirmed value now — becomes "yours"
-    // and feeds the knowledge base as a correction below.
+    // and feeds the knowledge base as a correction below. A portion change
+    // leaves the food's identity/provenance untouched.
     source: caloriesChanged ? "yours" : existing.source,
     agreement_count: caloriesChanged ? null : existing.agreement_count,
     is_favorite: existing.is_favorite ? 1 : 0,
@@ -174,6 +212,7 @@ export function updateEntry(userId: string, id: string, fields: UpdateEntryInput
     edited: merged.edited,
     source: merged.source,
     agreement_count: merged.agreement_count,
+    grams: merged.grams,
   });
 
   // Feed the correction back into the knowledge base — the strong signal that

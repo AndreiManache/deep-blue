@@ -186,6 +186,11 @@ export const strings: Record<string, { en: string; ro: string }> = {
   "entry.carbs": { en: "Carbs", ro: "Carbohidrați" },
   "entry.fat": { en: "Fat", ro: "Grăsimi" },
   "entry.grams": { en: "Amount", ro: "Cantitate" },
+  "entry.adjustAmount": { en: "Adjust amount", ro: "Ajustează cantitatea" },
+  "entry.gramsSaveError": {
+    en: "Couldn't update the amount.",
+    ro: "Cantitatea nu a putut fi actualizată.",
+  },
   "entry.loggedAt": { en: "Logged", ro: "Înregistrat" },
   "entry.youSaid": { en: "What you said", ro: "Ce ai spus" },
 

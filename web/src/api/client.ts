@@ -222,7 +222,7 @@ export async function removeWorkout(id: string): Promise<void> {
 
 export type CorrectionReason = "wrong_portion" | "wrong_food" | "has_label" | "skip";
 
-export interface EditEntryFields extends Partial<Pick<FoodEntry, "description" | "calories">> {
+export interface EditEntryFields extends Partial<Pick<FoodEntry, "description" | "calories" | "grams">> {
   correction_reason?: CorrectionReason | null;
   correction_evidence_url?: string | null;
 }

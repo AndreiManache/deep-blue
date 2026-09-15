@@ -49,6 +49,14 @@ export function EntryRow({ entry, onChanged, onMutated }: EntryRowProps) {
   });
   const [correctionReason, setCorrectionReason] = useState<CorrectionReason | null>(null);
   const [evidenceUrl, setEvidenceUrl] = useState("");
+  // Portion editing inside the detail popup — "I logged 200g but ate less."
+  // Separate from the calorie correction above: changing the amount rescales
+  // nutrition proportionally on the server without touching the food's
+  // remembered per-100g value.
+  const [editingGrams, setEditingGrams] = useState(false);
+  const [gramsInput, setGramsInput] = useState("");
+  const [gramsBusy, setGramsBusy] = useState(false);
+  const [gramsError, setGramsError] = useState<string | null>(null);
   // Optimistic — flips instantly on tap rather than waiting on the round
   // trip, reverted if the request fails. Reset whenever a fresh `entry`
   // comes in (a real refetch), so it never drifts from server truth.
@@ -73,6 +81,8 @@ export function EntryRow({ entry, onChanged, onMutated }: EntryRowProps) {
     setConfirmingDelete(false);
     setFavoriteOverride(null);
     setJustLoggedAgain(false);
+    setEditingGrams(false);
+    setGramsError(null);
   }, [entry]);
 
   const kcal = Number(form.calories);
@@ -160,6 +170,47 @@ export function EntryRow({ entry, onChanged, onMutated }: EntryRowProps) {
       setBusy(false);
     }
   }
+
+  function openGramsEditor() {
+    if (entry.grams == null) return;
+    setGramsInput(String(Math.round(entry.grams)));
+    setGramsError(null);
+    setEditingGrams(true);
+  }
+
+  async function handleSaveGrams() {
+    if (gramsBusy) return;
+    const g = Number(gramsInput);
+    if (!Number.isFinite(g) || g <= 0) {
+      setGramsError(t("entry.gramsSaveError"));
+      return;
+    }
+    // No change — just close, no round trip.
+    if (entry.grams != null && g === Math.round(entry.grams)) {
+      setEditingGrams(false);
+      return;
+    }
+    setGramsBusy(true);
+    setGramsError(null);
+    try {
+      await editEntry(entry.id, { grams: g });
+      setEditingGrams(false);
+      onChanged();
+      onMutated?.();
+    } catch (err) {
+      setGramsError(err instanceof ApiError ? err.message : t("entry.gramsSaveError"));
+    } finally {
+      setGramsBusy(false);
+    }
+  }
+
+  // Live "→ N kcal" preview while typing a new amount, so the effect of the
+  // portion change is visible before saving.
+  const gramsNum = Number(gramsInput);
+  const gramsPreviewKcal =
+    editingGrams && entry.grams && Number.isFinite(gramsNum) && gramsNum > 0 && gramsNum !== entry.grams
+      ? Math.round((entry.calories || 0) * (gramsNum / entry.grams))
+      : null;
 
   return (
     <div className={cn("flex items-center gap-3 py-3", editing && "rounded-2xl bg-ink3 px-3")}>
@@ -414,9 +465,62 @@ export function EntryRow({ entry, onChanged, onMutated }: EntryRowProps) {
           </div>
 
           {entry.grams != null && (
-            <div className="flex items-center justify-between text-sm">
-              <span className="font-semibold text-ink/50">{t("entry.grams")}</span>
-              <span className="font-bold text-ink">{Math.round(entry.grams)} g</span>
+            <div className="rounded-2xl bg-ink3 px-4 py-3">
+              {editingGrams ? (
+                <div className="space-y-2.5">
+                  <div className="text-xs font-bold uppercase tracking-wide text-ink/40">
+                    {t("entry.adjustAmount")}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        value={gramsInput}
+                        onChange={(e) => setGramsInput(e.target.value)}
+                        inputMode="decimal"
+                        autoFocus
+                        className={cn(inputClass, "pr-8")}
+                        aria-label={t("entry.adjustAmount")}
+                      />
+                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-ink/30">
+                        g
+                      </span>
+                    </div>
+                    <button
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-coral px-3.5 py-2.5 text-xs font-bold text-white disabled:opacity-60"
+                      onClick={handleSaveGrams}
+                      disabled={gramsBusy}
+                    >
+                      <Check className="size-3.5" /> {t("entry.save")}
+                    </button>
+                    <button
+                      className="grid size-9 place-items-center rounded-xl bg-white text-ink/60 ring-1 ring-ink/10 disabled:opacity-60"
+                      onClick={() => setEditingGrams(false)}
+                      disabled={gramsBusy}
+                      aria-label={t("entry.cancel")}
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </div>
+                  {gramsPreviewKcal != null && (
+                    <div className="text-xs font-semibold text-ink/50">
+                      → {gramsPreviewKcal} {t("entry.calories").toLowerCase()}
+                    </div>
+                  )}
+                  {gramsError && <div className="text-xs font-semibold text-coral">{gramsError}</div>}
+                </div>
+              ) : (
+                <button
+                  className="flex w-full items-center justify-between text-sm"
+                  onClick={openGramsEditor}
+                  aria-label={t("entry.adjustAmount")}
+                >
+                  <span className="font-semibold text-ink/50">{t("entry.grams")}</span>
+                  <span className="flex items-center gap-1.5 font-bold text-ink">
+                    {Math.round(entry.grams)} g
+                    <Pencil className="size-3.5 text-ink/40" />
+                  </span>
+                </button>
+              )}
             </div>
           )}
 

@@ -63,6 +63,9 @@ export function validateEntryPatch(body: Record<string, unknown>): string | null
   if (badNumber(body.protein_g, 0, 5000)) return "protein_g must be a number between 0 and 5000";
   if (badNumber(body.carbs_g, 0, 5000)) return "carbs_g must be a number between 0 and 5000";
   if (badNumber(body.fat_g, 0, 5000)) return "fat_g must be a number between 0 and 5000";
+  // A portion change — the logged amount. Recomputes nutrition server-side
+  // (see updateEntry), so it's a different edit from a calorie correction.
+  if (badNumber(body.grams, 1, 5000)) return "grams must be a number between 1 and 5000";
   if (badEnum(body.correction_reason, [...CORRECTION_REASONS]))
     return `correction_reason must be one of: ${CORRECTION_REASONS.join(", ")}`;
   if (badString(body.correction_evidence_url, 500))

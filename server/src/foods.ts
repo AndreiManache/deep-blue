@@ -109,6 +109,23 @@ export function getUserObservation(
   };
 }
 
+// Like getUserObservation, but also returns whether the value is a deliberate
+// "correction" or an auto-seeded "estimate" — the resolver needs that to let
+// the authoritative food DB win over a first-log guess while still honoring a
+// value the user actually corrected. (2026-09-17)
+export function getUserObservationRaw(
+  userId: string,
+  foodKey: string,
+): { basis: Basis; nutrition: Nutrition; source: ObservationSource } | undefined {
+  const row = getUserObsStmt.get(foodKey, userId) as unknown as ObservationRow | undefined;
+  if (!row) return undefined;
+  return {
+    basis: row.basis,
+    nutrition: { calories: row.calories, protein_g: row.protein_g, carbs_g: row.carbs_g, fat_g: row.fat_g },
+    source: row.source,
+  };
+}
+
 const deleteObsStmt = db.prepare(
   `DELETE FROM food_observations WHERE food_key = :food_key AND user_id = :user_id`,
 );

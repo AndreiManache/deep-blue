@@ -215,6 +215,37 @@ db.exec(`
   );
 `);
 
+// --- Authoritative food database (2026-09-17) ----------------------------
+//
+// The global, shared source of truth for a food's nutrient density per 100g.
+// Keyed by (food_key, cooking_state) because cooking state materially changes
+// density (boiled chicken ~120 kcal/100g raw vs ~165 cooked, purely water
+// loss) and mixing the two silently corrupts everything. This sits ABOVE the
+// per-user food_observations layer: once a food is in here, every user's log
+// of it resolves from here, deterministically, with no model guess. Rows come
+// from a curated seed (curatedFoods.ts), from USDA lookups on first encounter
+// (later slice), from the admin panel, or — as a last resort for the long
+// tail with no better source — from the model's own estimate, stored with
+// low confidence and flagged needs_review so an admin can vet it.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS food_density (
+    food_key TEXT NOT NULL,
+    cooking_state TEXT NOT NULL DEFAULT 'n/a',  -- 'raw' | 'cooked' | 'n/a'
+    basis TEXT NOT NULL DEFAULT 'per_100g',     -- 'per_100g' | 'per_item'
+    calories REAL NOT NULL,
+    protein_g REAL,
+    carbs_g REAL,
+    fat_g REAL,
+    source TEXT NOT NULL,                        -- 'admin' | 'curated' | 'usda' | 'llm'
+    source_id TEXT,                              -- e.g. the USDA fdcId, when applicable
+    confidence TEXT NOT NULL DEFAULT 'medium',   -- 'high' | 'medium' | 'low'
+    verified INTEGER NOT NULL DEFAULT 0,         -- admin-reviewed and trusted
+    needs_review INTEGER NOT NULL DEFAULT 0,     -- low-confidence -> admin review queue
+    resolved_at TEXT NOT NULL,
+    PRIMARY KEY (food_key, cooking_state)
+  );
+`);
+
 // is_recipe: this food's numbers were authored from scratch by the user (the
 // "Your recipes" section of My Foods) rather than derived from ever actually
 // logging it — a food that didn't exist in any database until the user typed

@@ -5,8 +5,10 @@ import {
   cookingStateFromMethod,
   recordModelFallback,
   resolveDensity,
+  upsertDensity,
   type Confidence,
 } from "./foodDb.js";
+import { lookupUsda } from "./usda.js";
 import {
   getConsensus,
   getUserObservationRaw,
@@ -241,12 +243,12 @@ export interface ToolExecutionResult {
   ended: boolean;
 }
 
-export function executeTool(
+export async function executeTool(
   userId: string,
   name: string,
   input: Record<string, unknown>,
   userTranscript?: string,
-): ToolExecutionResult {
+): Promise<ToolExecutionResult> {
   try {
     switch (name) {
       case "log_food": {
@@ -348,12 +350,43 @@ export function executeTool(
                 source = "yours";
                 confidence = "medium";
               } else {
-                // Nothing authoritative — use the model's estimate and store it
-                // so it becomes the DB's value from now on (flagged for review).
-                used = totalNutrition;
-                source = "estimate";
-                confidence = "low";
-                recordModelFallback(foodKey, cookingState, basis, perBasisModel);
+                // Nothing in our DB, no consensus, no prior estimate — look the
+                // food up on USDA before ever trusting the model's number. USDA
+                // returns per-100g values, so it only applies when we know the
+                // weight (per_100g basis); a per_item food falls straight to the
+                // model estimate. Either way the result is stored so the next
+                // log of this food resolves from our DB with no lookup.
+                let resolvedViaUsda = false;
+                if (basis === "per_100g" && grams && grams > 0) {
+                  const usda = await lookupUsda(foodKey, cookingState);
+                  if (usda) {
+                    upsertDensity({
+                      food_key: foodKey,
+                      cooking_state: cookingState,
+                      basis: "per_100g",
+                      nutrition: usda.perBasis,
+                      source: "usda",
+                      source_id: usda.fdcId,
+                      confidence: usda.confidence,
+                      verified: false,
+                      // Fuzzy DB matches are trustworthy data but an automated
+                      // match — queue them for an admin to confirm the food.
+                      needs_review: true,
+                    });
+                    used = totalFromBasis(usda.perBasis, "per_100g", grams);
+                    source = "estimate";
+                    confidence = usda.confidence;
+                    resolvedViaUsda = true;
+                  }
+                }
+                if (!resolvedViaUsda) {
+                  // Last resort: the model's own estimate, stored low-confidence
+                  // and flagged for admin review so it can be vetted later.
+                  used = totalNutrition;
+                  source = "estimate";
+                  confidence = "low";
+                  recordModelFallback(foodKey, cookingState, basis, perBasisModel);
+                }
               }
             }
           }

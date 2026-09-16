@@ -107,6 +107,15 @@ export const MURF_API_KEY = process.env.MURF_API_KEY ?? "";
 // Swappable; that endpoint lists the full 162-voice catalog.
 export const MURF_VOICE_ID = process.env.MURF_VOICE_ID ?? "en-US-natalie";
 
+// USDA FoodData Central — the authoritative resolver for foods not yet in our
+// own database (see foodDb.ts / usda.ts). Free key at api.data.gov/signup;
+// falls back to the public rate-limited DEMO_KEY so dev works without one.
+// A USDA miss or error is non-fatal — resolution just falls through to the
+// model estimate, so this is never required for the app to function. Unset
+// falls back to DEMO_KEY; an explicit empty string disables USDA entirely
+// (used by tests so they never touch the network).
+export const USDA_API_KEY = process.env.USDA_API_KEY ?? "DEMO_KEY";
+
 if (LLM_PROVIDER === "anthropic" && !ANTHROPIC_API_KEY) {
   console.warn(
     "[config] ANTHROPIC_API_KEY is not set — /chat requests will fail. Copy .env.example to .env and fill it in.",

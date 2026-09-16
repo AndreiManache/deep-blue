@@ -222,7 +222,7 @@ async function runTurnUnguarded(
     for (const step of lastStepsOut) steps.push(step);
 
     for (const call of functionCalls) {
-      const result = executeTool(userId, call.name, call.arguments as Record<string, unknown>, userText);
+      const result = await executeTool(userId, call.name, call.arguments as Record<string, unknown>, userText);
       if (result.mutated) mutated = true;
       if (result.ended) ended = true;
       steps.push({

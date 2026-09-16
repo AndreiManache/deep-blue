@@ -650,6 +650,79 @@ export async function fetchCorrections(): Promise<CorrectionItem[]> {
   return res.json();
 }
 
+// --- Authoritative food database (admin) ---------------------------------
+
+export type CookingState = "raw" | "cooked" | "n/a";
+export type DensitySource = "admin" | "curated" | "usda" | "llm";
+export type Confidence = "high" | "medium" | "low";
+
+export interface FoodDensityRow {
+  food_key: string;
+  cooking_state: CookingState;
+  basis: "per_100g" | "per_item";
+  calories: number;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  source: DensitySource;
+  source_id: string | null;
+  confidence: Confidence;
+  verified: number;
+  needs_review: number;
+  resolved_at: string;
+}
+
+export interface AdminFoodsResponse {
+  foods: FoodDensityRow[];
+  review_count: number;
+}
+
+export async function fetchAdminFoods(): Promise<AdminFoodsResponse> {
+  const res = await apiFetch("/admin/foods");
+  if (!res.ok) throw new ApiError("Could not load the food database.");
+  return res.json();
+}
+
+export interface UpsertFoodInput {
+  food_key: string;
+  cooking_state: CookingState;
+  basis?: "per_100g" | "per_item";
+  calories: number;
+  protein_g?: number | null;
+  carbs_g?: number | null;
+  fat_g?: number | null;
+}
+
+export async function upsertAdminFood(input: UpsertFoodInput): Promise<void> {
+  const res = await apiFetch("/admin/foods", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new ApiError(data.error ?? "Could not save this food.");
+  }
+}
+
+export async function verifyAdminFood(foodKey: string, cookingState: CookingState): Promise<void> {
+  const res = await apiFetch("/admin/foods/verify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ food_key: foodKey, cooking_state: cookingState }),
+  });
+  if (!res.ok) throw new ApiError("Could not verify this food.");
+}
+
+export async function deleteAdminFood(foodKey: string, cookingState: CookingState): Promise<void> {
+  const res = await apiFetch("/admin/foods/delete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ food_key: foodKey, cooking_state: cookingState }),
+  });
+  if (!res.ok) throw new ApiError("Could not delete this food.");
+}
+
 // ---- client-side date helpers -------------------------------------------
 
 // Local day key (YYYY-MM-DD) — server day buckets are computed the same way.

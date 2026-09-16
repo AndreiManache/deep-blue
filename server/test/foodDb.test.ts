@@ -75,6 +75,40 @@ describe("authoritative food DB — resolution (2026-09-17)", () => {
   });
 });
 
+describe("authoritative food DB — admin CRUD", () => {
+  it("verify clears the review flag; delete removes the row; review-queue rows list first", () => {
+    foodDb.recordModelFallback("review me", "n/a", "per_100g", { calories: 150, protein_g: 5, carbs_g: 10, fat_g: 3 });
+    assert.equal(foodDb.reviewQueueCount() >= 1, true);
+
+    const before = foodDb.listDensities();
+    assert.equal(before[0]!.needs_review, 1, "needs_review rows sort to the top");
+
+    assert.equal(foodDb.verifyDensity("review me", "n/a"), true);
+    const row = db
+      .prepare("SELECT verified, needs_review FROM food_density WHERE food_key = ? AND cooking_state = ?")
+      .get("review me", "n/a") as { verified: number; needs_review: number };
+    assert.equal(row.verified, 1);
+    assert.equal(row.needs_review, 0);
+
+    // Admin upsert overrides an AI row with a verified admin value.
+    foodDb.upsertDensity({
+      food_key: "review me",
+      cooking_state: "n/a",
+      nutrition: { calories: 200, protein_g: 8, carbs_g: 12, fat_g: 4 },
+      source: "admin",
+      confidence: "high",
+      verified: true,
+    });
+    const admin = foodDb.lookupDensity("review me", "n/a")!;
+    assert.equal(admin.source, "admin");
+    assert.equal(admin.calories, 200);
+
+    assert.equal(foodDb.deleteDensity("review me", "n/a"), true);
+    assert.equal(foodDb.lookupDensity("review me", "n/a"), undefined);
+    assert.equal(foodDb.deleteDensity("review me", "n/a"), false, "already gone");
+  });
+});
+
 describe("authoritative food DB — log_food integration", () => {
   it("uses the DB value, not the model's wrong estimate", async () => {
     // Model wildly over-estimates 200g grilled chicken at 999 kcal; the DB says 330.

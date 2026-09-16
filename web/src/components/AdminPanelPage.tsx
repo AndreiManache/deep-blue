@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Gauge, Inbox, ListChecks, Sparkles } from "lucide-react";
+import { Database, Gauge, Inbox, ListChecks, Sparkles } from "lucide-react";
 import {
   ApiError,
   fetchAdminLatency,
@@ -14,6 +14,7 @@ interface AdminPanelPageProps {
   onOpenFeedbackInbox: () => void;
   onOpenModelsInUse: () => void;
   onOpenCorrections: () => void;
+  onOpenFoodDb: () => void;
 }
 
 function fmtUsd(n: number): string {
@@ -40,6 +41,7 @@ export function AdminPanelPage({
   onOpenFeedbackInbox,
   onOpenModelsInUse,
   onOpenCorrections,
+  onOpenFoodDb,
 }: AdminPanelPageProps) {
   const [users, setUsers] = useState<AdminUserRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -83,6 +85,13 @@ export function AdminPanelPage({
         >
           <ListChecks className="size-4 text-leaf" />
           Corrections
+        </button>
+        <button
+          className="flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-bold text-ink shadow-sm ring-1 ring-ink/5 transition-colors hover:bg-ink3"
+          onClick={onOpenFoodDb}
+        >
+          <Database className="size-4 text-sun" />
+          Food database
         </button>
       </div>
 

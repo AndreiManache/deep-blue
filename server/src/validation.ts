@@ -53,6 +53,34 @@ export function validateBarcodeEntry(body: Record<string, unknown>): string | nu
   return null;
 }
 
+const COOKING_STATES = ["raw", "cooked", "n/a"];
+
+// Admin-authored food_density row (see foodDb.ts). Values are per 100g.
+export function validateFoodDensity(body: Record<string, unknown>): string | null {
+  if (typeof body !== "object" || body === null) return "Body must be an object";
+  if (typeof body.food_key !== "string" || !body.food_key.trim() || body.food_key.length > 80)
+    return "food_key must be a non-empty string of at most 80 characters";
+  if (!COOKING_STATES.includes(body.cooking_state as string))
+    return `cooking_state must be one of: ${COOKING_STATES.join(", ")}`;
+  if (body.basis !== undefined && !BASES.includes(body.basis as string))
+    return `basis must be one of: ${BASES.join(", ")}`;
+  if (typeof body.calories !== "number" || !Number.isFinite(body.calories) || body.calories < 0 || body.calories > 2000)
+    return "calories must be a number between 0 and 2000 (per 100g)";
+  if (badNumber(body.protein_g, 0, 200)) return "protein_g must be a number between 0 and 200";
+  if (badNumber(body.carbs_g, 0, 200)) return "carbs_g must be a number between 0 and 200";
+  if (badNumber(body.fat_g, 0, 200)) return "fat_g must be a number between 0 and 200";
+  return null;
+}
+
+// The (food_key, cooking_state) identity for a verify/delete action.
+export function validateFoodDensityKey(body: Record<string, unknown>): string | null {
+  if (typeof body !== "object" || body === null) return "Body must be an object";
+  if (typeof body.food_key !== "string" || !body.food_key.trim()) return "food_key is required";
+  if (!COOKING_STATES.includes(body.cooking_state as string))
+    return `cooking_state must be one of: ${COOKING_STATES.join(", ")}`;
+  return null;
+}
+
 export function validateEntryPatch(body: Record<string, unknown>): string | null {
   if (typeof body !== "object" || body === null) return "Body must be an object";
   if (body.description !== undefined) {

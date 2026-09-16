@@ -225,6 +225,47 @@ const seedStmt = db.prepare(`
   WHERE food_density.source = 'curated'
 `);
 
+// --- Admin panel: browse / curate the food database -----------------------
+
+const listStmt = db.prepare(`
+  SELECT * FROM food_density
+  ORDER BY needs_review DESC, verified ASC, resolved_at DESC
+`);
+
+// Every row, review-queue first (needs_review), then unverified, newest first.
+export function listDensities(): DensityRow[] {
+  return listStmt.all() as unknown as DensityRow[];
+}
+
+const verifyStmt = db.prepare(`
+  UPDATE food_density SET verified = 1, needs_review = 0, resolved_at = :resolved_at
+  WHERE food_key = :food_key AND cooking_state = :cooking_state
+`);
+
+// Approve an AI-resolved (usda/llm) row as-is — trusts its current values and
+// clears it from the review queue, without changing the numbers.
+export function verifyDensity(foodKey: string, state: string): boolean {
+  const r = verifyStmt.run({
+    food_key: foodKey.trim().toLowerCase(),
+    cooking_state: state,
+    resolved_at: new Date().toISOString(),
+  });
+  return Number(r.changes) > 0;
+}
+
+const deleteStmt = db.prepare(
+  `DELETE FROM food_density WHERE food_key = :food_key AND cooking_state = :cooking_state`,
+);
+
+export function deleteDensity(foodKey: string, state: string): boolean {
+  const r = deleteStmt.run({ food_key: foodKey.trim().toLowerCase(), cooking_state: state });
+  return Number(r.changes) > 0;
+}
+
+export function reviewQueueCount(): number {
+  return (db.prepare(`SELECT COUNT(*) AS n FROM food_density WHERE needs_review = 1`).get() as { n: number }).n;
+}
+
 export function seedCuratedFoods(): number {
   const now = new Date().toISOString();
   let n = 0;

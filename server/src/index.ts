@@ -32,7 +32,14 @@ import {
 } from "./config.js";
 import { listCorrections } from "./corrections.js";
 import { createEntry, deleteEntry, getEntriesForDate, updateEntry } from "./entries.js";
-import { seedCuratedFoods } from "./foodDb.js";
+import {
+  deleteDensity,
+  listDensities,
+  reviewQueueCount,
+  seedCuratedFoods,
+  upsertDensity,
+  verifyDensity,
+} from "./foodDb.js";
 import { addWater, getWaterCount, setWaterToday } from "./water.js";
 import { deleteWorkout, getWorkoutsForDate, logWorkout } from "./workouts.js";
 import {
@@ -81,6 +88,8 @@ import { synthesizeSpeech } from "./ttsProvider.js";
 import {
   validateBarcodeEntry,
   validateEntryPatch,
+  validateFoodDensity,
+  validateFoodDensityKey,
   validateFoodObservation,
   validateProfileInput,
 } from "./validation.js";
@@ -402,6 +411,71 @@ app.get("/admin/latency", (_req, res) => {
 // Audit trail of calorie edits with a reason/evidence — see corrections.ts.
 app.get("/admin/corrections", (_req, res) => {
   res.json(listCorrections());
+});
+
+// --- Authoritative food database (food_density) — admin CRUD -------------
+
+app.get("/admin/foods", (_req, res) => {
+  res.json({ foods: listDensities(), review_count: reviewQueueCount() });
+});
+
+// Create or overwrite a food by hand. An admin entry is the strongest source:
+// verified, high-confidence, and it overrides any AI-resolved (usda/llm) row
+// for the same (food_key, cooking_state).
+app.put("/admin/foods", (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const err = validateFoodDensity(body);
+  if (err) {
+    res.status(400).json({ error: err });
+    return;
+  }
+  upsertDensity({
+    food_key: body.food_key as string,
+    cooking_state: body.cooking_state as "raw" | "cooked" | "n/a",
+    basis: (body.basis as "per_100g" | "per_item") ?? "per_100g",
+    nutrition: {
+      calories: body.calories as number,
+      protein_g: (body.protein_g as number | null) ?? null,
+      carbs_g: (body.carbs_g as number | null) ?? null,
+      fat_g: (body.fat_g as number | null) ?? null,
+    },
+    source: "admin",
+    confidence: "high",
+    verified: true,
+    needs_review: false,
+  });
+  res.json({ ok: true });
+});
+
+// Approve an AI-resolved row as-is (clears it from the review queue).
+app.post("/admin/foods/verify", (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const err = validateFoodDensityKey(body);
+  if (err) {
+    res.status(400).json({ error: err });
+    return;
+  }
+  const ok = verifyDensity(body.food_key as string, body.cooking_state as string);
+  if (!ok) {
+    res.status(404).json({ error: "Food not found" });
+    return;
+  }
+  res.json({ ok: true });
+});
+
+app.post("/admin/foods/delete", (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const err = validateFoodDensityKey(body);
+  if (err) {
+    res.status(400).json({ error: err });
+    return;
+  }
+  const ok = deleteDensity(body.food_key as string, body.cooking_state as string);
+  if (!ok) {
+    res.status(404).json({ error: "Food not found" });
+    return;
+  }
+  res.json({ ok: true });
 });
 
 // Accepts status and/or resolution_note independently — an admin can leave

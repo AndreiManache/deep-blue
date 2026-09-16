@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchMe, getStoredToken, logout as logoutRequest, SESSION_INVALIDATED_EVENT } from "./api/client";
 import { AdminCorrectionsPage } from "./components/AdminCorrectionsPage";
+import { FoodDbAdminPage } from "./components/FoodDbAdminPage";
 import { AdminFeedbackPage } from "./components/AdminFeedbackPage";
 import { AdminPanelPage } from "./components/AdminPanelPage";
 import { AuthGate } from "./components/AuthGate";
@@ -25,6 +26,7 @@ type View =
   | "admin"
   | "admin-panel"
   | "corrections"
+  | "food-db"
   | "providers"
   | "scan";
 
@@ -37,6 +39,7 @@ const VIEWS: readonly View[] = [
   "admin",
   "admin-panel",
   "corrections",
+  "food-db",
   "providers",
   "scan",
 ];
@@ -225,10 +228,12 @@ function AppShell({ view, setView, conversation, endSession, scanSignal, setScan
           onOpenFeedbackInbox={() => setView("admin")}
           onOpenModelsInUse={() => setView("providers")}
           onOpenCorrections={() => setView("corrections")}
+          onOpenFoodDb={() => setView("food-db")}
         />
       )}
       {view === "admin" && <AdminFeedbackPage onBack={() => setView("admin-panel")} />}
       {view === "corrections" && <AdminCorrectionsPage onBack={() => setView("admin-panel")} />}
+      {view === "food-db" && <FoodDbAdminPage onBack={() => setView("admin-panel")} />}
       {view === "providers" && <ProvidersPage onBack={() => setView("admin-panel")} />}
 
       {pillLabelKey && (

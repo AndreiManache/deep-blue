@@ -106,17 +106,19 @@ async function runTurnUnguarded(
       (block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
     );
 
-    const toolResults: Anthropic.ToolResultBlockParam[] = toolUseBlocks.map((block) => {
-      const result = executeTool(userId, block.name, block.input as Record<string, unknown>, userText);
-      if (result.mutated) mutated = true;
-      if (result.ended) ended = true;
-      return {
-        type: "tool_result",
-        tool_use_id: block.id,
-        content: result.content,
-        is_error: result.isError,
-      };
-    });
+    const toolResults: Anthropic.ToolResultBlockParam[] = await Promise.all(
+      toolUseBlocks.map(async (block) => {
+        const result = await executeTool(userId, block.name, block.input as Record<string, unknown>, userText);
+        if (result.mutated) mutated = true;
+        if (result.ended) ended = true;
+        return {
+          type: "tool_result" as const,
+          tool_use_id: block.id,
+          content: result.content,
+          is_error: result.isError,
+        };
+      }),
+    );
 
     // All tool_result blocks go back in a single user message — splitting
     // them across messages silently trains the model to stop parallelizing.

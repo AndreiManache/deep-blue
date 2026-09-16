@@ -8,6 +8,7 @@ import { before, describe, it } from "node:test";
 const dbPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "deepblue-fooddb-test-")), "test.db");
 process.env.DEEPBLUE_DB_PATH = dbPath;
 process.env.ANTHROPIC_API_KEY = "test-key";
+process.env.USDA_API_KEY = ""; // disable USDA — these tests must not hit the network
 
 let foodDb: typeof import("../src/foodDb.js");
 let tools: typeof import("../src/tools.js");
@@ -75,9 +76,9 @@ describe("authoritative food DB — resolution (2026-09-17)", () => {
 });
 
 describe("authoritative food DB — log_food integration", () => {
-  it("uses the DB value, not the model's wrong estimate", () => {
+  it("uses the DB value, not the model's wrong estimate", async () => {
     // Model wildly over-estimates 200g grilled chicken at 999 kcal; the DB says 330.
-    const res = tools.executeTool("u1", "log_food", {
+    const res = await tools.executeTool("u1", "log_food", {
       description: "grilled chicken",
       food_key: "chicken breast",
       grams: 200,
@@ -95,17 +96,19 @@ describe("authoritative food DB — log_food integration", () => {
     assert.ok(entry.calorie_range && entry.calorie_range.low < 330 && entry.calorie_range.high > 330);
   });
 
-  it("stores an unknown food from the model estimate, then reuses the DB for the next user", () => {
+  it("stores an unknown food from the model estimate, then reuses the DB for the next user", async () => {
     const first = JSON.parse(
-      tools.executeTool("u1", "log_food", {
-        description: "zurna kebab",
-        food_key: "zurna kebab",
-        grams: 300,
-        calories: 600,
-        protein_g: 30,
-        carbs_g: 40,
-        fat_g: 30,
-      }).content,
+      (
+        await tools.executeTool("u1", "log_food", {
+          description: "zurna kebab",
+          food_key: "zurna kebab",
+          grams: 300,
+          calories: 600,
+          protein_g: 30,
+          carbs_g: 40,
+          fat_g: 30,
+        })
+      ).content,
     );
     assert.equal(first.source, "estimate");
     assert.equal(first.confidence, "low");
@@ -120,15 +123,17 @@ describe("authoritative food DB — log_food integration", () => {
     // A DIFFERENT user logging the same food, even with a different guess, now
     // resolves from the stored DB value (300g -> the same 600), no re-guessing.
     const second = JSON.parse(
-      tools.executeTool("u2", "log_food", {
-        description: "zurna kebab",
-        food_key: "zurna kebab",
-        grams: 300,
-        calories: 900,
-        protein_g: 1,
-        carbs_g: 1,
-        fat_g: 1,
-      }).content,
+      (
+        await tools.executeTool("u2", "log_food", {
+          description: "zurna kebab",
+          food_key: "zurna kebab",
+          grams: 300,
+          calories: 900,
+          protein_g: 1,
+          carbs_g: 1,
+          fat_g: 1,
+        })
+      ).content,
     );
     assert.equal(second.calories, 600, "reused the stored DB value, not u2's 900 guess");
   });

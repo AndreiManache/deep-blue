@@ -1,10 +1,18 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { createEntry, deleteEntry, getEntriesForDate, updateEntry } from "./entries.js";
 import {
+  calorieRange,
+  cookingStateFromMethod,
+  recordModelFallback,
+  resolveDensity,
+  type Confidence,
+} from "./foodDb.js";
+import {
+  getConsensus,
+  getUserObservationRaw,
   normalizeFoodKey,
   perBasisFromTotal,
   recordObservation,
-  resolveNutrition,
   totalFromBasis,
   type Nutrition,
 } from "./foods.js";
@@ -51,7 +59,12 @@ export const toolDefs: ToolDef[] = [
         food_key: {
           type: "string",
           description:
-            "ALWAYS provide this. A canonical, generic name for the food in ENGLISH, lowercase, singular, no quantity and no brand unless essential to identity — e.g. 'butter crackers', 'grilled chicken breast', 'french fries', 'coca-cola'. Used to match the same food across users and languages (Romanian 'biscuiți cu unt' -> 'butter crackers'), so keep it stable and generic.",
+            "ALWAYS provide this. A canonical, generic name for the food in ENGLISH, lowercase, singular, no quantity and no brand unless essential to identity — e.g. 'chicken breast', 'white rice', 'french fries', 'coca-cola'. Keep it GENERIC and stable: do not bake the cooking method into it (use 'chicken breast', not 'grilled chicken breast') — pass the method in `cooking_method` instead. The exceptions are dishes whose name IS the preparation ('fried egg', 'boiled egg', 'french fries'). Used to match the same food across users and languages (Romanian 'piept de pui' -> 'chicken breast').",
+        },
+        cooking_method: {
+          type: "string",
+          description:
+            "How the food was cooked, when it matters. Nutrition per 100g differs a lot by cooking state (boiled chicken ~120 kcal/100g raw vs ~165 cooked, from water loss), so this picks the right value from our database. Use a plain word: 'raw', 'boiled', 'grilled', 'fried', 'baked', 'roasted', 'steamed'. Omit for foods where it doesn't apply (bread, fruit, a can of soda) or when genuinely unknown.",
         },
         grams: {
           type: "number",
@@ -272,7 +285,16 @@ export function executeTool(
           };
         }
 
-        // --- Food knowledge base: prefer a known-good value over the estimate ---
+        // --- Nutrition resolution ------------------------------------------
+        // The authoritative food DB is the source of truth. Order:
+        //   1. the user's own saved/corrected value (theirs always wins)
+        //   2. the global food_density DB (curated / admin / usda)
+        //   3. crowd consensus (a nice-to-have layer on top)
+        //   4. the model's estimate — which is then STORED in the DB
+        //      (low-confidence, flagged for admin review) so the next log of
+        //      this food resolves deterministically with no guess.
+        // All arithmetic is here in code; the model only classified the food,
+        // its cooking state and the portion.
         const totalNutrition: Nutrition = {
           calories: nutrition.calories,
           protein_g: nutrition.protein_g ?? null,
@@ -280,6 +302,7 @@ export function executeTool(
           fat_g: nutrition.fat_g ?? null,
         };
         const foodKey = normalizeFoodKey(input.food_key);
+        const cookingState = cookingStateFromMethod(input.cooking_method);
         const grams = hasComposition
           ? (input.total_weight_g as number)
           : typeof input.grams === "number" && input.grams > 0
@@ -289,21 +312,53 @@ export function executeTool(
         let used = totalNutrition;
         let source: string | null = null;
         let agreementCount: number | null = null;
+        let confidence: Confidence = "low";
 
         if (foodKey) {
           const { basis, nutrition: perBasisModel } = perBasisFromTotal(totalNutrition, grams);
+
           if (hasComposition) {
-            // The deterministic tissue calc is authoritative for a described
-            // cut — don't override it, but still contribute the observation.
+            // The deterministic tissue calc is authoritative for a described cut.
             source = "estimate";
+            confidence = "medium";
           } else {
-            const resolved = resolveNutrition(userId, foodKey, basis, perBasisModel);
-            used = totalFromBasis(resolved.nutrition, resolved.basis, grams);
-            source = resolved.source;
-            agreementCount = resolved.agreementCount;
+            const mine = getUserObservationRaw(userId, foodKey);
+            if (mine && mine.source === "correction") {
+              // A value THIS user deliberately corrected — always wins for them.
+              used = totalFromBasis(mine.nutrition, mine.basis, grams);
+              source = "yours";
+              confidence = "high";
+            } else {
+              const dbHit = resolveDensity(foodKey, cookingState, grams);
+              const consensus = dbHit ? null : getConsensus(foodKey);
+              if (dbHit) {
+                // The authoritative food DB — the source of truth.
+                used = dbHit.nutrition;
+                source = dbHit.verified ? "verified" : "estimate";
+                confidence = dbHit.verified ? "high" : dbHit.confidence;
+              } else if (consensus && consensus.basis === basis) {
+                // Crowd-verified value (the nice-to-have layer on top).
+                used = totalFromBasis(consensus.nutrition, basis, grams);
+                source = "verified";
+                agreementCount = consensus.agreementCount;
+                confidence = "high";
+              } else if (mine) {
+                // This user's own prior auto-estimate — reuse it for consistency.
+                used = totalFromBasis(mine.nutrition, mine.basis, grams);
+                source = "yours";
+                confidence = "medium";
+              } else {
+                // Nothing authoritative — use the model's estimate and store it
+                // so it becomes the DB's value from now on (flagged for review).
+                used = totalNutrition;
+                source = "estimate";
+                confidence = "low";
+                recordModelFallback(foodKey, cookingState, basis, perBasisModel);
+              }
+            }
           }
-          // Seed this user's own value the first time they log this food
-          // (no-op if they already have one; edits record corrections instead).
+
+          // Per-user observation still feeds the crowd-consensus layer.
           recordObservation(userId, foodKey, basis, perBasisModel, "estimate");
         }
 
@@ -321,7 +376,15 @@ export function executeTool(
           source,
           agreement_count: agreementCount,
         });
-        return { content: JSON.stringify(entry), isError: false, mutated: true, ended: false };
+        // Hand the model a confidence-derived range so it can voice honest
+        // uncertainty ("about 295, somewhere in 265-330") on shakier resolutions.
+        const range = calorieRange(entry.calories, confidence);
+        return {
+          content: JSON.stringify({ ...entry, confidence, calorie_range: range }),
+          isError: false,
+          mutated: true,
+          ended: false,
+        };
       }
       case "get_entries": {
         const entries = getEntriesForDate(userId, input.date as string | undefined);

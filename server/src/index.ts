@@ -32,6 +32,7 @@ import {
 } from "./config.js";
 import { listCorrections } from "./corrections.js";
 import { createEntry, deleteEntry, getEntriesForDate, updateEntry } from "./entries.js";
+import { seedCuratedFoods } from "./foodDb.js";
 import { addWater, getWaterCount, setWaterToday } from "./water.js";
 import { deleteWorkout, getWorkoutsForDate, logWorkout } from "./workouts.js";
 import {
@@ -960,6 +961,15 @@ if (fs.existsSync(WEB_DIST)) {
 
 app.listen(PORT, () => {
   console.log(`Deep Blue server listening on http://localhost:${PORT}`);
+  // Seed/refresh the authoritative food database's curated foods. Idempotent
+  // and cheap (~50 upserts), re-asserting curated rows on every boot without
+  // touching admin/usda/llm rows — see foodDb.ts.
+  try {
+    const n = seedCuratedFoods();
+    console.log(`[foodDb] curated food seed applied (${n} rows)`);
+  } catch (err) {
+    console.error("[foodDb] curated seed failed:", err);
+  }
   // Backfill AI titles for every pre-existing report that predates
   // auto-titling — runs in the background so it never delays readiness, and
   // is idempotent, so a deploy mid-backfill just resumes on the next boot.
